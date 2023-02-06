@@ -17,7 +17,7 @@ if __name__ == "__main__":
         print(f"Experiments for seed {seed} and var_prior {var_prior}")
         run(save_path=save_dir,
             seed=seed,
-            var_prior = var_prior
+            var_prior=var_prior
             )
 
     """

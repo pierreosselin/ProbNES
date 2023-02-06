@@ -43,7 +43,7 @@ def run(save_path: str,
     MC_SAMPLES = 256 if not SMOKE_TEST else 32
 
     #Pi bo parameters
-    BETA, VAR_PRIOR = 1, 10000
+    BETA, VAR_PRIOR = 1, var_prior
     mean, loc = torch.zeros(2, device=device, dtype=dtype), VAR_PRIOR*torch.eye(2, device=device, dtype=dtype)
     pi_distrib = MultivariateNormal(mean, loc)
 
@@ -221,4 +221,4 @@ def run(save_path: str,
     ax.legend(loc="lower right")
     
     plt.savefig(os.path.join(save_path, f"seed-{str(seed).zfill(4)}_Beta-{BETA}_VarPrior-{VAR_PRIOR}.pdf"))
-    plt.savefig(os.path.join(save_path, f"seed-{str(seed).zfill(4)}_Beta-{BETA}_VarPrior-{VAR_PRIOR}.pdf"))
+    plt.savefig(os.path.join(save_path, f"seed-{str(seed).zfill(4)}_Beta-{BETA}_VarPrior-{VAR_PRIOR}.png"))
