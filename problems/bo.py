@@ -15,9 +15,14 @@ import warnings
 import matplotlib.pyplot as plt
 import numpy as np
 
-def run():
+def run(save_path: str,
+        seed: int,
+        var_prior:int = 1.):
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     dtype = torch.double
+    torch.manual_seed(seed)
+    np.random.seed(seed)
+    
     SMOKE_TEST = os.environ.get("SMOKE_TEST")
     NOISE_SE = 0.
     train_yvar = torch.tensor(NOISE_SE**2, device=device, dtype=dtype)
@@ -38,8 +43,8 @@ def run():
     MC_SAMPLES = 256 if not SMOKE_TEST else 32
 
     #Pi bo parameters
-    BETA = 0.3
-    mean, loc = torch.zeros(2, device=device, dtype=dtype), torch.eye(2, device=device, dtype=dtype)
+    BETA, VAR_PRIOR = 1, 10000
+    mean, loc = torch.zeros(2, device=device, dtype=dtype), VAR_PRIOR*torch.eye(2, device=device, dtype=dtype)
     pi_distrib = MultivariateNormal(mean, loc)
 
     verbose = False
@@ -197,14 +202,23 @@ def run():
     y_pi = np.asarray(best_observed_all_pi)
     y_rnd = np.asarray(best_random_all)
 
-
     _, ax = plt.subplots(1, 1, figsize=(8, 6))
-    ax.errorbar(iters, y_ei.mean(axis=0), yerr=ci(y_ei), label="qEI", linewidth=1.5)
-    ax.errorbar(iters, y_pi.mean(axis=0), yerr=ci(y_pi), label="pi_qEI", linewidth=1.5)
-    ax.errorbar(iters, y_rnd.mean(axis=0), yerr=ci(y_rnd), label="random", linewidth=1.5)
+    
+    ax.plot(iters, y_ei.mean(axis=0), ".-", label="qEI", color="#1f77b4")
+    yerr=ci(y_ei)
+    ax.fill_between(iters, y_ei.mean(axis=0)-yerr, y_ei.mean(axis=0)+yerr, alpha=0.1, color="#1f77b4")
+
+    ax.plot(iters, y_pi.mean(axis=0), ".-", label="pi_qEI", color="#8c564b")
+    yerr=ci(y_pi)
+    ax.fill_between(iters, y_pi.mean(axis=0)-yerr, y_pi.mean(axis=0)+yerr, alpha=0.1, color="#8c564b")
+
+    ax.plot(iters, y_rnd.mean(axis=0), ".-", label="random", color="#ff7f0e")
+    yerr=ci(y_rnd)
+    ax.fill_between(iters, y_rnd.mean(axis=0)-yerr, y_rnd.mean(axis=0)+yerr, alpha=0.1, color="#ff7f0e")
+    
     ax.plot([0, N_BATCH * BATCH_SIZE], [GLOBAL_MAXIMUM] * 2, 'k', label="true best objective", linewidth=2)
     ax.set(xlabel='number of observations (beyond initial points)', ylabel='best objective value')
     ax.legend(loc="lower right")
-
-    plt.savefig("hello.pdf")
-    plt.show()
+    
+    plt.savefig(os.path.join(save_path, f"seed-{str(seed).zfill(4)}_Beta-{BETA}_VarPrior-{VAR_PRIOR}.pdf"))
+    plt.savefig(os.path.join(save_path, f"seed-{str(seed).zfill(4)}_Beta-{BETA}_VarPrior-{VAR_PRIOR}.pdf"))
