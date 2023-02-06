@@ -1,9 +1,8 @@
 # TODO now
 
-- Add pi-BO as acquisition function
-- Add real world data
+- Add real world data and other test functions
 - Add VAE based (weighted retraining)
 - Implement IGO
     - Implement IGO with kernel recombination
-- Add config
+- Add config : hybrid between config and loops
 - Write configuration files

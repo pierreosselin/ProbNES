@@ -1,4 +1,4 @@
-from problems.bo import run
+from module.bo import run
 from itertools import product
 import os
 
