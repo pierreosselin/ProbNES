@@ -13,6 +13,6 @@ bo_settings:
   batch_size: 3
 
 problem_settings:
-  test_function: "rosenbrock"
+  test_function: "ackley"
   noise: 0.
   dim: 2
