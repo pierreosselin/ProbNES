@@ -1,9 +1,10 @@
 import os
 import torch
-from botorch.models import FixedNoiseGP
+from .base_problem import get_objective
+from typing import Optional, Any, Union, Tuple, Callable, Dict
+from botorch.models import SingleTaskGP
 from gpytorch.mlls import ExactMarginalLogLikelihood
-from botorch.optim import optimize_acqf
-from botorch.test_functions.synthetic import Ackley
+from botorch.optim import optimize_acqf, optimize_acqf_discrete
 from botorch import fit_gpytorch_mll
 from botorch.acquisition.monte_carlo import qExpectedImprovement
 from botorch.sampling.normal import SobolQMCNormalSampler
@@ -17,18 +18,23 @@ import numpy as np
 
 def run(save_path: str,
         seed: int,
-        var_prior:int = 1.):
+        var_prior:int = 1.,
+        task:str = "test_function",
+        problem_kwargs: Optional[Dict[str, Any]] = None,
+        ):
+
+    # Set device, dtype, seed
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     dtype = torch.double
     torch.manual_seed(seed)
     np.random.seed(seed)
-    
     SMOKE_TEST = os.environ.get("SMOKE_TEST")
-    NOISE_SE = 0.
-    train_yvar = torch.tensor(NOISE_SE**2, device=device, dtype=dtype)
-    obj = Ackley(dim = 2)
-    objective = lambda x : -obj(x)
-    bounds = torch.tensor([[-10.0] * 2, [10.0] * 2], device=device, dtype=dtype)
+    
+    problem_kwargs = problem_kwargs or {}
+    objective = get_objective(label=task, problem_kwargs=problem_kwargs)
+    if task == "test_function":
+        bounds = torch.tensor([[-5.0] * objective.dim, [5.0] * objective.dim], device=device, dtype=dtype)
+
 
     BATCH_SIZE = 3 if not SMOKE_TEST else 2
     NUM_RESTARTS = 10 if not SMOKE_TEST else 2
@@ -36,7 +42,6 @@ def run(save_path: str,
 
     warnings.filterwarnings('ignore', category=BadInitialCandidatesWarning)
     warnings.filterwarnings('ignore', category=RuntimeWarning)
-
 
     N_TRIALS = 3 if not SMOKE_TEST else 2
     N_BATCH = 20 if not SMOKE_TEST else 2
@@ -53,17 +58,15 @@ def run(save_path: str,
 
     def generate_initial_data(n=10):
         # generate training data
-        train_x = torch.rand(n, 2, device=device, dtype=dtype)
+        train_x = torch.rand(n, 2, device=device, dtype=dtype) ### Change initializer normal or discrete
         exact_obj = objective(train_x).unsqueeze(-1)  # add output dimension
-        train_obj = exact_obj + NOISE_SE * torch.randn_like(exact_obj)
-
+        train_obj = exact_obj
         best_observed_value = train_obj.max().item()
         return train_x, train_obj, best_observed_value
         
     def initialize_model(train_x, train_obj, state_dict=None):
         # define models for objective and constraint
-        model_obj = FixedNoiseGP(train_x, train_obj, train_yvar.expand_as(train_obj)).to(train_x)
-        # combine into a multi-output GP model
+        model_obj = SingleTaskGP(train_x, train_obj).to(train_x)
         mll = ExactMarginalLogLikelihood(model_obj.likelihood, model_obj)
         # load state dict if it is passed
         if state_dict is not None:
@@ -84,7 +87,7 @@ def run(save_path: str,
         # observe new values 
         new_x = candidates.detach()
         exact_obj = objective(new_x).unsqueeze(-1) # add output dimension
-        new_obj = exact_obj + NOISE_SE * torch.randn_like(exact_obj)
+        new_obj = exact_obj
         return new_x, new_obj
     
     def update_random_observations(best_random):

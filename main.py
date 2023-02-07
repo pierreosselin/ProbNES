@@ -5,19 +5,23 @@ import os
 if __name__ == "__main__":
 
     ### Place where design save_path from config parameters
-    save_dir = "./logs/testfunction/ackley"
+    save_dir = "./logs"
     
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
     
     seed_list = [0,1,2]
     var_list = [1.,100.,10000.]
+    task="test_function"
+    problem_kwargs={"dim":2, "function":"ackley"}
 
     for seed, var_prior in product(seed_list, var_list):
         print(f"Experiments for seed {seed} and var_prior {var_prior}")
         run(save_path=save_dir,
             seed=seed,
-            var_prior=var_prior
+            var_prior=var_prior,
+            task=task,
+            problem_kwargs=problem_kwargs,
             )
 
     """

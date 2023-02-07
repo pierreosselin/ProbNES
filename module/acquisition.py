@@ -69,3 +69,4 @@ class piqExpectedImprovement(qExpectedImprovement):
         q_ei = obj.max(dim=-1)[0].mean(dim=0)
         pi_X = (self.beta / self.n_iter)*self.pi_dist.log_prob(X).sum(axis = 1)
         return q_ei * torch.exp(pi_X)
+    
