@@ -1,0 +1,16 @@
+label: airfoil
+save_dir: ./logs/airfoil 
+
+bo_settings:
+  seed: 0
+  beta: 1.
+  var_prior: 1.
+  n_trials: 3
+  num_restarts: 10
+  n_iter: 20
+  mc_samples: 256
+  raw_samples: 512
+  batch_size: 3
+
+problem_settings:
+  target_value: 140.

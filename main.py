@@ -1,20 +1,60 @@
 from module.bo import run
-from itertools import product
 import os
+import argparse
+import yaml
+from itertools import product
 
 if __name__ == "__main__":
 
-    ### Place where design save_path from config parameters
-    save_dir = "./logs"
+    # parse arguments and load config
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--config', type=str, default='test')
+    args = parser.parse_args()
+    with open(f'config/{args.config}.yaml', 'r') as file:
+        config = yaml.safe_load(file)
     
+    ### Place where design save_path from config parameters
+    save_dir = config["save_dir"]
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
-    
-    seed_list = [0,1,2]
-    var_list = [1.,100.,10000.]
-    task="test_function"
-    problem_kwargs={"dim":2, "function":"ackley"}
 
+    ### Get different  configs
+    task=config["label"]
+    problem_kwargs = config["problem_settings"]
+    bo_kwargs = config["bo_settings"]
+
+    ### Make lists for multiple experiments
+    list_keys, list_values = [], []
+    for key, value in problem_kwargs.items():
+        if type(value) == list:
+            list_keys.append(tuple(["pb", key]))
+            list_values.append(value)
+    for key, value in bo_kwargs.items():
+        if type(value) == list:
+            list_keys.append(tuple(["bo", key]))
+            list_values.append(value)
+    
+    if len(list_values) > 0:
+        for t in product(*list_values):
+            for i, el in enumerate(t):
+                type_param, key = list_keys[i]
+                if type_param == "pb":
+                    problem_kwargs[key] = el
+                elif type_param == "bo":
+                    bo_kwargs[key] = el
+            run(save_path=save_dir,
+                task=task,
+                bo_kwargs=bo_kwargs,
+                problem_kwargs=problem_kwargs,
+                )
+    else:
+        run(save_path=save_dir,
+            task=task,
+            bo_kwargs=bo_kwargs,
+            problem_kwargs=problem_kwargs,
+            )
+    
+    """
     for seed, var_prior in product(seed_list, var_list):
         print(f"Experiments for seed {seed} and var_prior {var_prior}")
         run(save_path=save_dir,
@@ -23,7 +63,7 @@ if __name__ == "__main__":
             task=task,
             problem_kwargs=problem_kwargs,
             )
-
+    """
     """
     IF PARALLELIZATION:
 

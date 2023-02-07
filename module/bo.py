@@ -1,6 +1,6 @@
 import os
 import torch
-from .base_problem import get_objective
+from .base_problem import get_problem
 from typing import Optional, Any, Union, Tuple, Callable, Dict
 from botorch.models import SingleTaskGP
 from gpytorch.mlls import ExactMarginalLogLikelihood
@@ -15,54 +15,47 @@ import time
 import warnings
 import matplotlib.pyplot as plt
 import numpy as np
+import random
 
 def run(save_path: str,
-        seed: int,
-        var_prior:int = 1.,
         task:str = "test_function",
+        bo_kwargs: Optional[Dict[str, Any]] = None,
         problem_kwargs: Optional[Dict[str, Any]] = None,
         ):
 
     # Set device, dtype, seed
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     dtype = torch.double
+    
+    #Get experiment settings
+    seed = bo_kwargs["seed"]
+    BATCH_SIZE = bo_kwargs["batch_size"]
+    NUM_RESTARTS = bo_kwargs["num_restarts"]
+    RAW_SAMPLES = bo_kwargs["raw_samples"]
+    N_TRIALS = bo_kwargs["n_trials"]
+    N_BATCH = bo_kwargs["n_iter"]
+    MC_SAMPLES = bo_kwargs["mc_samples"]
+    BETA, VAR_PRIOR = bo_kwargs["beta"], bo_kwargs["var_prior"]
+
+    #Set seed and device
     torch.manual_seed(seed)
     np.random.seed(seed)
-    SMOKE_TEST = os.environ.get("SMOKE_TEST")
-    
+
+    #Get problem
     problem_kwargs = problem_kwargs or {}
-    objective = get_objective(label=task, problem_kwargs=problem_kwargs)
-    if task == "test_function":
-        bounds = torch.tensor([[-5.0] * objective.dim, [5.0] * objective.dim], device=device, dtype=dtype)
-
-
-    BATCH_SIZE = 3 if not SMOKE_TEST else 2
-    NUM_RESTARTS = 10 if not SMOKE_TEST else 2
-    RAW_SAMPLES = 512 if not SMOKE_TEST else 32
+    problem = get_problem(label=task, device=device, dtype=dtype, problem_kwargs=problem_kwargs)
+    objective = problem.objective
 
     warnings.filterwarnings('ignore', category=BadInitialCandidatesWarning)
     warnings.filterwarnings('ignore', category=RuntimeWarning)
 
-    N_TRIALS = 3 if not SMOKE_TEST else 2
-    N_BATCH = 20 if not SMOKE_TEST else 2
-    MC_SAMPLES = 256 if not SMOKE_TEST else 32
-
     #Pi bo parameters
-    BETA, VAR_PRIOR = 1, var_prior
-    mean, loc = torch.zeros(2, device=device, dtype=dtype), VAR_PRIOR*torch.eye(2, device=device, dtype=dtype)
+    mean, loc = torch.zeros(problem.dim, device=device, dtype=dtype), VAR_PRIOR*torch.eye(problem.dim, device=device, dtype=dtype)
     pi_distrib = MultivariateNormal(mean, loc)
 
     verbose = False
 
     best_observed_all_ei, best_observed_all_pi, best_random_all = [], [], []
-
-    def generate_initial_data(n=10):
-        # generate training data
-        train_x = torch.rand(n, 2, device=device, dtype=dtype) ### Change initializer normal or discrete
-        exact_obj = objective(train_x).unsqueeze(-1)  # add output dimension
-        train_obj = exact_obj
-        best_observed_value = train_obj.max().item()
-        return train_x, train_obj, best_observed_value
         
     def initialize_model(train_x, train_obj, state_dict=None):
         # define models for objective and constraint
@@ -78,11 +71,25 @@ def run(save_path: str,
         # optimize
         candidates, _ = optimize_acqf(
             acq_function=acq_func,
-            bounds=bounds,
+            bounds=problem.bounds,
             q=BATCH_SIZE,
             num_restarts=NUM_RESTARTS,
             raw_samples=RAW_SAMPLES,  # used for intialization heuristic
             options={"batch_limit": 5, "maxiter": 200},
+        )
+        # observe new values 
+        new_x = candidates.detach()
+        exact_obj = objective(new_x).unsqueeze(-1) # add output dimension
+        new_obj = exact_obj
+        return new_x, new_obj
+    
+    def optimize_acqf_and_get_observation_discrete(acq_func):
+        """Optimizes the acquisition function, and returns a new candidate and a noisy observation."""
+        # optimize
+        candidates, _ = optimize_acqf_discrete(
+            acq_function=acq_func,
+            q=BATCH_SIZE,
+            choices=torch.tensor(problem.scaled_data[:, :5], device=device, dtype=dtype)
         )
         # observe new values 
         new_x = candidates.detach()
@@ -98,6 +105,17 @@ def run(save_path: str,
         next_random_best = objective(rand_x).max().item()
         best_random.append(max(best_random[-1], next_random_best))       
         return best_random
+    
+    def update_random_observations_discrete(best_random):
+        """Simulates a random policy by taking a the current list of best values observed randomly,
+        drawing a new random point, observing its value, and updating the list.
+        """
+        n_data = problem.raw_data.shape[0]
+        indice = torch.tensor(random.sample(range(n_data), BATCH_SIZE))
+        rand_x = torch.tensor(problem.scaled_data[indice, :problem.dim], device=device, dtype=dtype)
+        next_random_best = objective(rand_x).max().item()
+        best_random.append(max(best_random[-1], next_random_best))       
+        return best_random
 
 
     # average over multiple trials
@@ -107,7 +125,7 @@ def run(save_path: str,
         best_observed_ei, best_observed_pi, best_random = [], [], []
         
         # call helper functions to generate initial training data and initialize model
-        train_x_ei, train_obj_ei, best_observed_value_ei = generate_initial_data(n=10)
+        train_x_ei, train_obj_ei, best_observed_value_ei = problem.generate_initial_data(n=10)
         mll_ei, model_ei = initialize_model(train_x_ei, train_obj_ei)
 
         train_x_pi, train_obj_pi = train_x_ei, train_obj_ei
@@ -147,8 +165,12 @@ def run(save_path: str,
             )
 
             # optimize and get new observation
-            new_x_ei, new_obj_ei = optimize_acqf_and_get_observation(qEI)
-            new_x_pi, new_obj_pi = optimize_acqf_and_get_observation(qPI)
+            if task == "test_function":
+                new_x_ei, new_obj_ei = optimize_acqf_and_get_observation(qEI)
+                new_x_pi, new_obj_pi = optimize_acqf_and_get_observation(qPI)
+            elif task == "airfoil":
+                new_x_ei, new_obj_ei = optimize_acqf_and_get_observation_discrete(qEI)
+                new_x_pi, new_obj_pi = optimize_acqf_and_get_observation_discrete(qPI)
 
                     
             # update training points
@@ -159,7 +181,10 @@ def run(save_path: str,
             train_obj_pi = torch.cat([train_obj_pi, new_obj_pi])
 
             # update progress
-            best_random = update_random_observations(best_random)
+            if task == "test_function":
+                best_random = update_random_observations(best_random)
+            elif task == "airfoil":
+                best_random = update_random_observations_discrete(best_random)
 
             best_value_ei = train_obj_ei.max().item()
             best_observed_ei.append(best_value_ei)
@@ -198,7 +223,7 @@ def run(save_path: str,
     def ci(y):
         return 1.96 * y.std(axis=0) / np.sqrt(N_TRIALS)
 
-    GLOBAL_MAXIMUM = 0.
+    GLOBAL_MAXIMUM = objective.best_value
 
     iters = np.arange(N_BATCH + 1) * BATCH_SIZE
     y_ei = np.asarray(best_observed_all_ei)

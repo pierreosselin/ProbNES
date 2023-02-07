@@ -1,12 +1,13 @@
-# TODO now
+# TODO
 
-- Add real world data
-    - UCI datasets
-    - Code to normalize features
-    - Acquisition function class to be evaluated on training data
-- Add VAE based (weighted retraining)
-- Implement IGO
+- Algorithms
+    - Add VAE based (weighted retraining)
+    - Implement IGO
     - Implement IGO with kernel recombination
-- Add config : hybrid between config and loops
+
 - Write configuration files
+    - Change output from saving .pt and then seperate script for plotting
+    - When list in yaml make loops
+    - Separate bo settings from experiment settings
+
 - manage option for GPU
