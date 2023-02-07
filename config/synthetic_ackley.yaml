@@ -2,7 +2,7 @@ label: test_function
 save_dir: ./logs/testfunction/ackley
 
 bo_settings:
-  seed: [0, 1, 2]
+  seed: [0, 1]
   beta: 1.
   var_prior: [1., 100., 1000.]
   n_trials: 3
@@ -14,5 +14,5 @@ bo_settings:
 
 problem_settings:
   test_function: "ackley"
-  noise: 0.
-  dim: 2
+  noise: [0., 1.]
+  dim: [2, 5, 10]

@@ -2,9 +2,9 @@ label: airfoil
 save_dir: ./logs/airfoil 
 
 bo_settings:
-  seed: 0
+  seed: [0, 1]
   beta: 1.
-  var_prior: 1.
+  var_prior: [1., 100., 1000.]
   n_trials: 3
   num_restarts: 10
   n_iter: 20
