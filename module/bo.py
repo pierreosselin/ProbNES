@@ -2,7 +2,7 @@ import os
 import torch
 from .base_problem import get_problem
 from typing import Optional, Any, Union, Tuple, Callable, Dict
-from botorch.models import SingleTaskGP
+from botorch.models import SingleTaskGP, FixedNoiseGP
 from gpytorch.mlls import ExactMarginalLogLikelihood
 from botorch.optim import optimize_acqf, optimize_acqf_discrete
 from botorch import fit_gpytorch_mll
@@ -56,10 +56,12 @@ def run(save_path: str,
     verbose = False
 
     best_observed_all_ei, best_observed_all_pi, best_random_all = [], [], []
+    train_yvar = torch.tensor(objective.noise_std**2, device=device, dtype=dtype)
         
     def initialize_model(train_x, train_obj, state_dict=None):
         # define models for objective and constraint
-        model_obj = SingleTaskGP(train_x, train_obj).to(train_x)
+        #model_obj = SingleTaskGP(train_x, train_obj).to(train_x)
+        model_obj = FixedNoiseGP(train_x, train_obj, train_yvar.expand_as(train_obj)).to(train_x)
         mll = ExactMarginalLogLikelihood(model_obj.likelihood, model_obj)
         # load state dict if it is passed
         if state_dict is not None:
@@ -248,5 +250,5 @@ def run(save_path: str,
     ax.set(xlabel='number of observations (beyond initial points)', ylabel='best objective value')
     ax.legend(loc="lower right")
     
-    plt.savefig(os.path.join(save_path, f"seed-{str(seed).zfill(4)}_Beta-{BETA}_VarPrior-{VAR_PRIOR}.pdf"))
-    plt.savefig(os.path.join(save_path, f"seed-{str(seed).zfill(4)}_Beta-{BETA}_VarPrior-{VAR_PRIOR}.png"))
+    plt.savefig(os.path.join(save_path, f"seed-{str(seed).zfill(4)}_Beta-{BETA}_VarPrior-{VAR_PRIOR}_Noise-{objective.noise_std}_Dim-{problem.dim}.pdf"))
+    plt.savefig(os.path.join(save_path, f"seed-{str(seed).zfill(4)}_Beta-{BETA}_VarPrior-{VAR_PRIOR}_Noise-{objective.noise_std}_Dim-{problem.dim}.png"))
