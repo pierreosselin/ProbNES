@@ -42,11 +42,15 @@ if __name__ == "__main__":
                     problem_kwargs[key] = el
                 elif type_param == "bo":
                     bo_kwargs[key] = el
-            run(save_path=save_dir,
-                task=task,
-                bo_kwargs=bo_kwargs,
-                problem_kwargs=problem_kwargs,
-                )
+            try:
+                run(save_path=save_dir,
+                    task=task,
+                    bo_kwargs=bo_kwargs,
+                    problem_kwargs=problem_kwargs,
+                    )
+            except:
+                print(f"Run failed at parameters {t}, proceeding to the next parameters...")
+                continue
     else:
         run(save_path=save_dir,
             task=task,
