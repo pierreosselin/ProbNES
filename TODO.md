@@ -1,6 +1,5 @@
 # TODO
 - Double check noise
-- Make parameter for bound
 - Initial Points should be the same for everyone or 0
 - Make class for acquiring new point (via aq if bo / random / eq) new_x, new_obj
 - Problem: both in script and ea

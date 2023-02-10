@@ -1,5 +1,5 @@
 problem_name: test_function
-save_dir: ./logs/testfunction/rosenbrock_dim2
+save_dir: ./logs/testfunction/rosenbrock_dim5
 seed: 0
 
 exp_settings:
@@ -18,5 +18,5 @@ bo_settings:
 problem_settings:
   test_function: "rosenbrock"
   noise: 0.
-  dim: 2
+  dim: 5
   initial_bounds: 10.

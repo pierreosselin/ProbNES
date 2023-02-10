@@ -1,16 +1,16 @@
 problem_name: test_function
-save_dir: ./logs/testfunction/rosenbrocktest_result
-seed: 10
+save_dir: ./logs/testfunction/rosenbrock_dim10
+seed: 0
 
 exp_settings:
-  n_exp: 10
+  n_exp: 15
   n_iter: 100
   batch_size: 5
 
 bo_settings:
-  algorithm: [qEI, SNES, piqEI]
+  algorithm: [random, qEI, SNES, piqEI]
   beta: 1.
-  var_prior: 1.
+  var_prior: 100.
   num_restarts: 10
   mc_samples: 256
   raw_samples: 512
@@ -18,5 +18,5 @@ bo_settings:
 problem_settings:
   test_function: "rosenbrock"
   noise: 0.
-  dim: 2
+  dim: 10
   initial_bounds: 10.

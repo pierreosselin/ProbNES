@@ -9,7 +9,7 @@
             "type": "python",
             "request": "launch",
             "program": "${workspaceFolder}/main.py",
-            "args": ["--config", "synthetic_rosenbrock_test"],
+            "args": ["--config", "airfoil"],
             "console": "integratedTerminal",
             "justMyCode": true
         }
