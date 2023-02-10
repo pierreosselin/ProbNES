@@ -1,12 +1,13 @@
 # TODO
-
+- Double check noise
+- Make parameter for bound
+- Initial Points should be the same for everyone or 0
+- Make class for acquiring new point (via aq if bo / random / eq) new_x, new_obj
+- Problem: both in script and ea
 - Algorithms
     - Add VAE based (weighted retraining)
     - Implement IGO 
     - Implement IGO with kernel recombination
     - Library for IGO evotorch 
-- Write configuration files
-    - Change output from saving .pt and then seperate script for plotting
-    - Separate bo settings from experiment settings
 
 - manage option for GPU

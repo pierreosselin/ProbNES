@@ -1,8 +1,10 @@
 from module.bo import run
+from module.plot_script import plot_figure
 import os
 import argparse
 import yaml
 from itertools import product
+
 
 if __name__ == "__main__":
 
@@ -19,7 +21,8 @@ if __name__ == "__main__":
         os.makedirs(save_dir)
 
     ### Get different  configs
-    task=config["label"]
+    problem_name=config["problem_name"]
+    exp_kwargs = config["exp_settings"]
     problem_kwargs = config["problem_settings"]
     bo_kwargs = config["bo_settings"]
 
@@ -33,6 +36,10 @@ if __name__ == "__main__":
         if type(value) == list:
             list_keys.append(tuple(["bo", key]))
             list_values.append(value)
+    for key, value in exp_kwargs.items():
+        if type(value) == list:
+            list_keys.append(tuple(["exp", key]))
+            list_values.append(value)
     
     if len(list_values) > 0:
         for t in product(*list_values):
@@ -42,21 +49,42 @@ if __name__ == "__main__":
                     problem_kwargs[key] = el
                 elif type_param == "bo":
                     bo_kwargs[key] = el
-            try:
-                run(save_path=save_dir,
-                    task=task,
-                    bo_kwargs=bo_kwargs,
-                    problem_kwargs=problem_kwargs,
-                    )
-            except:
-                print(f"Run failed at parameters {t}, proceeding to the next parameters...")
-                continue
+                elif type_param == "exp":
+                    exp_kwargs[key] = el
+
+            for seed in range(exp_kwargs["n_exp"]):
+                try:
+                    algo = bo_kwargs["algorithm"]
+                    save_path = os.path.join(save_dir, algo)
+                    if not os.path.exists(save_path):
+                        os.makedirs(save_path)
+                    initial_seed = config["seed"]
+                    run(save_path=save_path,
+                        problem_name=problem_name,
+                        seed = initial_seed + seed,
+                        exp_kwargs=exp_kwargs,
+                        bo_kwargs=bo_kwargs,
+                        problem_kwargs=problem_kwargs,
+                        )
+                except:
+                    print(f"Run failed at parameters {t}, proceeding to the next parameters...")
+                    continue
     else:
-        run(save_path=save_dir,
-            task=task,
-            bo_kwargs=bo_kwargs,
-            problem_kwargs=problem_kwargs,
-            )
+        for seed in range(exp_kwargs["n_exp"]):
+            label = bo_kwargs["algorithm"]
+            save_path = os.path.join(save_dir, label)
+            if not os.path.exists(save_path):
+                os.makedirs(save_path)
+            initial_seed = config["seed"]
+            run(save_path=save_path,
+                problem_name=problem_name,
+                seed = initial_seed + seed,
+                exp_kwargs=exp_kwargs,
+                bo_kwargs=bo_kwargs,
+                problem_kwargs=problem_kwargs,
+                )
+    plot_figure(os.path.dirname(save_path))
+
     
     """
     for seed, var_prior in product(seed_list, var_list):

@@ -1,0 +1,22 @@
+problem_name: test_function
+save_dir: ./logs/testfunction/rosenbrocktest_result
+seed: 10
+
+exp_settings:
+  n_exp: 10
+  n_iter: 100
+  batch_size: 5
+
+bo_settings:
+  algorithm: [qEI, SNES, piqEI]
+  beta: 1.
+  var_prior: 1.
+  num_restarts: 10
+  mc_samples: 256
+  raw_samples: 512
+
+problem_settings:
+  test_function: "rosenbrock"
+  noise: 0.
+  dim: 2
+  initial_bounds: 10.

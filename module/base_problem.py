@@ -60,7 +60,7 @@ class SyntheticProblem(Problem):
                               n: Optional[int]=10,
                               ):
         # generate training data
-        train_x = torch.rand(n, self.dim, device=self.device, dtype=self.dtype) ### Change initializer normal or discrete
+        train_x = 20*torch.rand(n, self.dim, device=self.device, dtype=self.dtype) - 10 ### Change initializer normal or discrete
         train_obj = self.objective(train_x).unsqueeze(-1)  # add output dimension
         best_observed_value = train_obj.max().item()
         return train_x, train_obj, best_observed_value
@@ -95,8 +95,9 @@ def get_problem(
         obj = get_objective(label=label, **problem_kwargs)
 
         ## Get pb
+        bounds = problem_kwargs.get("initial_bounds", 10.)
         pb = SyntheticProblem(objective=obj, dim=dim, device=device, dtype=dtype)
-        pb.bounds = torch.tensor([[-5.0] * pb.dim, [5.0] * pb.dim], device=device, dtype=dtype)
+        pb.bounds = torch.tensor([[-bounds] * pb.dim, [bounds] * pb.dim], device=device, dtype=dtype)
 
     return pb
         
