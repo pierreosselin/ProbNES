@@ -104,13 +104,16 @@ def plot_figure(save_path):
     plt.savefig(os.path.join(save_path, f"plot_regret.pdf"))
     plt.savefig(os.path.join(save_path, f"plot_regret.png"))
 
-def plot_distribution_gif(save_path):
+def plot_distribution_gif(save_path, n_seeds=1):
+    """
+    n_seeds: Number of seeds one wants to plot the trajectory
+    """
     alg_name = [name for name in os.listdir(save_path) if os.path.isdir(os.path.join(save_path, name))]
-    for algo in alg_name:
+    for algo in tqdm(alg_name, desc="Processing Algorithms..."):
         algo_path = os.path.join(save_path, algo)
         _, ax = plt.subplots(1, 1, figsize=(8, 6))
-        data_path_seeds = [f for f in os.listdir(algo_path) if ".pt" in f]
-        for seed, df in tqdm(enumerate(data_path_seeds), desc="Processing Seeds..."):
+        data_path_seeds = [f for f in os.listdir(algo_path) if ".pt" in f][:n_seeds]
+        for seed, df in enumerate(data_path_seeds):
             data_path = os.path.join(algo_path, df)
             with open(data_path, "rb") as _:
                 data = torch.load(data_path, map_location="cpu")

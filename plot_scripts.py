@@ -3,8 +3,6 @@ from module.plot_script import plot_figure, plot_distribution_gif
 import os
 import argparse
 import yaml
-from itertools import product
-
 
 if __name__ == "__main__":
 
@@ -26,7 +24,8 @@ if __name__ == "__main__":
     problem_kwargs = config["problem_settings"]
     bo_kwargs = config["bo_settings"]
 
-    plot_distribution_gif(save_dir)
+    #plot_figure(os.path.dirname(save_path))
+    plot_distribution_gif(save_dir, n_seeds=1)
     
     """
     for seed, var_prior in product(seed_list, var_list):

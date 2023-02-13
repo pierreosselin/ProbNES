@@ -1,5 +1,5 @@
 from module.bo import run
-from module.plot_script import plot_figure
+from module.plot_script import plot_figure, plot_distribution_gif
 import os
 import argparse
 import yaml
@@ -84,6 +84,7 @@ if __name__ == "__main__":
                 problem_kwargs=problem_kwargs,
                 )
     plot_figure(os.path.dirname(save_path))
+    plot_distribution_gif(save_dir, n_seeds=1)
 
     
     """
