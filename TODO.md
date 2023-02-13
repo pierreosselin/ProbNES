@@ -7,6 +7,5 @@
     - Add VAE based (weighted retraining)
     - Implement IGO 
     - Implement IGO with kernel recombination
-    - Library for IGO evotorch 
 
 - manage option for GPU

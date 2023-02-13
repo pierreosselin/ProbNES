@@ -8,8 +8,8 @@
             "name": "Semisupervised",
             "type": "python",
             "request": "launch",
-            "program": "${workspaceFolder}/main.py",
-            "args": ["--config", "airfoil"],
+            "program": "${workspaceFolder}/module/plot_script.py",
+            //"args": ["--config", "airfoil"],
             "console": "integratedTerminal",
             "justMyCode": true
         }

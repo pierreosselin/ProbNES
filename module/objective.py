@@ -3,6 +3,7 @@
 from typing import Optional, Any, Union, Tuple, Callable, Dict
 import torch
 from botorch.test_functions.synthetic import Ackley, Rosenbrock, Rastrigin
+from .utils import Sphere
 
 class Objective:
     def __init__(self,
@@ -56,6 +57,9 @@ def get_objective(
             obj = Objective(obj_func=Ackley(dim), noise_std=noise_std, best_value=0., negate=True)
         elif test_function == "rastrigin":
             obj = Objective(obj_func=Rastrigin(dim), noise_std=noise_std, best_value=0., negate=True)
+        elif test_function == "sphere":
+            obj = Objective(obj_func=Sphere(dim), noise_std=noise_std, best_value=0., negate=True)
+            
         else:
             raise NotImplementedError(f"Function {test_function} is not implemented")
     

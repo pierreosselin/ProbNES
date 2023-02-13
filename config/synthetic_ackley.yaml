@@ -16,7 +16,7 @@ bo_settings:
   raw_samples: 512
 
 problem_settings:
-  test_function: "ackley"
+  function: "ackley"
   noise: 0.
   dim: 2
   initial_bounds: 10.

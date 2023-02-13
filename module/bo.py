@@ -68,6 +68,9 @@ def run(save_path: str,
                 dtype=torch.float64,
             )
         searcher = SNES(problem_ea, popsize=BATCH_SIZE, stdev_init=1.)
+        list_mu, list_sigma = [], []
+        list_mu.append(searcher._get_mu())
+        list_sigma.append(searcher._get_sigma())
     
     warnings.filterwarnings('ignore', category=BadInitialCandidatesWarning)
     warnings.filterwarnings('ignore', category=RuntimeWarning)
@@ -150,6 +153,8 @@ def run(save_path: str,
         searcher.run(1)
         train_x, train_obj = searcher.population.values, searcher.population.evals
         best_observed_value = train_obj.max().item()
+        list_mu.append(searcher._get_mu())
+        list_sigma.append(searcher._get_sigma())
     
     if label in ["qEI", "piqEI"]:
         mll, model = initialize_model(train_x, train_obj)
@@ -199,6 +204,9 @@ def run(save_path: str,
         elif label == "SNES":
             searcher.run(1)
             new_x, new_obj = searcher.population.values, searcher.population.evals
+            list_mu.append(searcher._get_mu())
+            list_sigma.append(searcher._get_sigma())
+
         
         # update training points
         train_x = torch.cat([train_x, new_x])
@@ -234,8 +242,14 @@ def run(save_path: str,
         "Y": best_observed.cpu(),
         "regret": regret.cpu(),
         "N_BATCH": N_BATCH,
-        "BATCH_SIZE": BATCH_SIZE
+        "BATCH_SIZE": BATCH_SIZE,
+        "objective": objective.obj_func,
+        "bounds": problem_kwargs["initial_bounds"]
     }
+
+    if label == "SNES":
+        output_dict["mu"] = list_mu
+        output_dict["sigma"] = list_sigma        
     
     with open(os.path.join(save_path, f"seed-{str(seed).zfill(4)}_Beta-{BETA}_VarPrior-{VAR_PRIOR}_Noise-{objective.noise_std}_Dim-{problem.dim}.pt"), "wb") as fp:
         torch.save(output_dict, fp)

@@ -1,9 +1,9 @@
 problem_name: test_function
-save_dir: ./logs/testfunction/ackley_dim5
+save_dir: ./logs/testfunction/sphere_test
 seed: 0
 
 exp_settings:
-  n_exp: 15
+  n_exp: 5
   n_iter: 100
   batch_size: 5
 
@@ -16,7 +16,7 @@ bo_settings:
   raw_samples: 512
 
 problem_settings:
-  function: "ackley"
+  function: sphere
   noise: 0.
-  dim: 5
+  dim: 2
   initial_bounds: 10.

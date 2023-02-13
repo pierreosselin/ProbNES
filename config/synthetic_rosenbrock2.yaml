@@ -16,7 +16,7 @@ bo_settings:
   raw_samples: 512
 
 problem_settings:
-  test_function: "rosenbrock"
+  function: "rosenbrock"
   noise: 0.
   dim: 10
   initial_bounds: 10.
