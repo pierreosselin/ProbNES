@@ -16,7 +16,8 @@ from botorch.utils.transforms import (
     t_batch_mode_transform,
 )
 
-
+# TODO Make general class for acquiring new points instead of if functinin bo
+# TODO add algorithm for VAE based distribution
 class piqExpectedImprovement(qExpectedImprovement):
     def __init__(
         self,

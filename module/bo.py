@@ -11,6 +11,7 @@ from botorch.sampling.normal import SobolQMCNormalSampler
 from botorch.exceptions import BadInitialCandidatesWarning
 from .acquisition import piqExpectedImprovement
 from torch.distributions.multivariate_normal import MultivariateNormal
+from .search import NESWSABI
 import time
 import warnings
 from tqdm import tqdm
@@ -54,7 +55,7 @@ def run(save_path: str,
     problem = get_problem(label=problem_name, device=device, dtype=dtype, problem_kwargs=problem_kwargs)
     objective = problem.objective
     
-    if label == "SNES":
+    if label in ["SNES", "NESWSABI"]:
         # Get Problem for EA
         problem_ea = Problem(
                 "max",
@@ -67,11 +68,15 @@ def run(save_path: str,
                 # Higher-than-default precision
                 dtype=torch.float64,
             )
-        searcher = SNES(problem_ea, popsize=BATCH_SIZE, stdev_init=1.)
+        if label == "SNES":
+            searcher = SNES(problem_ea, popsize=BATCH_SIZE, stdev_init=problem_kwargs["initial_bounds"])
+        elif label == "NESWSABI":
+            searcher = NESWSABI(problem_ea, popsize=BATCH_SIZE, stdev_init=problem_kwargs["initial_bounds"])
         list_mu, list_sigma = [], []
         list_mu.append(searcher._get_mu())
         list_sigma.append(searcher._get_sigma())
     
+
     warnings.filterwarnings('ignore', category=BadInitialCandidatesWarning)
     warnings.filterwarnings('ignore', category=RuntimeWarning)
 
@@ -83,7 +88,7 @@ def run(save_path: str,
     verbose = True
 
     #train_yvar = torch.tensor(objective.noise_std**2, device=device, dtype=dtype)
-        
+    # TODO Normalize data for gp estimation
     def initialize_model(train_x, train_obj, state_dict=None):
         # define models for objective and constraint
         model_obj = SingleTaskGP(train_x, train_obj).to(train_x)
@@ -149,7 +154,7 @@ def run(save_path: str,
     if label in ["qEI", "piqEI", "random"]:
         # call helper functions to generate initial training data and initialize model
         train_x, train_obj, best_observed_value = problem.generate_initial_data(n=10)
-    elif label == "SNES":
+    elif label in ["SNES", "NESWSABI"]:
         searcher.run(1)
         train_x, train_obj = searcher.population.values, searcher.population.evals
         best_observed_value = train_obj.max().item()
@@ -201,7 +206,7 @@ def run(save_path: str,
                 new_x, new_obj = update_random_observations()
             elif problem_name == "airfoil":
                 new_x, new_obj = update_random_observations_discrete()
-        elif label == "SNES":
+        elif label in ["SNES", "NESWSABI"]:
             searcher.run(1)
             new_x, new_obj = searcher.population.values, searcher.population.evals
             list_mu.append(searcher._get_mu())
@@ -247,9 +252,9 @@ def run(save_path: str,
         "bounds": problem_kwargs["initial_bounds"]
     }
 
-    if label == "SNES":
+    if label in ["SNES", "NESWSABI"]:
         output_dict["mu"] = list_mu
-        output_dict["sigma"] = list_sigma        
+        output_dict["sigma"] = list_sigma
     
     with open(os.path.join(save_path, f"seed-{str(seed).zfill(4)}_Beta-{BETA}_VarPrior-{VAR_PRIOR}_Noise-{objective.noise_std}_Dim-{problem.dim}.pt"), "wb") as fp:
         torch.save(output_dict, fp)

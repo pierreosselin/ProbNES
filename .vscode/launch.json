@@ -8,8 +8,8 @@
             "name": "Semisupervised",
             "type": "python",
             "request": "launch",
-            "program": "${workspaceFolder}/main2.py",
-            "args": ["--config", "sphere_test"],
+            "program": "${workspaceFolder}/mainbasq.py",
+            //"args": ["--config", "test"],
             "console": "integratedTerminal",
             "justMyCode": true
         }

@@ -5,7 +5,7 @@ import argparse
 import yaml
 from itertools import product
 
-
+## TODO Manage option for gpu
 if __name__ == "__main__":
 
     # parse arguments and load config
