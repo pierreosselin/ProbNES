@@ -4,7 +4,7 @@ import torch
 import numpy as np
 from sklearn.preprocessing import StandardScaler
 import random
-
+# TODO Issue two Problem classes, unify them maybe
 class Problem:
     def __init__(self,
                  objective: Objective,

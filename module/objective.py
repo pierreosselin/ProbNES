@@ -5,6 +5,7 @@ import torch
 from botorch.test_functions.synthetic import Ackley, Rosenbrock, Rastrigin
 from .utils import Sphere
 
+# TODO Check noise std is actually working
 class Objective:
     def __init__(self,
                  obj_func: Callable,
@@ -41,7 +42,7 @@ class Objective:
         if noise and self.noise_std is not None:
             f += self.noise_std * torch.randn_like(f)
         return f
-    
+# TODO Implement experiments on hyperparameter tuning (refer to pibo for data)
 def get_objective(
         label: str,
         **problem_kwargs,
