@@ -3,7 +3,7 @@ save_dir: ./logs/testfunction/ackley_dim5
 seed: 0
 
 exp_settings:
-  n_exp: 15
+  n_exp: 10
   n_iter: 100
   batch_size: 5
 

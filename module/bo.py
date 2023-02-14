@@ -67,7 +67,7 @@ def run(save_path: str,
                 # Higher-than-default precision
                 dtype=torch.float64,
             )
-        searcher = SNES(problem_ea, popsize=BATCH_SIZE, stdev_init=1.)
+        searcher = SNES(problem_ea, popsize=BATCH_SIZE, stdev_init=problem_kwargs["initial_bounds"])
         list_mu, list_sigma = [], []
         list_mu.append(searcher._get_mu())
         list_sigma.append(searcher._get_sigma())
