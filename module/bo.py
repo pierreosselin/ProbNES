@@ -17,6 +17,8 @@ import warnings
 from tqdm import tqdm
 import numpy as np
 import random
+from botorch.utils.transforms import standardize, normalize, unnormalize
+
 
 from evotorch.algorithms import SNES
 from evotorch import Problem
@@ -45,6 +47,7 @@ def run(save_path: str,
     RAW_SAMPLES = bo_kwargs["raw_samples"]
     MC_SAMPLES = bo_kwargs["mc_samples"]
     BETA, VAR_PRIOR = bo_kwargs["beta"], bo_kwargs["var_prior"]
+    NORMALIZE = True
 
     #Set seed and device
     torch.manual_seed(seed)
@@ -104,14 +107,17 @@ def run(save_path: str,
         # optimize
         candidates, _ = optimize_acqf(
             acq_function=acq_func,
-            bounds=problem.bounds,
+            bounds=torch.stack([
+            torch.zeros(problem.dim, dtype=dtype, device=device), 
+            torch.ones(problem.dim, dtype=dtype, device=device),
+            ]),
             q=BATCH_SIZE,
             num_restarts=NUM_RESTARTS,
             raw_samples=RAW_SAMPLES,  # used for intialization heuristic
             options={"batch_limit": 5, "maxiter": 200},
         )
         # observe new values 
-        new_x = candidates.detach()
+        new_x = unnormalize(candidates.detach(), bounds=problem.bounds)
         exact_obj = objective(new_x).unsqueeze(-1) # add output dimension
         new_obj = exact_obj
         return new_x, new_obj
@@ -134,7 +140,7 @@ def run(save_path: str,
         """Simulates a random policy by taking a the current list of best values observed randomly,
         drawing a new random point, observing its value, and updating the list.
         """
-        rand_x = 20*torch.rand(BATCH_SIZE, problem.dim, device=device, dtype=dtype) - 10
+        rand_x = unnormalize(torch.rand(BATCH_SIZE, problem.dim, device=device, dtype=dtype), bounds=problem.bounds)
         rand_y = objective(rand_x).unsqueeze(-1)
         return rand_x, rand_y
     
@@ -162,7 +168,10 @@ def run(save_path: str,
         list_sigma.append(searcher._get_sigma())
     
     if label in ["qEI", "piqEI"]:
-        mll, model = initialize_model(train_x, train_obj)
+        if NORMALIZE:
+            mll, model = initialize_model(normalize(train_x, bounds=problem.bounds), standardize(train_obj))
+        else:
+            mll, model = initialize_model(train_x, train_obj)
 
     best_observed.append(best_observed_value)
     # run N_BATCH rounds of BayesOpt after the initial random batch
@@ -171,7 +180,7 @@ def run(save_path: str,
         t0 = time.monotonic()
         
         if label in ["qEI", "piqEI"]:
-
+            
             # fit the models
             fit_gpytorch_mll(mll)
             
@@ -182,13 +191,13 @@ def run(save_path: str,
                 # for best_f, we use the best observed noisy values as an approximation
                 af = qExpectedImprovement(
                     model=model, 
-                    best_f=train_obj.max(),
+                    best_f=standardize(train_obj).max(),
                     sampler=qmc_sampler
                 )
             if label == "piqEI":                
                 af = piqExpectedImprovement(
                     model=model,
-                    best_f=train_obj.max(),
+                    best_f=standardize(train_obj).max(),
                     pi_distrib=pi_distrib,
                     n_iter=iteration,
                     beta=BETA,
@@ -224,8 +233,8 @@ def run(save_path: str,
         # use the current state dict to speed up fitting
         if label in ["qEI", "piqEI"]:
             mll, model = initialize_model(
-                train_x, 
-                train_obj, 
+                normalize(train_x, bounds=problem.bounds), 
+                standardize(train_obj), 
                 model.state_dict(),
             )
         

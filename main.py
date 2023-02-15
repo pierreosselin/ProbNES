@@ -53,6 +53,7 @@ if __name__ == "__main__":
                     exp_kwargs[key] = el
 
             for seed in range(exp_kwargs["n_exp"]):
+                """
                 try:
                     algo = bo_kwargs["algorithm"]
                     save_path = os.path.join(save_dir, algo)
@@ -69,6 +70,19 @@ if __name__ == "__main__":
                 except:
                     print(f"Run failed at parameters {t}, proceeding to the next parameters...")
                     continue
+                """
+                algo = bo_kwargs["algorithm"]
+                save_path = os.path.join(save_dir, algo)
+                if not os.path.exists(save_path):
+                    os.makedirs(save_path)
+                initial_seed = config["seed"]
+                run(save_path=save_path,
+                    problem_name=problem_name,
+                    seed = initial_seed + seed,
+                    exp_kwargs=exp_kwargs,
+                    bo_kwargs=bo_kwargs,
+                    problem_kwargs=problem_kwargs,
+                    )
     else:
         for seed in range(exp_kwargs["n_exp"]):
             label = bo_kwargs["algorithm"]

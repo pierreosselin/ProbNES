@@ -4,7 +4,11 @@ import torch
 import numpy as np
 from sklearn.preprocessing import StandardScaler
 import random
+from botorch.utils.transforms import standardize, normalize, unnormalize
+
 # TODO Issue two Problem classes, unify them maybe
+# TODO Look into this Bound issue, code organisation
+
 class Problem:
     def __init__(self,
                  objective: Objective,
@@ -60,7 +64,7 @@ class SyntheticProblem(Problem):
                               n: Optional[int]=10,
                               ):
         # generate training data
-        train_x = 20*torch.rand(n, self.dim, device=self.device, dtype=self.dtype) - 10 ### Change initializer normal or discrete
+        train_x = unnormalize(torch.rand(n, self.dim, device=self.device, dtype=self.dtype), self.bounds) ### Change initializer normal or discrete
         train_obj = self.objective(train_x).unsqueeze(-1)  # add output dimension
         best_observed_value = train_obj.max().item()
         return train_x, train_obj, best_observed_value
