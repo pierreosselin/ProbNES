@@ -8,8 +8,8 @@
             "name": "Semisupervised",
             "type": "python",
             "request": "launch",
-            "program": "${workspaceFolder}/mainbasq.py",
-            //"args": ["--config", "test"],
+            "program": "${workspaceFolder}/main.py",
+            "args": ["--config", "synthetic_rosenbrock1"],
             "console": "integratedTerminal",
             "justMyCode": true
         }

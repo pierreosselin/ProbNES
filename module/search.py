@@ -12,7 +12,7 @@ from evotorch.distributions import (
 )
 import torch
 from torch.distributions import MultivariateNormal
-from ..BASQ._basq import BASQ
+from .BASQ._basq import BASQ
 
 
 class BayesQuadrature:
