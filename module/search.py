@@ -12,10 +12,68 @@ from evotorch.distributions import (
 )
 import torch
 from torch.distributions import MultivariateNormal
+from ..BASQ._basq import BASQ
 
 
+class BayesQuadrature:
+    """
+    Bayesian Inference Modelling
 
+    Goal: estimation of both evidence and posterior in one go.
 
+    Bayesian inference to be solved:
+        - true_likelihood: a likelihood modelled with Gaussian mixture
+                            We wish to estimate this function only from the queries to this.
+        - prior: a unimodal multivariate normal distribution.
+                    mean: mu_pi
+                    covariance matrix: cov_pi
+        - true evidence: 1
+
+    Note:
+    - initial guess: (X, Y) = (train_x, train_y)
+    - metric for posterior inference: the KL divergence between true and estimated posterior.
+                posterior = E[GP-modelled-likelihood] * prior / marginal-likelihood
+    - metric for evidence: logarithmic mean absolute error between true and estimated evidence.
+                logMAE = torch.log(Z_estimated - Z_true)
+
+    Returns:
+        - prior: torch.distributions, prior distribution
+        - train_x: torch.tensor, initial sample(s)
+        - train_y: torch.tensor, initial observation of true likelihood query
+        - true_likelihood: function of y = function(x), true likelihood to be estimated.
+        - metric: function of KL = metric(basq, EZy), where basq is the trained BQ model, and EZy is the mean of the evidence
+        - device: torch.device, cpu or cuda
+    """
+    def __init__(self) -> None:
+        pass
+    
+    
+    def set_basq(
+    ):
+
+        # device = torch.device('cpu')
+        device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+        num_dim = 10  # Number of dimensions of the true likelihood to be estimated
+        mu_pi = torch.zeros(num_dim).to(device)  # the mean vactor of Gaussian prior
+        cov_pi = 2 * torch.eye(num_dim).to(device)  # the covariance matrix of Gaussian prior
+        prior = MultivariateNormal(mu_pi, cov_pi)  # Gaussian prior distribution
+        true_likelihood = GMM(num_dim, mu_pi, cov_pi, device)  # true likelihood to be estimated
+
+        # BQ modelling
+        train_x = torch.rand(2, num_dim).to(device)  # initial locations
+        train_y = true_likelihood(train_x)  # initial observations
+
+        # evaluation setting
+        Z_true = 1  # the analytical integral value of marginal likelihood (a.k.a. evidence)
+        test_x = prior.sample(sample_shape=torch.Size([10000]))  # test data locations
+        basq = BASQ(
+            train_x,  # initial locations
+            train_y,  # initial observations
+            prior,  # Gaussian prior distribution
+            true_likelihood,  # true likelihood to be estimated
+            device,  # cpu or cuda
+        )
+        return basq
 
 class NESWSABI(SNES):
 
@@ -44,6 +102,7 @@ class NESWSABI(SNES):
         obj_index: Optional[int] = None,
         distributed: bool = False,
         popsize_weighted_grad_avg: Optional[bool] = None,
+        quad_method: Optional[str] = "wasbi"
     ):
         
         super().__init__(
@@ -67,7 +126,10 @@ class NESWSABI(SNES):
                     popsize_weighted_grad_avg=popsize_weighted_grad_avg,
                 )
         # We kee track of the population sampled
+        self.quad_method = quad_method
         self.populations = []
+
+        
 
     def _step_non_distributed(self):
         # First, we define an inner function which fills the current population by sampling from the distribution.
@@ -86,7 +148,10 @@ class NESWSABI(SNES):
                 # Now, we do in-place sampling on the population
                 self._population = SolutionBatch(self.problem, popsize=self._popsize, device=self._distribution.device, empty=True)
                 # TODO Check change this line with potential batch Quadrature Algorithm 
+                # self._population.access_values() to change to quadrature point selection
                 self._distribution.sample(out=self._population.access_values(), generator=self.problem)
+
+
                 # Finally, here, the solutions are evaluated.
                 self.problem.evaluate(self._population)
                 
@@ -152,7 +217,21 @@ class NESWSABI(SNES):
         if self._first_iter:
             # If we are computing the first generation, we just sample from our distribution and evaluate
             # the solutions.
+
             fill_and_eval_pop()
+
+            prior, train_x, train_y = MultivariateNormal(self._get_mu(), torch.diag(self._get_sigma())), self._population.values, self._population.evals
+            true_likelihood, device = self.problem._objective_func, self.problem.device
+
+            if self.quad_method == "BASQ":
+                self.quad = BASQ(
+                    train_x,  # initial locations
+                    train_y,  # initial observations
+                    prior,  # Gaussian prior distribution
+                    true_likelihood,  # true likelihood to be estimated
+                    device,  # cpu or cuda
+                )
+            
             self._first_iter = False
         else:
             # If we are computing next generations, then we need to compute the gradients of the last
