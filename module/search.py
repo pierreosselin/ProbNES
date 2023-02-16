@@ -15,6 +15,8 @@ import torch
 from torch.distributions import MultivariateNormal
 from .BASQ._basq_search import BASQ
 # TODO Data currently saved both in BO and in search
+# TODO Initial distribution should be mu = 0 for fairer comparison
+
 class NESWSABI(SNES):
 
     DISTRIBUTION_TYPE = ExpSeparableGaussian
@@ -70,7 +72,7 @@ class NESWSABI(SNES):
         self.train_x = torch.tensor([], device = self.problem.device, dtype = self.problem.dtype)
         self.train_y = torch.tensor([], device = self.problem.device, dtype = self.problem.dtype)
         self.weights = torch.tensor([], device = self.problem.device, dtype = self.problem.dtype)
-        
+        self._distribution.mu = torch.zeros(self.problem.solution_length, device = self.problem.device, dtype = self.problem.dtype)
 
     def _step_non_distributed(self):
         # First, we define an inner function which fills the current population by sampling from the distribution.
@@ -88,11 +90,9 @@ class NESWSABI(SNES):
                 
                 # Now, we do in-place sampling on the population
                 self._population = SolutionBatch(self.problem, popsize=self._popsize, device=self._distribution.device, empty=True)
-                
-                # TODO Check change this line with potential batch Quadrature Algorithm 
-                
+                                
                 if not self._first_iter:
-                    prior = MultivariateNormal(self._distribution.mu, torch.diag(self._distribution.mu))
+                    prior = MultivariateNormal(self._distribution.mu, torch.diag(self._distribution.sigma))
                     true_likelihood, device, dtype = self.problem._objective_func, self.problem.device, self.problem.dtype
                     self.quad = BASQ(
                         self.train_x,  # initial locations
@@ -188,11 +188,17 @@ class NESWSABI(SNES):
         else:
             # If we are computing next generations, then we need to compute the gradients of the last
             # generation, sample a new population, and evaluate the new population's solutions.
-            samples = self._population.access_values(keep_evals=True)
-            fitnesses = self._population.access_evals()[:, self._obj_index]
+            #samples = self._population.access_values(keep_evals=True)
+            samples = self.train_x
+            
+            #fitnesses = self._population.access_evals()[:, self._obj_index]
+            m = MultivariateNormal(self._get_mu(), torch.diag(self._get_sigma()))
+            fitnesses = self.train_y * torch.exp(m.log_prob(samples) - self.weights)
+            
             obj_sense = self.problem.senses[self._obj_index]
-            # TODO Make option from ranking to value function 
             ranking_method = self._ranking_method
+            # Build full samples
+            
             gradients = self._distribution.compute_gradients(
                 samples, fitnesses, objective_sense=obj_sense, ranking_method=ranking_method
             )

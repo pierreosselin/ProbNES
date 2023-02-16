@@ -80,16 +80,17 @@ class BASQ(Parameters):
         x = pts_rec[idx]
         return x, w
 
-    def run_basq(self):
+    def run_basq(self, n_batch=1):
         if self.sampler_type == "uncertainty":
             self.sampler.update(self.gp.model)
         pts_nys, pts_rec, w_IS = self.sampler(self.n_rec)
         X, _ = self.run_rchq(pts_nys, pts_rec, w_IS, self.kernel)
         Y = self.true_likelihood(X)
-        self.update(X, Y)
+        if n_batch > 2:
+            self.update(X, Y) ### Not necessary here
         return X, Y
 
-    def run(self, n_batch):
+    def runtrash(self, n_batch):
         """
         Args:
             - n_batch: int, number of iteration. The total query is n_batch * self.batch_size
@@ -101,7 +102,7 @@ class BASQ(Parameters):
         overhead = 0
         for _ in range(n_batch):
             s = time.time()
-            X, Y = self.run_basq()
+            X, Y = self.run_basq(n_batch=n_batch)
             _overhead = time.time() - s
             if self.show_progress:
                 EZy, VarZy = self.kq.quadrature()
@@ -111,11 +112,24 @@ class BASQ(Parameters):
         if not self.show_progress:
             EZy, VarZy = self.kq.quadrature()
             results.append([overhead, EZy, VarZy])
-        """
+        
         if self.bq_model == "wsabi":
             self.gp.memorise_parameters()
             EZy_prior, VarZy_prior, EZy_uni, VarZy_uni = self.quadratures()
             self.gp.remind_parameters()
             self.retrain()
+        return results
+    
+    def run(self, n_batch):
         """
+        Args:
+            - n_batch: int, number of iteration. The total query is n_batch * self.batch_size
+
+        Returns:
+            - results: torch.tensor, [overhead, EZy, VarZy]
+        """
+        results = []
+        for _ in range(n_batch):
+            X, Y = self.run_basq(n_batch=n_batch)
+            results.append([X, Y])
         return results

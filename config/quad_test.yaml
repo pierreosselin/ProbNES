@@ -14,6 +14,7 @@ bo_settings:
   num_restarts: 10
   mc_samples: 256
   raw_samples: 512
+  ranking_method: nes # Choose among nes, raw 
   quadrature:
     # BQ Modelling
     bq_model: "wsabi"             # select a BQ model from ["wsabi", "vbq"], vbq stands for Vanilla BQ
