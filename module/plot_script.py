@@ -75,7 +75,7 @@ def plot_figure_algo(alg_dir, ax):
     yerr=ci(y, N_TRIALS)
     ax.fill_between(iters, y.mean(axis=0)-yerr, y.mean(axis=0)+yerr, alpha=0.1)
 
-def plot_figure(save_path):
+def plot_figure(save_path, log_transform=False):
     _, ax = plt.subplots(1, 1, figsize=(8, 6))
     alg_name = [name for name in os.listdir(save_path) if os.path.isdir(os.path.join(save_path, name))]
     for algo in alg_name:
@@ -94,15 +94,27 @@ def plot_figure(save_path):
         label = data["label"]
         data_over_seeds = [t.detach().cpu().numpy() for t in data_over_seeds]
         y = np.asarray(data_over_seeds)
-        ax.plot(iters, y.mean(axis=0), ".-", label=label)
+        if log_transform:
+            ax.plot(iters, np.log(y.mean(axis=0)), ".-", label=label)
+        else:
+            ax.plot(iters, y.mean(axis=0), ".-", label=label)
         yerr=ci(y, N_TRIALS)
-        ax.fill_between(iters, y.mean(axis=0)-yerr, y.mean(axis=0)+yerr, alpha=0.1)
-    ax.plot([0, N_BATCH * BATCH_SIZE], [0.] * 2, 'k', label="true best objective", linewidth=2)
+        if log_transform:
+            ax.fill_between(iters, np.log(np.clip(y.mean(axis=0)-yerr, a_min=1e-5, a_max=None)), np.log(np.clip(y.mean(axis=0)+yerr, a_min=1e-5, a_max=None)), alpha=0.1)
+        else:
+            ax.fill_between(iters, y.mean(axis=0)-yerr, y.mean(axis=0)+yerr, alpha=0.1)
+    if not log_transform:    
+        ax.plot([0, N_BATCH * BATCH_SIZE], [0.] * 2, 'k', label="true best objective", linewidth=2)
+        ax.set_ylim(0,10.)
     ax.set(xlabel='number of observations (beyond initial points)', ylabel='best objective value')
-    ax.set_ylim(0,10.)
+    #ax.set_ylim(0,10.)
     ax.legend(loc="lower right")
-    plt.savefig(os.path.join(save_path, f"plot_regret.pdf"))
-    plt.savefig(os.path.join(save_path, f"plot_regret.png"))
+    if not log_transform:
+        plt.savefig(os.path.join(save_path, f"plot_regret.pdf"))
+        plt.savefig(os.path.join(save_path, f"plot_regret.png"))
+    else:
+        plt.savefig(os.path.join(save_path, f"plot_regret_log.pdf"))
+        plt.savefig(os.path.join(save_path, f"plot_regret_log.png"))
 
 def plot_distribution_gif(save_path, n_seeds=1):
     """
