@@ -7,6 +7,7 @@ def recombination(
     num_pts,         # number of samples finally returned
     kernel,          # kernel
     device,          # device
+    dtype,           # dtype
     init_weights=0,  # initial weights of the sample for recombination
 ):
     """
@@ -22,25 +23,25 @@ def recombination(
         - x: torch.tensor, the sparcified samples from pts_rec. The number of samples are determined by self.batch_size
         - w: torch.tensor, the positive weights for kernel quadrature as discretised summation.
     """
-    return rc_kernel_svd(pts_rec, pts_nys, num_pts, kernel, device, mu=init_weights)
+    return rc_kernel_svd(pts_rec, pts_nys, num_pts, kernel, device, dtype, mu=init_weights)
 
 
-def ker_svd_sparsify(pt, s, kernel, device):
+def ker_svd_sparsify(pt, s, kernel):
     _U, S, _ = torch.svd_lowrank(kernel(pt, pt), q=s)
     U = -1 * _U.T  # Hermitian
     return S, U
 
 
-def rc_kernel_svd(samp, pt, s, kernel, device, mu=0, use_obj=True):
+def rc_kernel_svd(samp, pt, s, kernel, device, dtype, mu=0, use_obj=True):
     # Nystrom method
-    _, U = ker_svd_sparsify(pt, s - 1, kernel, device)
+    _, U = ker_svd_sparsify(pt, s - 1, kernel)
     w_star, idx_star = Mod_Tchernychova_Lyons(
-        samp, U, pt, kernel, device, mu, use_obj=use_obj
+        samp, U, pt, kernel, device, dtype, mu, use_obj=use_obj
     )
     return idx_star, w_star
 
 
-def Mod_Tchernychova_Lyons(samp, U_svd, pt_nys, kernel, device, mu=0, use_obj=True, DEBUG=False):
+def Mod_Tchernychova_Lyons(samp, U_svd, pt_nys, kernel, device, dtype, mu=0, use_obj=True, DEBUG=False):
     """
     This function is a modified Tcherynychova_Lyons from
     https://github.com/FraCose/Recombination_Random_Algos/blob/master/recombination.py
@@ -50,7 +51,7 @@ def Mod_Tchernychova_Lyons(samp, U_svd, pt_nys, kernel, device, mu=0, use_obj=Tr
     number_of_sets = 2 * (n + 1)
 
     # obj = torch.zeros(N).to(device)
-    mu = torch.ones(N).to(device) / N
+    mu = torch.ones(N).to(device, dtype) / N
 
     idx_story = torch.arange(N).to(device)
     idx_story = idx_story[mu != 0]
@@ -65,7 +66,7 @@ def Mod_Tchernychova_Lyons(samp, U_svd, pt_nys, kernel, device, mu=0, use_obj=Tr
         elif n + 1 < remaining_points <= number_of_sets:
             X_mat = U_svd @ kernel(pt_nys, samp[idx_story])
             w_star, idx_star, x_star, _, ERR, _, _ = Tchernychova_Lyons_CAR(
-                X_mat.T, torch.clone(mu[idx_story]), device, DEBUG)
+                X_mat.T, torch.clone(mu[idx_story]), device, dtype, DEBUG)
             idx_story = idx_story[idx_star]
             mu[:] = 0.
             mu[idx_story] = w_star
@@ -76,7 +77,7 @@ def Mod_Tchernychova_Lyons(samp, U_svd, pt_nys, kernel, device, mu=0, use_obj=Tr
         number_of_el = int(remaining_points / number_of_sets)
 
         idx = idx_story[:number_of_el * number_of_sets].reshape(number_of_el, -1)
-        X_for_nys = torch.zeros((length, number_of_sets)).to(device)
+        X_for_nys = torch.zeros((length, number_of_sets)).to(device, dtype)
         # X_for_obj = torch.zeros((1, number_of_sets)).to(device)
         for i in range(number_of_el):
             idx_tmp_i = idx_story[i * number_of_sets:(i + 1) * number_of_sets]
@@ -101,7 +102,7 @@ def Mod_Tchernychova_Lyons(samp, U_svd, pt_nys, kernel, device, mu=0, use_obj=Tr
         X_tmp = torch.divide(X_tmp, tot_weights.unsqueeze(0).T)
 
         w_star, idx_star, _, _, ERR, _, _ = Tchernychova_Lyons_CAR(
-            X_tmp, torch.clone(tot_weights), device
+            X_tmp, torch.clone(tot_weights), device, dtype
         )
 
         idx_tomaintain = idx[:, idx_star].reshape(-1)
@@ -130,7 +131,7 @@ def Mod_Tchernychova_Lyons(samp, U_svd, pt_nys, kernel, device, mu=0, use_obj=Tr
         remaining_points = len(idx_story)
 
 
-def Tchernychova_Lyons_CAR(X, mu, device, DEBUG=False):
+def Tchernychova_Lyons_CAR(X, mu, device, dtype, DEBUG=False):
     """
     This functions reduce X from N points to n+1.
     This is taken from https://github.com/FraCose/Recombination_Random_Algos/blob/master/recombination.py
@@ -146,7 +147,7 @@ def Tchernychova_Lyons_CAR(X, mu, device, DEBUG=False):
     for _ in range(N - n):
         lm = len(mu)
         plis = Phi[:, 0] > 0
-        alpha = torch.zeros(lm).to(device)
+        alpha = torch.zeros(lm).to(device,dtype)
         alpha[plis] = mu[plis] / Phi[plis, 0]
         idx = torch.arange(lm, device=device)[plis].to(device)
         idx = idx[torch.argmin(alpha[plis])]

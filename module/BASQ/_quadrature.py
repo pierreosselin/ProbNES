@@ -4,7 +4,7 @@ from ._rchq import recombination
 
 
 class KernelQuadrature:
-    def __init__(self, n_rec, n_nys, n_quad, batch_size, sampler, kernel, device, mean_predict):
+    def __init__(self, n_rec, n_nys, n_quad, batch_size, sampler, kernel, device, dtype, mean_predict):
         """
         Args:
            - n_rec: int, subsampling size for kernel recombination
@@ -24,6 +24,7 @@ class KernelQuadrature:
         self.sampler = sampler
         self.kernel = kernel
         self.device = device
+        self.dtype = dtype
         self.mean_predict = mean_predict
 
     def rchq(self, pts_nys, pts_rec, w_IS, batch_size, kernel):
@@ -45,6 +46,7 @@ class KernelQuadrature:
             batch_size,
             kernel,
             self.device,
+            self.dtype,
             init_weights=w_IS,
         )
         x = pts_rec[idx]

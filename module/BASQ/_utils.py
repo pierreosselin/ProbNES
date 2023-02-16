@@ -50,7 +50,7 @@ class Utils:
         Returns:
            - flag: bool, flag to judge whether or not the given matrix is positive semi-definite
         """
-        return bool((mat == mat.T).all() and (torch.eig(mat)[0][:, 0] >= 0).all())
+        return bool((mat == mat.T).all() and (torch.real(torch.linalg.eig(mat)[0]) >= 0).all())
 
     def safe_mvn_register(self, mu, cov):
         """

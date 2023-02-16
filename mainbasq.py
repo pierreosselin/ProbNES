@@ -1,8 +1,8 @@
 import torch
 from torch.distributions.multivariate_normal import MultivariateNormal
-from BASQ.experiment.gmm import GMM
-from BASQ._basq import BASQ
-from BASQ._metric import KLdivergence
+from module.BASQ.experiment.gmm import GMM
+from module.BASQ._basq import BASQ
+from module.BASQ._metric import KLdivergence
 import warnings
 warnings.filterwarnings('ignore')
 

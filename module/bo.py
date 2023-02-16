@@ -74,7 +74,7 @@ def run(save_path: str,
         if label == "SNES":
             searcher = SNES(problem_ea, popsize=BATCH_SIZE, stdev_init=problem_kwargs["initial_bounds"])
         elif label == "NESWSABI":
-            searcher = NESWSABI(problem_ea, popsize=BATCH_SIZE, stdev_init=problem_kwargs["initial_bounds"])
+            searcher = NESWSABI(problem_ea, popsize=BATCH_SIZE, stdev_init=problem_kwargs["initial_bounds"], quad_kwargs=bo_kwargs["quadrature"])
         list_mu, list_sigma = [], []
         list_mu.append(searcher._get_mu())
         list_sigma.append(searcher._get_sigma())
