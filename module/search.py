@@ -11,10 +11,10 @@ from evotorch.distributions import (
     SeparableGaussian,
     SymmetricSeparableGaussian,
 )
+from datetime import datetime
 import torch
 from torch.distributions import MultivariateNormal
 from .BASQ._basq_search import BASQ
-# TODO Data currently saved both in BO and in search
 # TODO Initial distribution should be mu = 0 for fairer comparison
 
 class NESWSABI(SNES):
@@ -69,12 +69,50 @@ class NESWSABI(SNES):
                 )
         # We kee track of the population sampled
         self.quad_kwargs = quad_kwargs
-        self.train_x = torch.tensor([], device = self.problem.device, dtype = self.problem.dtype)
-        self.train_y = torch.tensor([], device = self.problem.device, dtype = self.problem.dtype)
         self.weights = torch.tensor([], device = self.problem.device, dtype = self.problem.dtype)
         self._distribution.mu = torch.zeros(self.problem.solution_length, device = self.problem.device, dtype = self.problem.dtype)
+    
+    def step(self, train_x:torch.Tensor, train_y:torch.Tensor):
+        """
+        Perform a step of the search algorithm.
+        """
+        self._before_step_hook()
+        self.clear_status()
 
-    def _step_non_distributed(self):
+        if self._first_step_datetime is None:
+            self._first_step_datetime = datetime.now()
+
+        self._step(train_x, train_y)
+        self._steps_count += 1
+        self.update_status({"iter": self._steps_count})
+        self.update_status(self._problem.status)
+        extra_status = self._after_step_hook.accumulate_dict()
+        self.update_status(extra_status)
+        if len(self._log_hook) >= 1:
+            self._log_hook(dict(self.status))
+
+    def run(self, num_generations: int, train_x:torch.Tensor, train_y:torch.Tensor, *, reset_first_step_datetime: bool = True):
+        """
+        Run the algorithm for the given number of generations
+        (i.e. iterations).
+        Args:
+            num_generations: Number of generations.
+            reset_first_step_datetime: If this argument is given as True,
+                then, the datetime of the first search step will be forgotten.
+                Forgetting the first step's datetime means that the first step
+                taken by this new run will be the new first step datetime.
+        """
+        if reset_first_step_datetime:
+            self.reset_first_step_datetime()
+
+        for _ in range(int(num_generations)):
+            self.step(train_x, train_y)
+
+        if len(self._end_of_run_hook) >= 1:
+            self._end_of_run_hook(dict(self.status))
+
+
+    def _step_non_distributed(self, train_x, train_y):
         # First, we define an inner function which fills the current population by sampling from the distribution.
         def fill_and_eval_pop():
             # This inner function is responsible for filling the main population with samples
@@ -95,8 +133,8 @@ class NESWSABI(SNES):
                     prior = MultivariateNormal(self._distribution.mu, torch.diag(self._distribution.sigma))
                     true_likelihood, device, dtype = self.problem._objective_func, self.problem.device, self.problem.dtype
                     self.quad = BASQ(
-                        self.train_x,  # initial locations
-                        standardize(self.train_y),  # initial observations
+                        train_x,  # initial locations
+                        standardize(train_y),  # initial observations
                         prior,  # Gaussian prior distribution
                         true_likelihood,  # true likelihood to be estimated
                         device,  # cpu or cuda
@@ -106,7 +144,6 @@ class NESWSABI(SNES):
                     # self._population.access_values() to change to quadrature point selection
                     result = self.quad.run(1)
                     self._population.set_values(result[0][0])
-                    #self._population.set_evals(result[0][1])
                     
                 else:
                     self._distribution.sample(out=self._population.access_values(), generator=self.problem)
@@ -117,8 +154,6 @@ class NESWSABI(SNES):
                 #Get log prob of values for importance sampling
                 m = MultivariateNormal(self._get_mu(), torch.diag(self._get_sigma()))
                 # Save data
-                self.train_x = torch.cat([self.train_x, self._population.values.detach().clone()])
-                self.train_y = torch.cat([self.train_y, self._population.evals.detach().clone().flatten()])
                 self.weights = torch.cat([self.weights, m.log_prob(self.population.values.detach().clone())])
                 
             else:
@@ -189,11 +224,11 @@ class NESWSABI(SNES):
             # If we are computing next generations, then we need to compute the gradients of the last
             # generation, sample a new population, and evaluate the new population's solutions.
             #samples = self._population.access_values(keep_evals=True)
-            samples = self.train_x
+            samples = train_x
             
             #fitnesses = self._population.access_evals()[:, self._obj_index]
             m = MultivariateNormal(self._get_mu(), torch.diag(self._get_sigma()))
-            fitnesses = self.train_y * torch.exp(m.log_prob(samples) - self.weights)
+            fitnesses = train_y * torch.exp(m.log_prob(samples) - self.weights)
             
             obj_sense = self.problem.senses[self._obj_index]
             ranking_method = self._ranking_method

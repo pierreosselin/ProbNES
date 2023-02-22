@@ -18,6 +18,8 @@ from tqdm import tqdm
 import numpy as np
 import random
 from botorch.utils.transforms import standardize, normalize, unnormalize
+import gc
+
 
 
 from evotorch.algorithms import SNES
@@ -91,7 +93,6 @@ def run(save_path: str,
     verbose = True
 
     #train_yvar = torch.tensor(objective.noise_std**2, device=device, dtype=dtype)
-    # TODO Normalize data for gp estimation
     def initialize_model(train_x, train_obj, state_dict=None):
         # define models for objective and constraint
         model_obj = SingleTaskGP(train_x, train_obj).to(train_x)
@@ -160,9 +161,16 @@ def run(save_path: str,
     if label in ["qEI", "piqEI", "random"]:
         # call helper functions to generate initial training data and initialize model
         train_x, train_obj, best_observed_value = problem.generate_initial_data(n=10)
-    elif label in ["SNES", "NESWSABI"]:
+    elif label == "SNES":
         searcher.run(1)
         train_x, train_obj = searcher.population.values, searcher.population.evals
+        best_observed_value = train_obj.max().item()
+        list_mu.append(searcher._get_mu())
+        list_sigma.append(searcher._get_sigma())
+    
+    elif label == "NESWSABI":
+        searcher.run(1, train_x=torch.tensor([], device=device, dtype=dtype), train_y=torch.tensor([], device=device, dtype=dtype))
+        train_x, train_obj = searcher.population.values.detach().clone(), searcher.population.evals.detach().clone().flatten()
         best_observed_value = train_obj.max().item()
         list_mu.append(searcher._get_mu())
         list_sigma.append(searcher._get_sigma())
@@ -194,7 +202,7 @@ def run(save_path: str,
                     best_f=standardize(train_obj).max(),
                     sampler=qmc_sampler
                 )
-            if label == "piqEI":                
+            if label == "piqEI":
                 af = piqExpectedImprovement(
                     model=model,
                     best_f=standardize(train_obj).max(),
@@ -215,9 +223,15 @@ def run(save_path: str,
                 new_x, new_obj = update_random_observations()
             elif problem_name == "airfoil":
                 new_x, new_obj = update_random_observations_discrete()
-        elif label in ["SNES", "NESWSABI"]:
+        elif label == "SNES":
             searcher.run(1)
             new_x, new_obj = searcher.population.values, searcher.population.evals
+            list_mu.append(searcher._get_mu())
+            list_sigma.append(searcher._get_sigma())
+        elif label == "NESWSABI":
+            #searcher = NESWSABI(problem_ea, popsize=BATCH_SIZE, stdev_init=problem_kwargs["initial_bounds"], ranking_method=bo_kwargs["ranking_method"], quad_kwargs=bo_kwargs["quadrature"])
+            searcher.run(1, train_x=train_x, train_y=train_obj)
+            new_x, new_obj = searcher.population.values.detach().clone(), searcher.population.evals.detach().clone().flatten()
             list_mu.append(searcher._get_mu())
             list_sigma.append(searcher._get_sigma())
 
@@ -239,7 +253,7 @@ def run(save_path: str,
             )
         
         t1 = time.monotonic()
-        
+
         if verbose:
             if (iteration + 1)%10 == 0:
                 print(

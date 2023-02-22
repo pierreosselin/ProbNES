@@ -97,6 +97,7 @@ if __name__ == "__main__":
                 bo_kwargs=bo_kwargs,
                 problem_kwargs=problem_kwargs,
                 )
+    
     plot_figure(os.path.dirname(save_path))
     plot_figure(os.path.dirname(save_path), log_transform=True)
     plot_distribution_gif(save_dir, n_seeds=1)
