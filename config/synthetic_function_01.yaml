@@ -1,5 +1,5 @@
 problem_name: test_function
-save_dir: ./logs/testfunction/rosenbrock_dim2
+save_dir: ./logs/testfunction/function_1
 seed: 0
 
 exp_settings:
@@ -50,8 +50,9 @@ bo_settings:
     # Utility
     show_progress: True           # flag whether or not show the quadrature result over each iteration.
 
+# function in ["rastrigin", "ackley", "rastrigin", "sphere"]
 problem_settings:
-  function: "rosenbrock"
+  function: "ackley"
   noise: 0.
-  dim: 2
-  initial_bounds: 10.
+  dim: 1
+  initial_bounds: 5.

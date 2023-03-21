@@ -3,15 +3,17 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from matplotlib.patches import Ellipse
-import imageio
+import imageio.v2 as imageio
 from tqdm import tqdm
+import scipy.stats as stats
+
 
 
 """
 Scripts to produce plots from the files contained in path
 """ 
 
-
+## TODO Adapt to one Dimensional plots
 def plot_cov_ellipse(cov, pos, nstd=2, ax=None, **kwargs):
     """
     Plots an `nstd` sigma error ellipse based on the specified covariance
@@ -116,10 +118,92 @@ def plot_figure(save_path, log_transform=False):
         plt.savefig(os.path.join(save_path, f"plot_regret_log.pdf"))
         plt.savefig(os.path.join(save_path, f"plot_regret_log.png"))
 
-def plot_distribution_gif(save_path, n_seeds=1):
+def distribution_gif_2D(algo_path, seed, data, ax):
+    X = data["X"]
+    dim = X.shape[0]
+    label = data["label"]
+    objective = data["objective"]
+    bounds = data["bounds"]
+    BATCH_SIZE = data["BATCH_SIZE"]
+    N_BATCH = data["N_BATCH"]
+    if label == "SNES":
+        mu = data["mu"]
+        sigma = data["sigma"]
+    b = np.arange(-bounds, bounds, 0.05)
+    d = np.arange(-bounds, bounds, 0.05)
+    B, D = np.meshgrid(b, d)
+    n = b.shape[0]
+    res = torch.stack((torch.tensor(B.flatten()), torch.tensor(D.flatten())), axis = 1)
+    nu = objective(res).numpy().reshape(n, n)
+
+    plot_path = os.path.join(algo_path, f"{seed}")
+    if not os.path.exists(plot_path):
+        os.mkdir(plot_path)
+        
+    for i in range(N_BATCH):
+        if ((i+1) % 5) == 0:
+            fig, ax = plt.subplots(1, 1, figsize=(8, 6))
+            ax.contourf(B, D, nu, levels=500)
+            ax.set_xlabel('x')
+            ax.set_ylabel('y')
+            plot_X = X[(i-1)*BATCH_SIZE:i*BATCH_SIZE].numpy()
+            ax.scatter(plot_X[:,0], plot_X[:,1], s=16)
+            if label == "SNES":
+                plot_cov_ellipse(np.diag(sigma[i].numpy()), mu[i].numpy(), nstd=1, ax=ax, facecolor="none", edgecolor = 'firebrick')
+                plot_cov_ellipse(np.diag(sigma[i].numpy()), mu[i].numpy(), nstd=2, ax=ax, facecolor="none", edgecolor = 'fuchsia', linestyle='--')
+                plot_cov_ellipse(np.diag(sigma[i].numpy()), mu[i].numpy(), nstd=3, ax=ax, facecolor="none", edgecolor = 'blue', linestyle=':')
+            fig.savefig(os.path.join(plot_path, f"plot{i}.png"))
+            plt.close()
+    images = []
+    for i in range(N_BATCH):
+        if ((i+1) % 5) == 0:
+            images.append(imageio.imread(os.path.join(plot_path, f"plot{i}.png")))
+    imageio.mimsave(os.path.join(algo_path, f"gif{seed}.gif"), images)
+
+
+def distribution_gif_1D(algo_path, seed, data, ax):
+    X = data["X"]
+    label = data["label"]
+    objective = data["objective"]
+    bounds = data["bounds"]
+    BATCH_SIZE = data["BATCH_SIZE"]
+    N_BATCH = data["N_BATCH"]
+    if label == "SNES":
+        mu = data["mu"]
+        sigma = data["sigma"]
+    b = np.arange(-bounds, bounds, 0.05)
+    ### Change here
+    nu = objective(torch.tensor(b).reshape(-1,1)).numpy()
+    plot_path = os.path.join(algo_path, f"{seed}")
+    if not os.path.exists(plot_path):
+        os.mkdir(plot_path)
+        
+    for i in range(N_BATCH):
+        if ((i+1) % 5) == 0:
+            fig, ax = plt.subplots(1, 1, figsize=(8, 6))
+            ax.plot(b, nu)
+            ax.set_xlabel('x')
+            ax.set_ylabel('y')
+            plot_X = X[(i-1)*BATCH_SIZE:i*BATCH_SIZE].numpy()
+            ax.scatter(plot_X[:,0], np.zeros_like(plot_X[:,0]), s=16)
+            if label == "SNES":
+                x = np.linspace(mu[i] - 3*sigma[i], mu[i] + 3*sigma[i], 100).flatten()
+                plt.plot(x, stats.norm.pdf(x, mu[i], sigma[i]))
+            fig.savefig(os.path.join(plot_path, f"plot{i}.png"))
+            plt.close()
+
+    images = []
+    for i in range(N_BATCH):
+        if ((i+1) % 5) == 0:
+            images.append(imageio.imread(os.path.join(plot_path, f"plot{i}.png")))
+    imageio.mimsave(os.path.join(algo_path, f"gif{seed}.gif"), images)
+
+
+def plot_distribution_gif_new(save_path, n_seeds=1):
     """
     n_seeds: Number of seeds one wants to plot the trajectory
     """
+
     alg_name = [name for name in os.listdir(save_path) if os.path.isdir(os.path.join(save_path, name))]
     for algo in tqdm(alg_name, desc="Processing Algorithms..."):
         algo_path = os.path.join(save_path, algo)
@@ -130,44 +214,15 @@ def plot_distribution_gif(save_path, n_seeds=1):
             with open(data_path, "rb") as _:
                 data = torch.load(data_path, map_location="cpu")
             X = data["X"]
-            label = data["label"]
-            objective = data["objective"]
-            bounds = data["bounds"]
-            BATCH_SIZE = data["BATCH_SIZE"]
-            N_BATCH = data["N_BATCH"]
-            if label == "SNES":
-                mu = data["mu"]
-                sigma = data["sigma"]
-            b = np.arange(-bounds, bounds, 0.05)
-            d = np.arange(-bounds, bounds, 0.05)
-            B, D = np.meshgrid(b, d)
-            n = b.shape[0]
-            res = torch.stack((torch.tensor(B.flatten()), torch.tensor(D.flatten())), axis = 1)
-            nu = objective(res).numpy().reshape(n, n)
+            dim = X.shape[1]
 
-            plot_path = os.path.join(algo_path, f"{seed}")
-            if not os.path.exists(plot_path):
-                os.mkdir(plot_path)
-                
-            for i in range(N_BATCH):
-                if ((i+1) % 5) == 0:
-                    fig, ax = plt.subplots(1, 1, figsize=(8, 6))
-                    ax.contourf(B, D, nu, levels=500)
-                    ax.set_xlabel('x')
-                    ax.set_ylabel('y')
-                    plot_X = X[(i-1)*BATCH_SIZE:i*BATCH_SIZE].numpy()
-                    ax.scatter(plot_X[:,0], plot_X[:,1], s=16)
-                    if label == "SNES":
-                        plot_cov_ellipse(np.diag(sigma[i].numpy()), mu[i].numpy(), nstd=1, ax=ax, facecolor="none", edgecolor = 'firebrick')
-                        plot_cov_ellipse(np.diag(sigma[i].numpy()), mu[i].numpy(), nstd=2, ax=ax, facecolor="none", edgecolor = 'fuchsia', linestyle='--')
-                        plot_cov_ellipse(np.diag(sigma[i].numpy()), mu[i].numpy(), nstd=3, ax=ax, facecolor="none", edgecolor = 'blue', linestyle=':')
-                    fig.savefig(os.path.join(plot_path, f"plot{i}.png"))
-                    plt.close()
-            images = []
-            for i in range(N_BATCH):
-                if ((i+1) % 5) == 0:
-                    images.append(imageio.imread(os.path.join(plot_path, f"plot{i}.png")))
-            imageio.mimsave(os.path.join(algo_path, f"gif{seed}.gif"), images)
+            if dim == 1:
+                distribution_gif_1D(algo_path, seed, data, ax)
+            elif dim == 2:
+                distribution_gif_2D(algo_path, seed, data, ax)
+            else:
+                raise Exception("Dimension of the problem should be less than 2")
 
 if __name__ == "__main__":
     plot_distribution_gif("./logs/testfunction/sphere_test")
+    #plot_distribution_gif("./logs/testfunction/function_1")

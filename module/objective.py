@@ -60,7 +60,10 @@ def get_objective(
             obj = Objective(obj_func=Rastrigin(dim), noise_std=noise_std, best_value=0., negate=True)
         elif test_function == "sphere":
             obj = Objective(obj_func=Sphere(dim), noise_std=noise_std, best_value=0., negate=True)
-            
+        elif test_function == "function_1":
+            obj_function = lambda x: torch.sin(x - 4.) + torch.sin((10./3.)*(x - 4.))
+            dim = 1
+            obj = Objective(obj_func=obj_function, noise_std=noise_std, best_value=0., negate=True)
         else:
             raise NotImplementedError(f"Function {test_function} is not implemented")
     
