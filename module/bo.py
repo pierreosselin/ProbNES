@@ -211,7 +211,7 @@ def run(save_path: str,
                     beta=BETA,
                     sampler=qmc_sampler
                 )
-
+        
         # optimize and get new observation
         if label in ["qEI", "piqEI"]:
             if problem_name == "test_function":

@@ -5,10 +5,10 @@ seed: 0
 exp_settings:
   n_exp: 10
   n_iter: 100
-  batch_size: 30
+  batch_size: 20
 
 bo_settings:
-  algorithm: NESWSABI
+  algorithm: NESWSABI #[random, qEI, SNES, piqEI, NESWSABI]
   beta: 1.
   var_prior: 10.
   num_restarts: 10
@@ -35,10 +35,10 @@ bo_settings:
     lr: 0.1                       # learning rate of Adam
 
     # RCHQ hyperparameters
-    n_rec: 20000                   # subsampling size for kernel recombination
+    n_rec: 2500                    # subsampling size for kernel recombination
     nys_ratio: 1.0e-2              # subsubsampling ratio for Nystrom. Number of Nystrom samples is nys_ratio * n_rec
     #batch_size: 100               # batch size
-    batch_size: 30
+    batch_size: 20
     quad_ratio: 5                 # supersampling ratio for quadrature. Number of recombination samples is quad_ratio * n_rec
 
     # Uncertainty sampling
