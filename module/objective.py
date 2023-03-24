@@ -4,8 +4,24 @@ from typing import Optional, Any, Union, Tuple, Callable, Dict
 import torch
 from botorch.test_functions.synthetic import Ackley, Rosenbrock, Rastrigin
 from .utils import Sphere
+import gpytorch
+
+# We will use the simplest form of GP model, exact inference
+class ExactGPModel(gpytorch.models.ExactGP):
+    def __init__(self, train_x, train_y, likelihood):
+        super(ExactGPModel, self).__init__(train_x, train_y, likelihood)
+        self.mean_module = gpytorch.means.ConstantMean()
+        self.covar_module = gpytorch.kernels.ScaleKernel(gpytorch.kernels.RBFKernel())
+
+    def forward(self, x):
+        mean_x = self.mean_module(x)
+        covar_x = self.covar_module(x)
+        return gpytorch.distributions.MultivariateNormal(mean_x, covar_x)
+
 
 # TODO Check noise std is actually working
+## TODO Refactor Problem and Objective class, a lot in common 
+
 class Objective:
     def __init__(self,
                  obj_func: Callable,
@@ -42,6 +58,7 @@ class Objective:
         if noise and self.noise_std is not None:
             f += self.noise_std * torch.randn_like(f)
         return f
+    
 # TODO Implement experiments on hyperparameter tuning (refer to pibo for data)
 def get_objective(
         label: str,
@@ -68,30 +85,36 @@ def get_objective(
             raise NotImplementedError(f"Function {test_function} is not implemented")
     
     elif label == "airfoil":
-        ## Load data
-        scaled_data = problem_kwargs.get("scaled_data")
-        scaled_target_value = problem_kwargs.get("scaled_target_value", None)
+        # Devices and dtype
+        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        dtype = torch.double
         
-        ## Create dictionary
-        d = {}
-        for row in scaled_data:
-            d[tuple(row[:5])] = row[5]
-
+        ## Load data
+        train_x, train_y = torch.load('data/airfoil_scaled_train_x.pt').to(dtype=dtype, device=device), torch.load('data/airfoil_scaled_train_y.pt').to(dtype=dtype, device=device)
+        state_dict = torch.load('data/airfoil_model_state.pth')
+        n = train_x.shape[0]
+        noises = torch.ones(n, dtype=dtype, device=device) * 1e-5
+        likelihood = gpytorch.likelihoods.FixedNoiseGaussianLikelihood(noise=noises)
+        model = ExactGPModel(train_x, train_y, likelihood=likelihood)  # Create a new GP model
+        model.load_state_dict(state_dict)
+        model = model.to(dtype=dtype, device=device)
+        target_value = train_y.cpu().max()
+        
         ## Create objective
         def objec(x):
-            if x.ndim > 1:
-                res = []
-                for btc in x:
-                    el = tuple(btc.detach().cpu().numpy())
-                    res.append(-abs(d[el] - scaled_target_value))
-                res = torch.tensor(res).to(x)
-            else:
-                el  = tuple(x.detach().cpu().numpy())
-                res = -abs(d[el] - scaled_target_value)
-                res = torch.tensor([res]).to(x)
-            return res
+            x = x.clone().detach()
+            if x.ndim == 1:
+                x = x.reshape(-1,1)
+            model.eval()
+            likelihood.eval()
+
+            # Test points are regularly spaced along [0,1]
+            # Make predictions by feeding model through likelihood
+            with torch.no_grad(), gpytorch.settings.fast_pred_var():
+                observed_pred = likelihood(model(x))
+            return observed_pred.mean
         
-        obj = Objective(obj_func=objec, noise_std=0., best_value=0.)
+        obj = Objective(obj_func=objec, noise_std=0., best_value=target_value)
         return obj
             
         

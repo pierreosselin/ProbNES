@@ -15,7 +15,7 @@ if __name__ == "__main__":
     log_plot = args.log
 
     plot_figure(save_path, log_transform=log_plot)
-    #plot_distribution_gif(save_dir, n_seeds=1)
+    plot_distribution_gif(save_path, n_seeds=1)
     
     """
     for seed, var_prior in product(seed_list, var_list):

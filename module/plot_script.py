@@ -6,6 +6,7 @@ from matplotlib.patches import Ellipse
 import imageio.v2 as imageio
 from tqdm import tqdm
 import scipy.stats as stats
+from module.objective import get_objective
 
 
 
@@ -77,9 +78,10 @@ def plot_figure_algo(alg_dir, ax):
     yerr=ci(y, N_TRIALS)
     ax.fill_between(iters, y.mean(axis=0)-yerr, y.mean(axis=0)+yerr, alpha=0.1)
 
-def plot_figure(save_path, log_transform=False):
+def plot_figure(config, save_path, log_transform=False):
     _, ax = plt.subplots(1, 1, figsize=(8, 6))
     alg_name = [name for name in os.listdir(save_path) if os.path.isdir(os.path.join(save_path, name))]
+    obj = get_objective(config["problem_name"], **config["problem_settings"])
     for algo in alg_name:
         alg_dir = os.path.join(save_path, algo)
         data_path_seeds = [f for f in os.listdir(alg_dir) if ".pt" in f]
@@ -118,11 +120,9 @@ def plot_figure(save_path, log_transform=False):
         plt.savefig(os.path.join(save_path, f"plot_regret_log.pdf"))
         plt.savefig(os.path.join(save_path, f"plot_regret_log.png"))
 
-def distribution_gif_2D(algo_path, seed, data, ax):
+def distribution_gif_2D(algo_path, objective, seed, data, ax):
     X = data["X"]
-    dim = X.shape[0]
     label = data["label"]
-    objective = data["objective"]
     bounds = data["bounds"]
     BATCH_SIZE = data["BATCH_SIZE"]
     N_BATCH = data["N_BATCH"]
@@ -161,10 +161,9 @@ def distribution_gif_2D(algo_path, seed, data, ax):
     imageio.mimsave(os.path.join(algo_path, f"gif{seed}.gif"), images)
 
 
-def distribution_gif_1D(algo_path, seed, data, ax):
+def distribution_gif_1D(algo_path, objective, seed, data, ax):
     X = data["X"]
     label = data["label"]
-    objective = data["objective"]
     bounds = data["bounds"]
     BATCH_SIZE = data["BATCH_SIZE"]
     N_BATCH = data["N_BATCH"]
@@ -172,7 +171,6 @@ def distribution_gif_1D(algo_path, seed, data, ax):
         mu = data["mu"]
         sigma = data["sigma"]
     b = np.arange(-bounds, bounds, 0.05)
-    ### Change here
     nu = objective(torch.tensor(b).reshape(-1,1)).numpy()
     plot_path = os.path.join(algo_path, f"{seed}")
     if not os.path.exists(plot_path):
@@ -199,12 +197,13 @@ def distribution_gif_1D(algo_path, seed, data, ax):
     imageio.mimsave(os.path.join(algo_path, f"gif{seed}.gif"), images)
 
 
-def plot_distribution_gif_new(save_path, n_seeds=1):
+def plot_distribution_gif(config, save_path, n_seeds=1):
     """
     n_seeds: Number of seeds one wants to plot the trajectory
     """
-
     alg_name = [name for name in os.listdir(save_path) if os.path.isdir(os.path.join(save_path, name))]
+    dim = config["problem_settings"]["dim"]
+    obj = get_objective(config["problem_name"], **config["problem_settings"])
     for algo in tqdm(alg_name, desc="Processing Algorithms..."):
         algo_path = os.path.join(save_path, algo)
         _, ax = plt.subplots(1, 1, figsize=(8, 6))
@@ -213,13 +212,10 @@ def plot_distribution_gif_new(save_path, n_seeds=1):
             data_path = os.path.join(algo_path, df)
             with open(data_path, "rb") as _:
                 data = torch.load(data_path, map_location="cpu")
-            X = data["X"]
-            dim = X.shape[1]
-
             if dim == 1:
-                distribution_gif_1D(algo_path, seed, data, ax)
+                distribution_gif_1D(algo_path, obj, seed, data, ax)
             elif dim == 2:
-                distribution_gif_2D(algo_path, seed, data, ax)
+                distribution_gif_2D(algo_path, obj, seed, data, ax)
             else:
                 raise Exception("Dimension of the problem should be less than 2")
 

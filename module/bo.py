@@ -18,9 +18,6 @@ from tqdm import tqdm
 import numpy as np
 import random
 from botorch.utils.transforms import standardize, normalize, unnormalize
-import gc
-
-
 
 from evotorch.algorithms import SNES
 from evotorch import Problem
@@ -214,15 +211,17 @@ def run(save_path: str,
         
         # optimize and get new observation
         if label in ["qEI", "piqEI"]:
-            if problem_name == "test_function":
-                new_x, new_obj = optimize_acqf_and_get_observation(af)
-            elif problem_name == "airfoil":
-                new_x, new_obj = optimize_acqf_and_get_observation_discrete(af)
+            new_x, new_obj = optimize_acqf_and_get_observation(af)
+            #if problem_name == "test_function":
+            #    new_x, new_obj = optimize_acqf_and_get_observation(af)
+            #elif problem_name == "airfoil":
+            #    new_x, new_obj = optimize_acqf_and_get_observation_discrete(af)
         elif label == "random":
-            if problem_name == "test_function":
-                new_x, new_obj = update_random_observations()
-            elif problem_name == "airfoil":
-                new_x, new_obj = update_random_observations_discrete()
+            new_x, new_obj = update_random_observations()
+            #if problem_name == "test_function":
+            #    new_x, new_obj = update_random_observations()
+            #elif problem_name == "airfoil":
+            #    new_x, new_obj = update_random_observations_discrete()
         elif label == "SNES":
             searcher.run(1)
             new_x, new_obj = searcher.population.values, searcher.population.evals
@@ -271,7 +270,6 @@ def run(save_path: str,
         "regret": regret.cpu(),
         "N_BATCH": N_BATCH,
         "BATCH_SIZE": BATCH_SIZE,
-        "objective": objective.obj_func,
         "bounds": problem_kwargs["initial_bounds"]
     }
 

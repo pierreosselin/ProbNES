@@ -1,9 +1,9 @@
-problem_name: test_function
+problem_name: airfoil
 save_dir: ./logs/airfoil
 seed: 0
 
 exp_settings:
-  n_exp: 10
+  n_exp: 2
   n_iter: 100
   batch_size: 5
 
@@ -54,4 +54,4 @@ problem_settings:
   function: "airfoil"
   noise: 0.
   dim: 5
-  initial_bounds: 5.
+  initial_bounds: 10.

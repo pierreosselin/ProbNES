@@ -1,4 +1,4 @@
-/* {
+{
     // Use IntelliSense to learn about possible attributes.
     // Hover to view descriptions of existing attributes.
     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
@@ -9,13 +9,13 @@
             "type": "python",
             "request": "launch",
             "program": "${workspaceFolder}/main.py",
-            "args": ["--config", "synthetic_rosenbrock1"],
+            "args": ["--config", "airfoil"],
             "console": "integratedTerminal",
             "justMyCode": true
         }
     ]
-}    */
-
+}
+/* 
 {
     // Use IntelliSense to learn about possible attributes.
     // Hover to view descriptions of existing attributes.
@@ -31,4 +31,4 @@
             "justMyCode": true
         }
     ]
-}   
+}    */
