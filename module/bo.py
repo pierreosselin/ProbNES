@@ -234,7 +234,6 @@ def run(save_path: str,
             list_mu.append(searcher._get_mu())
             list_sigma.append(searcher._get_sigma())
 
-        
         # update training points
         train_x = torch.cat([train_x, new_x])
         train_obj = torch.cat([train_obj, new_obj])
