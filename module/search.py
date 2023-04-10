@@ -240,9 +240,6 @@ class NESWSABI(SNES):
             self._update_distribution(gradients)
             fill_and_eval_pop()
 
-
-
-
 class NESQUAD(SNES):
 
     DISTRIBUTION_TYPE = ExpSeparableGaussian

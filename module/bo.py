@@ -4,7 +4,7 @@ from .base_problem import get_problem
 from typing import Optional, Any, Union, Tuple, Callable, Dict
 from botorch.models import SingleTaskGP, FixedNoiseGP
 from gpytorch.mlls import ExactMarginalLogLikelihood
-from botorch.optim import optimize_acqf, optimize_acqf_discrete
+from botorch.optim import optimize_acqf
 from botorch import fit_gpytorch_mll
 from botorch.acquisition.monte_carlo import qExpectedImprovement
 from botorch.sampling.normal import SobolQMCNormalSampler
@@ -12,15 +12,18 @@ from botorch.exceptions import BadInitialCandidatesWarning
 from .acquisition import piqExpectedImprovement
 from torch.distributions.multivariate_normal import MultivariateNormal
 from .search import NESWSABI
-import time
 import warnings
 from tqdm import tqdm
 import numpy as np
-import random
 from botorch.utils.transforms import standardize, normalize, unnormalize
+from module.quadrature import Quadrature
 
 from evotorch.algorithms import SNES
 from evotorch import Problem
+
+## TODO Refactor code such that remove if in there
+LIST_LABEL = ["SNES", "NESWSABI", "piqEI", "quad", "qEI"]
+
 
 def run(save_path: str,
         problem_name:str = "test_function",
@@ -45,7 +48,6 @@ def run(save_path: str,
     NUM_RESTARTS = bo_kwargs["num_restarts"]
     RAW_SAMPLES = bo_kwargs["raw_samples"]
     MC_SAMPLES = bo_kwargs["mc_samples"]
-    BETA, VAR_PRIOR = bo_kwargs["beta"], bo_kwargs["var_prior"]
     NORMALIZE = True
 
     #Set seed and device
@@ -77,15 +79,35 @@ def run(save_path: str,
         list_mu, list_sigma = [], []
         list_mu.append(searcher._get_mu())
         list_sigma.append(searcher._get_sigma())
+    elif label == "piqEI":
+        BETA, VAR_PRIOR = bo_kwargs["beta"], bo_kwargs["var_prior"]
+        mean, loc = torch.zeros(problem.dim, device=device, dtype=dtype), VAR_PRIOR*torch.eye(problem.dim, device=device, dtype=dtype)
+        pi_distrib = MultivariateNormal(mean, loc)
+    elif label == "quad": ## Modify initialization to integrate as well
+        VAR_PRIOR = bo_kwargs["var_prior"]
+        POLICY_QUAD = bo_kwargs["policy"]
+        STEP_SIZE = bo_kwargs["step_size"]
+        mean, cov_matrix = torch.zeros(problem.dim, device=device, dtype=dtype), VAR_PRIOR*torch.eye(problem.dim, device=device, dtype=dtype)
+        params = [mean, torch.diag(cov_matrix)]
+        quad_distrib = MultivariateNormal(params[0], torch.diag(params[1]))
+        quad = Quadrature(objective=objective,
+                        distribution=quad_distrib,
+                        batch_size=BATCH_SIZE,
+                        device=device,
+                        dtype=dtype,
+                        policy=POLICY_QUAD,
+                        params=params,
+                        step_size=STEP_SIZE)
+        list_mu, list_sigma = [], []
+        list_mu.append(quad.distribution.loc)
+        list_sigma.append(quad.distribution.covariance_matrix)
     
+        
+    else:
+        raise Exception(f"Wrong label, must be in {LIST_LABEL}")
 
     warnings.filterwarnings('ignore', category=BadInitialCandidatesWarning)
     warnings.filterwarnings('ignore', category=RuntimeWarning)
-
-    #Pi bo parameters
-    if label == "piqEI":
-        mean, loc = torch.zeros(problem.dim, device=device, dtype=dtype), VAR_PRIOR*torch.eye(problem.dim, device=device, dtype=dtype)
-        pi_distrib = MultivariateNormal(mean, loc)
 
     verbose = True
 
@@ -120,20 +142,6 @@ def run(save_path: str,
         new_obj = exact_obj
         return new_x, new_obj
     
-    def optimize_acqf_and_get_observation_discrete(acq_func):
-        """Optimizes the acquisition function, and returns a new candidate and a noisy observation."""
-        # optimize
-        candidates, _ = optimize_acqf_discrete(
-            acq_function=acq_func,
-            q=BATCH_SIZE,
-            choices=torch.tensor(problem.scaled_data[:, :5], device=device, dtype=dtype)
-        )
-        # observe new values 
-        new_x = candidates.detach()
-        exact_obj = objective(new_x).unsqueeze(-1) # add output dimension
-        new_obj = exact_obj
-        return new_x, new_obj
-    
     def update_random_observations():
         """Simulates a random policy by taking a the current list of best values observed randomly,
         drawing a new random point, observing its value, and updating the list.
@@ -141,23 +149,14 @@ def run(save_path: str,
         rand_x = unnormalize(torch.rand(BATCH_SIZE, problem.dim, device=device, dtype=dtype), bounds=problem.bounds)
         rand_y = objective(rand_x).unsqueeze(-1)
         return rand_x, rand_y
-    
-    def update_random_observations_discrete():
-        """Simulates a random policy by taking a the current list of best values observed randomly,
-        drawing a new random point, observing its value, and updating the list.
-        """
-        n_data = problem.raw_data.shape[0]
-        indice = torch.tensor(random.sample(range(n_data), BATCH_SIZE))
-        rand_x = torch.tensor(problem.scaled_data[indice, :problem.dim], device=device, dtype=dtype)
-        rand_y = objective(rand_x).unsqueeze(-1)      
-        return rand_x, rand_y
 
-    # average over multiple trials    
+    # average over multiple trials
     best_observed =  []
     
-    if label in ["qEI", "piqEI", "random"]:
+    if label in ["qEI", "piqEI", "random", "quad"]:
         # call helper functions to generate initial training data and initialize model
         train_x, train_obj, best_observed_value = problem.generate_initial_data(n=10)
+
     elif label == "SNES":
         searcher.run(1)
         train_x, train_obj = searcher.population.values, searcher.population.evals
@@ -174,16 +173,13 @@ def run(save_path: str,
     
     if label in ["qEI", "piqEI"]:
         if NORMALIZE:
-            mll, model = initialize_model(normalize(train_x, bounds=problem.bounds), standardize(train_obj))
+            mll, model = initialize_model(normalize(train_x, bounds=problem.bounds), train_obj)
         else:
             mll, model = initialize_model(train_x, train_obj)
 
     best_observed.append(best_observed_value)
     # run N_BATCH rounds of BayesOpt after the initial random batch
-    for iteration in tqdm(range(1, N_BATCH + 1), position=0, leave=True, desc = f"Processing algorithm {label} at seed {seed}"):
-        
-        t0 = time.monotonic()
-        
+    for iteration in tqdm(range(1, N_BATCH + 1), position=0, leave=True, desc = f"Processing algorithm {label} at seed {seed}"):        
         if label in ["qEI", "piqEI"]:
             
             # fit the models
@@ -212,21 +208,31 @@ def run(save_path: str,
         # optimize and get new observation
         if label in ["qEI", "piqEI"]:
             new_x, new_obj = optimize_acqf_and_get_observation(af)
-            #if problem_name == "test_function":
-            #    new_x, new_obj = optimize_acqf_and_get_observation(af)
-            #elif problem_name == "airfoil":
-            #    new_x, new_obj = optimize_acqf_and_get_observation_discrete(af)
+
         elif label == "random":
             new_x, new_obj = update_random_observations()
-            #if problem_name == "test_function":
-            #    new_x, new_obj = update_random_observations()
-            #elif problem_name == "airfoil":
-            #    new_x, new_obj = update_random_observations_discrete()
+
+        elif label == "quad":
+            quad.update(train_x=train_x, train_y=standardize(train_obj)) ### To move to first (or put one after initialization)
+            quad.grad_integration()
+            quad_distrib=quad.update_distribution()
+            _, new_x, new_obj=quad.integrate()
+            list_mu.append(quad.distribution.loc)
+            list_sigma.append(torch.diag(quad.distribution.covariance_matrix))
+            print("New distribution:")
+            print(quad.distribution.loc)
+            print(quad.distribution.covariance_matrix)
+            print("Grad distribution:")
+            print(quad.grad_distribution.loc)
+            print(quad.grad_distribution.covariance_matrix)
+            
+            
         elif label == "SNES":
             searcher.run(1)
             new_x, new_obj = searcher.population.values, searcher.population.evals
             list_mu.append(searcher._get_mu())
             list_sigma.append(searcher._get_sigma())
+
         elif label == "NESWSABI":
             #searcher = NESWSABI(problem_ea, popsize=BATCH_SIZE, stdev_init=problem_kwargs["initial_bounds"], ranking_method=bo_kwargs["ranking_method"], quad_kwargs=bo_kwargs["quadrature"])
             searcher.run(1, train_x=train_x, train_y=train_obj)
@@ -250,8 +256,6 @@ def run(save_path: str,
                 model.state_dict(),
             )
         
-        t1 = time.monotonic()
-
         if verbose:
             if (iteration + 1)%10 == 0:
                 print(
@@ -272,9 +276,9 @@ def run(save_path: str,
         "bounds": problem_kwargs["initial_bounds"]
     }
 
-    if label in ["SNES", "NESWSABI"]:
+    if label in ["SNES", "NESWSABI", "quad"]:
         output_dict["mu"] = list_mu
         output_dict["sigma"] = list_sigma
     
-    with open(os.path.join(save_path, f"seed-{str(seed).zfill(4)}_Beta-{BETA}_VarPrior-{VAR_PRIOR}_Noise-{objective.noise_std}_Dim-{problem.dim}.pt"), "wb") as fp:
+    with open(os.path.join(save_path, f"seed-{str(seed).zfill(4)}_VarPrior-{VAR_PRIOR}_Noise-{objective.noise_std}_Dim-{problem.dim}.pt"), "wb") as fp:
         torch.save(output_dict, fp)

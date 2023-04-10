@@ -18,10 +18,6 @@ class ExactGPModel(gpytorch.models.ExactGP):
         covar_x = self.covar_module(x)
         return gpytorch.distributions.MultivariateNormal(mean_x, covar_x)
 
-
-# TODO Check noise std is actually working
-## TODO Refactor Problem and Objective class, a lot in common 
-
 class Objective:
     def __init__(self,
                  obj_func: Callable,
@@ -59,7 +55,6 @@ class Objective:
             f += self.noise_std * torch.randn_like(f)
         return f
     
-# TODO Implement experiments on hyperparameter tuning (refer to pibo for data)
 def get_objective(
         label: str,
         **problem_kwargs,
@@ -116,8 +111,6 @@ def get_objective(
         
         obj = Objective(obj_func=objec, noise_std=0., best_value=target_value)
         return obj
-            
-        
 
     else:
         raise NotImplementedError(f"Problem {label} is not implemented")

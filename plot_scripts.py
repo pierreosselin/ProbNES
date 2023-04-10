@@ -8,14 +8,15 @@ if __name__ == "__main__":
 
     # parse arguments and load config
     parser = argparse.ArgumentParser()
-    parser.add_argument('--path', type=str, default='')
+    parser.add_argument('--config', type=str, default='')
     parser.add_argument('--log', type=bool, default=False)
-    args = parser.parse_args()
-    save_path = args.path
-    log_plot = args.log
 
-    plot_figure(save_path, log_transform=log_plot)
-    plot_distribution_gif(save_path, n_seeds=1)
+    args = parser.parse_args()
+    with open(f'config/{args.config}.yaml', 'r') as file:
+        config = yaml.safe_load(file)
+    log_plot = args.log
+    #plot_figure(config, log_transform=log_plot)
+    plot_distribution_gif(config, n_seeds=1)
     
     """
     for seed, var_prior in product(seed_list, var_list):

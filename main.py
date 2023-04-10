@@ -102,7 +102,7 @@ if __name__ == "__main__":
     plot_figure(config, os.path.dirname(save_path), log_transform=True)
 
     ## config["test_function"]
-    plot_distribution_gif(config, save_dir, n_seeds=1)
+    plot_distribution_gif(config, n_seeds=1)
 
     
     """

@@ -11,8 +11,8 @@ from probnum.randvars import Normal
 from typing import Callable, Optional, Tuple
 import torch
 from torch.distributions.multivariate_normal import MultivariateNormal
-import functorch
-
+from BASQ._basq import BASQ
+import gpytorch
 """
 SyntheticProblem(Problem):
 Have an objective function to evaluate and info s.a. 
@@ -24,6 +24,33 @@ Input: Dataset and objective function
 
 Output: Next query points
 """
+
+## Create kernel tailored for the gradient computation
+class Kernel_grad(gpytorch.kernels.Kernel):
+    is_stationary = False
+    
+    def __init__(self, kernel_base, function_multiply):
+        self.function_multiply = function_multiply
+        self.kernel_base = kernel_base
+
+    # this is the kernel function
+    def forward(self, x1, x2, **params):
+
+        # calculate the distance between inputs
+        result = ((self.function_multiply(x1)) @ (self.function_multiply(x2).T)) * self.kernel_base(x1, x2)
+        
+        return result
+    
+## Create mean tailored for the gradient computation
+class Mean_grad(gpytorch.means.Mean):
+    def __init__(self, kernel_base, function_multiply):
+        self.function_multiply = function_multiply
+        self.kernel_base = kernel_base
+
+    def forward(self, x):
+        result = self.kernel_base(x)*self.function_multiply(x)
+        return result
+
 
 ## TODO Sample vs mean, step_size, how many samples?
 def bayesquad_from_initial_data(
@@ -143,19 +170,30 @@ class Quadrature:
                train_y=None):
         self.train_x=train_x
         self.train_y=train_y
-        self.nodes = self.train_x.cpu().detach().numpy()
-        if self.nodes.ndim == 1:
-            self.nodes = self.nodes.reshape(-1,1)
-        self.fun_evals = train_y.flatten().cpu().detach().numpy()
-        self.measure = GaussianMeasure(self.distribution.loc.cpu().detach().numpy(), self.distribution.covariance_matrix.cpu().detach().numpy())
-        self.options["max_evals"] = self.train_x.shape[0] + self.batch_size
+        self.quad = BASQ(
+            self.train_x,  # initial locations
+            self.train_y,  # initial observations
+            prior = self.distribution,  # Gaussian prior distribution
+            true_likelihood=self.objective,  # true likelihood to be estimated
+            device=self.device,  # cpu or cuda
+            dtype=self.dtype)
 
     def integrate(self):
-        F, bqstate, _ = bayesquad_from_initial_data(fun=self.fun,nodes=self.nodes, fun_evals=self.fun_evals, measure=self.measure, policy=self.policy, options=self.options, rng=np.random.default_rng(0))
-        new_x = torch.tensor(bqstate.nodes[-self.batch_size:], device=self.device, dtype=self.dtype)
-        new_obj = torch.tensor(bqstate.fun_evals[-self.batch_size:], device=self.device, dtype=self.dtype).reshape(-1,1)
-        return F, new_x, new_obj
+        new_x, new_obj = self.quad.run_basq()
+        return new_x, new_obj
     
+    ## Gradient integration with BASQ and same kernel with logprbaility
+    def grad_integration(self):
+        self.grad_quad = BASQ(
+            self.train_x,  # initial locations
+            self.train_y,  # initial observations
+            prior = self.distribution,  # Gaussian prior distribution
+            true_likelihood=self.objective,  # true likelihood to be estimated
+            device=self.device,  # cpu or cuda
+            dtype=self.dtype)
+
+
+
     def grad_integration(self):
         ## Given dataset, update grad distribution
         ## Distribution agnostic but be careful params management + constraints

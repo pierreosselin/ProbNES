@@ -14,7 +14,6 @@ from module.objective import get_objective
 Scripts to produce plots from the files contained in path
 """ 
 
-## TODO Adapt to one Dimensional plots
 def plot_cov_ellipse(cov, pos, nstd=2, ax=None, **kwargs):
     """
     Plots an `nstd` sigma error ellipse based on the specified covariance
@@ -126,7 +125,7 @@ def distribution_gif_2D(algo_path, objective, seed, data, ax):
     bounds = data["bounds"]
     BATCH_SIZE = data["BATCH_SIZE"]
     N_BATCH = data["N_BATCH"]
-    if label == "SNES":
+    if label in ["SNES", "quad"]:
         mu = data["mu"]
         sigma = data["sigma"]
     b = np.arange(-bounds, bounds, 0.05)
@@ -148,7 +147,7 @@ def distribution_gif_2D(algo_path, objective, seed, data, ax):
             ax.set_ylabel('y')
             plot_X = X[(i-1)*BATCH_SIZE:i*BATCH_SIZE].numpy()
             ax.scatter(plot_X[:,0], plot_X[:,1], s=16)
-            if label == "SNES":
+            if label in ["SNES", "quad"]:
                 plot_cov_ellipse(np.diag(sigma[i].numpy()), mu[i].numpy(), nstd=1, ax=ax, facecolor="none", edgecolor = 'firebrick')
                 plot_cov_ellipse(np.diag(sigma[i].numpy()), mu[i].numpy(), nstd=2, ax=ax, facecolor="none", edgecolor = 'fuchsia', linestyle='--')
                 plot_cov_ellipse(np.diag(sigma[i].numpy()), mu[i].numpy(), nstd=3, ax=ax, facecolor="none", edgecolor = 'blue', linestyle=':')
@@ -167,11 +166,11 @@ def distribution_gif_1D(algo_path, objective, seed, data, ax):
     bounds = data["bounds"]
     BATCH_SIZE = data["BATCH_SIZE"]
     N_BATCH = data["N_BATCH"]
-    if label == "SNES":
+    if label in ["SNES", "quad"]:
         mu = data["mu"]
         sigma = data["sigma"]
     b = np.arange(-bounds, bounds, 0.05)
-    nu = objective(torch.tensor(b).reshape(-1,1)).numpy()
+    nu = -objective(torch.tensor(b).reshape(-1,1)).numpy()
     plot_path = os.path.join(algo_path, f"{seed}")
     if not os.path.exists(plot_path):
         os.mkdir(plot_path)
@@ -184,7 +183,7 @@ def distribution_gif_1D(algo_path, objective, seed, data, ax):
             ax.set_ylabel('y')
             plot_X = X[(i-1)*BATCH_SIZE:i*BATCH_SIZE].numpy()
             ax.scatter(plot_X[:,0], np.zeros_like(plot_X[:,0]), s=16)
-            if label == "SNES":
+            if label in ["SNES", "quad"]:
                 x = np.linspace(mu[i] - 3*sigma[i], mu[i] + 3*sigma[i], 100).flatten()
                 plt.plot(x, stats.norm.pdf(x, mu[i], sigma[i]))
             fig.savefig(os.path.join(plot_path, f"plot{i}.png"))
@@ -197,10 +196,11 @@ def distribution_gif_1D(algo_path, objective, seed, data, ax):
     imageio.mimsave(os.path.join(algo_path, f"gif{seed}.gif"), images)
 
 
-def plot_distribution_gif(config, save_path, n_seeds=1):
+def plot_distribution_gif(config, n_seeds=1):
     """
     n_seeds: Number of seeds one wants to plot the trajectory
     """
+    save_path = config["save_dir"]
     alg_name = [name for name in os.listdir(save_path) if os.path.isdir(os.path.join(save_path, name))]
     dim = config["problem_settings"]["dim"]
     obj = get_objective(config["problem_name"], **config["problem_settings"])

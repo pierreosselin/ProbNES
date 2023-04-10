@@ -87,7 +87,7 @@ class BASQ(Parameters):
         X, _ = self.run_rchq(pts_nys, pts_rec, w_IS, self.kernel)
         Y = self.true_likelihood(X)
         if n_batch > 2:
-            self.update(X, Y) ### Not necessary here
+            self.update(X, Y) 
         return X, Y
 
     def runtrash(self, n_batch):

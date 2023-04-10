@@ -35,7 +35,7 @@ from . import (
     randvars,
     utils,
 )
-from ._version import version as __version__
+#from ._version import version as __version__
 from .randvars import asrandvar
 
 # Public classes and functions. Order is reflected in documentation.
