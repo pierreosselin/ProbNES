@@ -1,5 +1,5 @@
 problem_name: test_function #test_function, airfoil
-save_dir: ./logs/test_function/ackley_dim1
+save_dir: ./logs/test_function/ackley_dim2
 seed: 0
 
 exp_settings:
@@ -20,5 +20,5 @@ bo_settings:
 problem_settings:
   function: "ackley" # Name of the function in [airfoil, rosenbrock, sphere, ackley]
   noise: 0.
-  dim: 1
+  dim: 2
   initial_bounds: 10.

@@ -9,7 +9,7 @@ from probnum.randprocs.kernels import Kernel
 from probnum.randvars import Normal
 from typing import Callable, Optional, Tuple
 from torch.distributions.multivariate_normal import MultivariateNormal
-from module.quadrature import Quadrature
+from module.quadrature_bis import Quadrature
 
 train_x = torch.linspace(0, 1, 5).reshape(-1,1)
 train_y = (train_x**2).flatten()

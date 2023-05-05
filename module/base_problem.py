@@ -43,5 +43,3 @@ def get_problem(
     pb = Problem(objective = obj, dim=dim, device=device, dtype=dtype)
     pb.bounds = torch.tensor([[-bounds] * pb.dim, [bounds] * pb.dim], device=device, dtype=dtype)
     return pb
-        
-
