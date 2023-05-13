@@ -4,6 +4,11 @@ from botorch.test_functions.synthetic import SyntheticTestFunction
 from typing import Optional, Any, Union, Tuple, Callable, Dict, List
 import numpy as np
 from scipy.special import erf
+from gpytorch.kernels.rbf_kernel import *
+from gpytorch.settings import trace_mode
+from gpytorch.functions import RBFCovariance
+
+
 
 def bounded_bivariate_normal_integral(rho, xl, xu, yl, yu):
   """Computes the bounded bivariate normal integral.
@@ -224,3 +229,103 @@ class Sphere(SyntheticTestFunction):
     def evaluate_true(self, X: Tensor) -> Tensor:
         part1 = torch.norm(X, dim=-1)**2
         return part1
+
+def standardize_return(Y: Tensor) -> Tensor:
+    r"""Standardizes (zero mean, unit variance) a tensor by dim=-2.
+
+    If the tensor is single-dimensional, simply standardizes the tensor.
+    If for some batch index all elements are equal (or if there is only a single
+    data point), this function will return 0 for that batch index.
+
+    Args:
+        Y: A `batch_shape x n x m`-dim tensor.
+
+    Returns:
+        The standardized `Y`.
+
+    Example:
+        >>> Y = torch.rand(4, 3)
+        >>> Y_standardized = standardize(Y)
+    """
+
+    stddim = -1 if Y.dim() < 2 else -2
+    Y_std = Y.std(dim=stddim, keepdim=True)
+    Y_std = Y_std.where(Y_std >= 1e-9, torch.full_like(Y_std, 1.0))
+    Y_mean = Y.mean(dim=stddim, keepdim=True)
+    return (Y - Y.mean(dim=stddim, keepdim=True)) / Y_std, Y_mean, Y_std
+
+class NormalKernel(RBFKernel):
+    r"""
+    Computes a covariance matrix based on the RBF (squared exponential) kernel
+    between inputs :math:`\mathbf{x_1}` and :math:`\mathbf{x_2}`:
+
+    .. math::
+
+       \begin{equation*}
+          k_{\text{RBF}}(\mathbf{x_1}, \mathbf{x_2}) = \exp \left( -\frac{1}{2}
+          (\mathbf{x_1} - \mathbf{x_2})^\top \Theta^{-2} (\mathbf{x_1} - \mathbf{x_2}) \right)
+       \end{equation*}
+
+    where :math:`\Theta` is a lengthscale parameter.
+    See :class:`gpytorch.kernels.Kernel` for descriptions of the lengthscale options.
+
+    .. note::
+
+        This kernel does not have an `outputscale` parameter. To add a scaling parameter,
+        decorate this kernel with a :class:`gpytorch.kernels.ScaleKernel`.
+
+    :param ard_num_dims: Set this if you want a separate lengthscale for each input
+        dimension. It should be `d` if x1 is a `n x d` matrix. (Default: `None`.)
+    :param batch_shape: Set this if you want a separate lengthscale for each batch of input
+        data. It should be :math:`B_1 \times \ldots \times B_k` if :math:`\mathbf x1` is
+        a :math:`B_1 \times \ldots \times B_k \times N \times D` tensor.
+    :param active_dims: Set this if you want to compute the covariance of only
+        a few input dimensions. The ints corresponds to the indices of the
+        dimensions. (Default: `None`.)
+    :param lengthscale_prior: Set this if you want to apply a prior to the
+        lengthscale parameter. (Default: `None`)
+    :param lengthscale_constraint: Set this if you want to apply a constraint
+        to the lengthscale parameter. (Default: `Positive`.)
+    :param eps: The minimum value that the lengthscale can take (prevents
+        divide by zero errors). (Default: `1e-6`.)
+
+    :ivar torch.Tensor lengthscale: The lengthscale parameter. Size/shape of parameter depends on the
+        ard_num_dims and batch_shape arguments.
+
+    Example:
+        >>> x = torch.randn(10, 5)
+        >>> # Non-batch: Simple option
+        >>> covar_module = gpytorch.kernels.ScaleKernel(gpytorch.kernels.RBFKernel())
+        >>> # Non-batch: ARD (different lengthscale for each input dimension)
+        >>> covar_module = gpytorch.kernels.ScaleKernel(gpytorch.kernels.RBFKernel(ard_num_dims=5))
+        >>> covar = covar_module(x)  # Output: LinearOperator of size (10 x 10)
+        >>>
+        >>> batch_x = torch.randn(2, 10, 5)
+        >>> # Batch: Simple option
+        >>> covar_module = gpytorch.kernels.ScaleKernel(gpytorch.kernels.RBFKernel())
+        >>> # Batch: different lengthscale for each batch
+        >>> covar_module = gpytorch.kernels.ScaleKernel(gpytorch.kernels.RBFKernel(batch_shape=torch.Size([2])))
+        >>> covar = covar_module(x)  # Output: LinearOperator of size (2 x 10 x 10)
+    """
+
+    has_lengthscale = True
+
+    def forward(self, x1, x2, diag=False, **params):
+      scale = 1/(np.sqrt(np.linalg.det(2*np.pi*self.lengthscale)))
+      if (
+          x1.requires_grad
+          or x2.requires_grad
+          or (self.ard_num_dims is not None and self.ard_num_dims > 1)
+          or diag
+          or params.get("last_dim_is_batch", False)
+          or trace_mode.on()
+      ):
+          x1_ = x1.div(self.lengthscale)
+          x2_ = x2.div(self.lengthscale)
+          return scale*postprocess_rbf(self.covar_dist(x1_, x2_, square_dist=True, diag=diag, **params))
+      return scale*RBFCovariance.apply(
+          x1,
+          x2,
+          self.lengthscale,
+          lambda x1, x2: self.covar_dist(x1, x2, square_dist=True, diag=False, **params),
+      )

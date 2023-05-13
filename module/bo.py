@@ -18,11 +18,11 @@ import numpy as np
 from botorch.utils.transforms import standardize, normalize, unnormalize
 from evotorch.algorithms import SNES
 from evotorch import Problem
-from .quadrature import QuadratureExploration, Quadrature
+from .quadrature import QuadratureExploration, QuadratureExplorationBis, Quadrature
+from .plot_script import plot_GP_fit
 
 ## TODO Refactor code such that remove if in there
 LIST_LABEL = ["SNES", "piqEI", "quad", "qEI"]
-
 
 def run(save_path: str,
         problem_name:str = "test_function",
@@ -47,8 +47,13 @@ def run(save_path: str,
     NUM_RESTARTS = bo_kwargs["num_restarts"]
     RAW_SAMPLES = bo_kwargs["raw_samples"]
     MC_SAMPLES = bo_kwargs["mc_samples"]
+    ACQUISITION_BATCH_OPTIMIZATION = bo_kwargs["batch_acq"]
     NORMALIZE = False
     STANDARDIZE_LABEL = True
+    VERBOSE = bo_kwargs["verbose"]
+    if VERBOSE:
+        if not os.path.exists(os.path.join(save_path, "fitgp")):
+                    os.makedirs(os.path.join(save_path, "fitgp"))
 
     #Set seed and device
     torch.manual_seed(seed)
@@ -73,6 +78,7 @@ def run(save_path: str,
                 dtype=torch.float64,
             )
         if label == "SNES":
+            VAR_PRIOR = bo_kwargs["var_prior"]
             searcher = SNES(problem_ea, popsize=BATCH_SIZE, stdev_init=problem_kwargs["initial_bounds"])
         elif label == "NESWSABI":
             searcher = NESWSABI(problem_ea, popsize=BATCH_SIZE, stdev_init=problem_kwargs["initial_bounds"], ranking_method=bo_kwargs["ranking_method"], quad_kwargs=bo_kwargs["quadrature"])
@@ -91,7 +97,6 @@ def run(save_path: str,
         list_mu, list_sigma = [], []
         list_mu.append(quad_distrib.loc)
         list_sigma.append(quad_distrib.covariance_matrix)
-    
         
     else:
         raise Exception(f"Wrong label, must be in {LIST_LABEL}")
@@ -130,7 +135,7 @@ def run(save_path: str,
             q=BATCH_SIZE,
             num_restarts=NUM_RESTARTS,
             raw_samples=RAW_SAMPLES,  # used for intialization heuristic
-            options={"batch_limit": 5, "maxiter": 200},
+            options={"batch_limit": ACQUISITION_BATCH_OPTIMIZATION, "maxiter": 200},
         )
         # observe new values 
         if NORMALIZE:
@@ -187,6 +192,8 @@ def run(save_path: str,
             
             # fit the models
             fit_gpytorch_mll(mll)
+            if VERBOSE and problem.dim == 1:
+                plot_GP_fit(model, model.likelihood, train_x, train_obj, obj=objective, lb=-10., up=10., save_path=save_path, iteration=iteration)
             
             # define the qEI and qNEI acquisition modules using a QMC sampler
             qmc_sampler = SobolQMCNormalSampler(sample_shape=torch.Size([MC_SAMPLES]))
@@ -207,13 +214,24 @@ def run(save_path: str,
                     beta=BETA,
                     sampler=qmc_sampler
                 )
+
         elif label == "quad":
+            # fit the models
+            fit_gpytorch_mll(mll)
+
             # for best_f, we use the best observed noisy values as an approximation
-                af = QuadratureExploration(
-                    model=model, 
-                    distribution=quad_distrib
-                    )
-        
+            # af = QuadratureExploration(
+            #     model=model,
+            #     distribution=quad_distrib,
+            #     batch_acq = ACQUISITION_BATCH_OPTIMIZATION,
+            #     )
+            af = QuadratureExplorationBis(
+                model=model,
+                distribution=quad_distrib,
+                )
+            if VERBOSE and problem.dim == 1:
+                plot_GP_fit(model, model.likelihood, train_x, train_obj, obj=objective, lb=-10., up=10., save_path=save_path, iteration=iteration)
+    
         # optimize and get new observation
         if label in ["qEI", "piqEI", "quad"]:
             new_x, new_obj = optimize_acqf_and_get_observation(af)
@@ -244,19 +262,37 @@ def run(save_path: str,
         # reinitialize the models so they are ready for fitting on next iteration
         # use the current state dict to speed up fitting
         if label in ["qEI", "piqEI", "quad"]:
-            mll, model = initialize_model(
-                normalize(train_x, bounds=problem.bounds), 
-                standardize(train_obj), 
-                model.state_dict(),
-            )
-        
+            if NORMALIZE and STANDARDIZE_LABEL:
+                mll, model = initialize_model(
+                    normalize(train_x, bounds=problem.bounds), 
+                    standardize(train_obj), 
+                    model.state_dict(),
+                )
+            elif STANDARDIZE_LABEL:
+                mll, model = initialize_model(
+                    train_x, 
+                    standardize(train_obj), 
+                    model.state_dict(),
+                )
+            elif NORMALIZE:
+                mll, model = initialize_model(
+                    normalize(train_x, bounds=problem.bounds), 
+                    train_obj, 
+                    model.state_dict(),
+                )
+            else:
+                mll, model = initialize_model(
+                    train_x, 
+                    train_obj, 
+                    model.state_dict(),
+                )
         if label == "quad":
-            quad = Quadrature(model=model, distribution=quad_distrib, batch_size=BATCH_SIZE, device=train_x.device, dtype=train_x.dtype)
-            ## HERE Update quad_distribution
-            ## Compute Gradient
-            ## Update quad_distribution
+            quad = Quadrature(model=model, distribution=quad_distrib, device=train_x.device, dtype=train_x.dtype)
             quad.gradient_direction()
-            quad.compute_p_wolfe(1.)
+            quad.maximize_step()
+            print(f"Current Epsilon {quad_distrib.covariance_matrix}, optimal step taken {quad.t_max * quad.d_epsilon}, final variance {quad_distrib.covariance_matrix + quad.t_max * quad.d_epsilon}")
+            print(f"Current mu {quad_distrib.loc}, optimal step taken {quad.t_max * quad.d_mu}, final variance {quad_distrib.loc + quad.t_max * quad.d_mu}")
+            quad_distrib = quad.update_distribution()
             list_mu.append(quad_distrib.loc.detach().clone())
             list_sigma.append(quad_distrib.covariance_matrix.detach().clone())
 

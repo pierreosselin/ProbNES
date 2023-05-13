@@ -7,12 +7,37 @@ import imageio.v2 as imageio
 from tqdm import tqdm
 import scipy.stats as stats
 from module.objective import get_objective
-
+from .utils import standardize_return
 
 
 """
 Scripts to produce plots from the files contained in path
 """ 
+
+def plot_GP_fit(model, likelihood, train_X, targets, obj, lb=-10., up=10., save_path=".", iteration=1):
+    """ Plot the figures corresponding to the Gaussian process fit
+    """
+    save_path_gp = os.path.join(save_path, f"fitgp/{iteration}.png")
+    model.eval()
+    likelihood.eval()
+    test_x = torch.linspace(lb, up, 200, device=train_X.device, dtype=train_X.dtype)
+    with torch.no_grad():
+        # Make predictions
+        predictions = likelihood(model(test_x))
+        lower, upper = predictions.confidence_region()
+    Y_standard, Y_mean, Y_std = standardize_return(targets)
+    value_ = ((obj(test_x.unsqueeze(-1)) - Y_mean)/Y_std).flatten()
+
+    plt.scatter(train_X.cpu().numpy(), Y_standard.cpu().numpy(), color='black', label='Training data')
+    plt.plot(test_x.cpu().numpy(), predictions.mean.cpu().numpy(), color='blue', label='Predictive mean')
+    plt.plot(test_x.cpu().numpy(), value_.cpu().numpy(), color='green', label='True Function')
+    plt.fill_between(test_x.cpu().numpy(), lower.cpu().numpy(), upper.cpu().numpy(), color='lightblue', alpha=0.5, label='Confidence region')
+    plt.xlabel('x')
+    plt.ylabel('y')
+    plt.title('Gaussian Process Regression')
+    plt.legend()
+    plt.savefig(save_path_gp)
+    plt.clf()
 
 def plot_cov_ellipse(cov, pos, nstd=2, ax=None, **kwargs):
     """
@@ -77,10 +102,9 @@ def plot_figure_algo(alg_dir, ax):
     yerr=ci(y, N_TRIALS)
     ax.fill_between(iters, y.mean(axis=0)-yerr, y.mean(axis=0)+yerr, alpha=0.1)
 
-def plot_figure(config, save_path, log_transform=False):
+def plot_figure(save_path, log_transform=False):
     _, ax = plt.subplots(1, 1, figsize=(8, 6))
     alg_name = [name for name in os.listdir(save_path) if os.path.isdir(os.path.join(save_path, name))]
-    obj = get_objective(config["problem_name"], **config["problem_settings"])
     for algo in alg_name:
         alg_dir = os.path.join(save_path, algo)
         data_path_seeds = [f for f in os.listdir(alg_dir) if ".pt" in f]
@@ -185,7 +209,7 @@ def distribution_gif_1D(algo_path, objective, seed, data, ax):
             ax.scatter(plot_X[:,0], np.zeros_like(plot_X[:,0]), s=16)
             if label in ["SNES", "quad"]:
                 x = np.linspace(mu[i] - 3*sigma[i], mu[i] + 3*sigma[i], 100).flatten()
-                plt.plot(x, stats.norm.pdf(x, mu[i], sigma[i]))
+                plt.plot(x, stats.norm.pdf(x, mu[i], sigma[i]).flatten())
             fig.savefig(os.path.join(plot_path, f"plot{i}.png"))
             plt.close()
 
