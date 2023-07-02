@@ -9,15 +9,16 @@ import torch
 from torch.distributions.multivariate_normal import MultivariateNormal
 from botorch.acquisition.analytic import AnalyticAcquisitionFunction
 from botorch.models import SingleTaskGP
-#from .utils import bounded_bivariate_normal_integral
+from .utils import bounded_bivariate_normal_integral, nearestPD
+
 
 ## TODO check if lengscale becomes non diagonal?
 class Quadrature:
     def __init__(self, 
                  model=None,
                  distribution=None,
-                 c1 = 0.1,
-                 c2 = 0.2,
+                 c1 = 0.0001,
+                 c2 = 0.9,
                  t_max = 10,
                  budget = 50,
                  maximize = True,
@@ -46,14 +47,13 @@ class Quadrature:
         #Compute the gradient of m:
         noise_tensor = self.model.likelihood.noise.detach().clone() * torch.eye(self.train_X.shape[0], dtype=self.train_X.dtype, device=self.train_X.device)
         self.K_X_X = (self.model.covar_module(self.train_X) + noise_tensor).evaluate()
-        
         constant = torch.sqrt(torch.linalg.det(2*torch.pi*self.gp_kernel)) * self.theta
         self.t_X = constant * torch.exp(MultivariateNormal(loc = self.distribution.loc, covariance_matrix = self.covariance_matrix).log_prob(self.train_X))
         self.R = constant * torch.exp(MultivariateNormal(loc = self.distribution.loc, covariance_matrix = self.covariance_matrix + self.distribution.covariance_matrix).log_prob(self.distribution.loc))
         self.m = self.model.mean_module.constant + (self.t_X.T @ torch.linalg.solve(self.K_X_X, self.model.train_targets - self.model.mean_module.constant))
         self.v = self.R - self.t_X.T @ torch.linalg.solve(self.K_X_X, self.t_X)
 
-    def gradient_direction(self, sample = True):
+    def gradient_direction(self, sample = False):
         # Compute tau matrix
         self.train_X = self.model.train_inputs[0]
         self.gp_kernel = (torch.diag(self.model.covar_module.base_kernel.lengthscale[0].detach().clone()))**2
@@ -110,7 +110,9 @@ class Quadrature:
                     + 0.25*((torch.unsqueeze(torch.unsqueeze(self.d_epsilon, -1), -1)) * (self.fourth_order_Pi1_Pi1 + torch.einsum("ijkl->ikjl" ,self.fourth_order_Pi1_Pi1) + torch.einsum("ijkl->iljk" ,self.fourth_order_Pi1_Pi1)) * (torch.unsqueeze(torch.unsqueeze(self.d_epsilon, 0), 0).repeat(self.d,self.d,1,1))).sum()
 
     def update_distribution(self):
-        return MultivariateNormal(self.distribution.loc + self.t_max*self.d_mu, self.distribution.covariance_matrix + self.t_max*self.d_epsilon)
+        updated_mu = self.distribution.loc + self.t_max*self.d_mu
+        updated_Epsilon = nearestPD(self.distribution.covariance_matrix + self.t_max*self.d_epsilon)
+        return MultivariateNormal(updated_mu, updated_Epsilon)
     
     def maximize_step(self):
         t_linspace = torch.linspace(0, self.t_max, self.budget + 1, dtype=self.train_X.dtype, device=self.train_X.device)[1:]
@@ -126,13 +128,13 @@ class Quadrature:
         Wolfe conditions under the current GP model."""
         # Compute mu and PI
         mu1, mu2 = self.distribution.loc, self.distribution.loc + t*self.d_mu
-        Epsilon1, Epsilon2 = self.distribution.covariance_matrix, self.distribution.covariance_matrix + t*self.d_epsilon
+        Epsilon1, Epsilon2 = self.distribution.covariance_matrix, nearestPD(self.distribution.covariance_matrix + t*self.d_epsilon)
         Pi_1_2 = self.gp_kernel + Epsilon1 + Epsilon2
         Pi_2_2 = self.gp_kernel + 2*Epsilon2
         Pi_inv_1_2 = torch.linalg.inv(Pi_1_2)
         Pi_inv_2_2 = torch.linalg.inv(Pi_2_2)
         
-        nu = -t*Pi_inv_1_2 @ self.d_mu # (mu1 - mu2)
+        nu = Pi_inv_1_2 @ (mu1 - mu2)
         
         third_order_Pi_nu = torch.einsum("i,jk->ijk", nu, Pi_inv_1_2)
         third_order_nu_nu_nu = torch.einsum("i,j,k->ijk", nu, nu, nu)
@@ -167,7 +169,6 @@ class Quadrature:
 
         #Compute posterior term
         inverse_data_covar_t2X = torch.linalg.solve(self.K_X_X, t2X) 
-
 
         # Compute covariance structure
         ## Compute mean elements
@@ -222,9 +223,6 @@ class Quadrature:
 
         return bounded_bivariate_normal_integral(rho, al, torch.inf, bl, torch.inf)
 
-
-
-
 ## TODO Check if can be more efficient here use inversion block matrices
 class QuadratureExploration(AnalyticAcquisitionFunction):
     r"""Single-outcome Quadrature bRT.
@@ -238,13 +236,13 @@ class QuadratureExploration(AnalyticAcquisitionFunction):
         posterior_transform: Optional[PosteriorTransform] = None,
         **kwargs,
     ):
-        r"""Single-outcome Quadrature bRT.
+        """Acquisition function for bayesian quadrature
+
         Args:
-            model: A fitted single-outcome model.
-            distribution: A fitted single-outcome model.
-            posterior_transform: A PosteriorTransform. If using a multi-output model,
-                a PosteriorTransform that transforms the multi-output posterior into a
-                single-output posterior is required.
+            model (Model): Surrogate model
+            distribution (MultivariateNormal): Quadrature distribution
+            batch_acq (int, optional): Batches evaluated, different from the batch size of points evalauted by the objective. Defaults to 5.
+            posterior_transform (Optional[PosteriorTransform], optional): _description_. Defaults to None.
         """
         super().__init__(model=model, posterior_transform=posterior_transform, **kwargs)
         self.batch_size = batch_acq
@@ -282,6 +280,16 @@ class QuadratureExploration(AnalyticAcquisitionFunction):
         noise_tensor = self.model.likelihood.noise.detach().clone() * torch.eye(X[0].shape[0] + self.train_X.shape[0], dtype=X.dtype, device=X.device)
         t_X_full = torch.exp(MultivariateNormal(loc = self.distribution.loc, covariance_matrix = self.distribution.covariance_matrix + gp_kernel).log_prob(X_full))
         full_inv = torch.linalg.inv((self.model.covar_module(X_full) + noise_tensor).evaluate())
+        print("Debug test")
+        print("Full matrix inverse", full_inv)
+        print("Formula:", P_inv_A)
+        print("Formula:", P_inv_B)
+        print("Formula:", P_inv_C)
+        print("Formula:", P_inv_D)
+        print("Check cov X")
+        print((self.model.covar_module(X_full) + noise_tensor).evaluate())
+        print("From formula")
+        print(self.cov_X_X)
 
         first_term = torch.bmm(P_inv_A, self.t_X_train_batch).squeeze() @ self.t_X_train
         second_term = torch.bmm(P_inv_B, t_X[:, :, None]).squeeze() @ self.t_X_train
@@ -380,10 +388,12 @@ if __name__ == "__main__":
         plt.title('Gaussian Process Regression')
         plt.legend()
         plt.savefig("regression.png")
+    
+    quad_distrib = MultivariateNormal(torch.tensor([0., 0.]), torch.diag(torch.tensor([1., 1.])))
+    train_X = torch.rand(2, 2)
+    test_X = torch.rand(60, 2, 2)
+    train_Y = torch.sin(train_X).sum(dim=1, keepdim=True)
 
-    quad_distrib = MultivariateNormal(torch.tensor([0.]), torch.diag(torch.tensor([1.])))
-    train_X = torch.linspace(-1,1, 40).reshape(-1,1)
-    train_Y = ((train_X)**2).sum(dim=1, keepdim=True)
     covar_module = ScaleKernel(
                 RBFKernel(
                     ard_num_dims=train_X.shape[-1],
@@ -393,6 +403,7 @@ if __name__ == "__main__":
                 batch_shape=None,
                 outputscale_prior=GammaPrior(2.0, 0.15),
             )
+    
     model = SingleTaskGP(train_X, train_Y, covar_module=covar_module)
     mll = ExactMarginalLogLikelihood(model.likelihood, model)
     fit_gpytorch_mll(mll)
@@ -408,5 +419,12 @@ if __name__ == "__main__":
     quad.gradient_direction(sample = False)
     print("mean grad:", quad.d_mu)
     print("variance grad:", quad.d_epsilon)
+    acq_2 = QuadratureExplorationBis(model=model,
+                                distribution= quad_distrib)
+    acq_1 = QuadratureExploration(model=model,
+                            distribution= quad_distrib,
+                            batch_acq = 2)
 
-    plot_GP_fit(model, quad_distrib, train_X, train_Y, obj = lambda x :-x**2, lb=-2., up=2.)
+    print("Value acquisition 1", acq_1(test_X))
+    print("Value acquisition 2", acq_2(test_X))
+    #plot_GP_fit(model, quad_distrib, train_X, train_Y, obj = lambda x :-x**2, lb=-2., up=2.)

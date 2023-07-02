@@ -14,7 +14,7 @@ bo_settings:
   num_restarts: 10 #For qEI and piqEI
   mc_samples: 256 #For qEI and piqEI
   raw_samples: 512 #For qEI and piqEI
-  batch_acq: 3
+  batch_acq: 3 # Number of batches used to evaluate the acquisition function at the same time
   verbose: True
 
 problem_settings:
