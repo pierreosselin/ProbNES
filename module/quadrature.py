@@ -270,7 +270,7 @@ class QuadratureExploration(AnalyticAcquisitionFunction):
         self.cov_X_X_inv = torch.linalg.inv(self.cov_X_X)
         self.t_X_train = torch.exp(MultivariateNormal(loc = self.distribution.loc, covariance_matrix = self.distribution.covariance_matrix + self.gp_covariance).log_prob(self.train_X))
         self.t_X_train_batch = self.t_X_train[None, :, None].repeat(self.batch_size,1,1)
-    
+
     @t_batch_mode_transform()
     def forward(self, X: Tensor) -> Tensor:
         r"""Evaluate the Exploration Quadrature value
@@ -336,6 +336,8 @@ class QuadratureExplorationBis(AnalyticAcquisitionFunction):
         super().__init__(model=model, posterior_transform=posterior_transform, **kwargs)
         self.distribution=distribution
         self.train_X = self.model.train_inputs[0]
+        self.constant = self.model.covar_module.outputscale * torch.sqrt(torch.linalg.det(2*torch.pi*self.gp_covariance))
+
 
     @t_batch_mode_transform()
     def forward(self, X: Tensor) -> Tensor:
@@ -346,7 +348,7 @@ class QuadratureExplorationBis(AnalyticAcquisitionFunction):
         X_full = torch.cat((train_X_batch, X), dim= 1)
         gp_kernel = torch.diag(self.model.covar_module.base_kernel.lengthscale[0].detach().clone())
         noise_tensor = self.model.likelihood.noise.detach().clone() * torch.eye(X[0].shape[0] + self.train_X.shape[0], dtype=X.dtype, device=X.device)
-        t_X = torch.exp(MultivariateNormal(loc = self.distribution.loc, covariance_matrix = self.distribution.covariance_matrix + gp_kernel).log_prob(X_full))
+        t_X = self.constant * torch.exp(MultivariateNormal(loc = self.distribution.loc, covariance_matrix = self.distribution.covariance_matrix + gp_kernel).log_prob(X_full))
         v = torch.linalg.solve((self.model.covar_module(X_full) + noise_tensor).evaluate(), t_X)
         return (v * t_X).sum(dim=-1)
     

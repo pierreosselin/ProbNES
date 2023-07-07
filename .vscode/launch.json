@@ -25,7 +25,7 @@
             "name": "Semisupervised",
             "type": "python",
             "request": "launch",
-            "program": "${workspaceFolder}/test_wolfe.py",
+            "program": "${workspaceFolder}/test_acquisition.py",
             "console": "integratedTerminal",
             "justMyCode": true
         }
