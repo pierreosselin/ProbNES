@@ -21,7 +21,10 @@ from evotorch import Problem
 from .quadrature import QuadratureExploration, QuadratureExplorationBis, Quadrature
 from .plot_script import plot_GP_fit
 
+
 ## TODO Refactor code such that remove if in there
+### By default the Optimization procedure maximize the objective function (acquisition function maximize)
+
 LIST_LABEL = ["SNES", "piqEI", "quad", "qEI"]
 
 def run(save_path: str,

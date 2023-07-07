@@ -25,7 +25,7 @@
             "name": "Semisupervised",
             "type": "python",
             "request": "launch",
-            "program": "${workspaceFolder}/module/quadrature.py",
+            "program": "${workspaceFolder}/test_wolfe.py",
             "console": "integratedTerminal",
             "justMyCode": true
         }

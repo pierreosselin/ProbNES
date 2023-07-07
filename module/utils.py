@@ -7,6 +7,8 @@ from scipy.special import erf
 from gpytorch.kernels.rbf_kernel import *
 from gpytorch.settings import trace_mode
 from gpytorch.functions import RBFCovariance
+import matplotlib.pyplot as plt
+import scipy.stats as stats
 
 
 
@@ -381,3 +383,35 @@ def isPD(B):
         return True
     except:
         return False
+
+def plot_GP_fit(model, distribution, train_X, targets, obj, normalize=False, lb=-10., up=10., mean_Y=None, std_Y=None):
+    """ Plot the figures corresponding to the Gaussian process fit
+    """
+    model.eval()
+    model.likelihood.eval()
+    test_x = torch.linspace(lb, up, 200, device=train_X.device, dtype=train_X.dtype)
+    with torch.no_grad():
+        # Make predictions
+        predictions = model.likelihood(model(test_x))
+        lower, upper = predictions.confidence_region()
+    
+    if normalize:
+        predictions = predictions*float(std_Y) + float(mean_Y)
+        lower, upper = lower*float(std_Y), upper*float(std_Y)
+        targets = targets*float(std_Y) + float(mean_Y)
+    value_ = (obj(test_x.unsqueeze(-1))).flatten()
+
+    plt.scatter(train_X.cpu().numpy(), targets.cpu().numpy(), color='black', label='Training data')
+    plt.plot(test_x.cpu().numpy(), predictions.mean.cpu().numpy(), color='blue', label='Predictive mean')
+    plt.plot(test_x.cpu().numpy(), value_.cpu().numpy(), color='green', label='True Function')
+    plt.fill_between(test_x.cpu().numpy(), lower.cpu().numpy(), upper.cpu().numpy(), color='lightblue', alpha=0.5, label='Confidence region')
+    
+    x = np.linspace(distribution.loc - 3*distribution.covariance_matrix, distribution.loc + 3*distribution.covariance_matrix, 100).flatten()
+    y_lim = plt.gca().get_ylim()
+    plt.plot(x, (y_lim[1] - y_lim[0])*stats.norm.pdf(x, distribution.loc, distribution.covariance_matrix).flatten(), "k")
+    
+    plt.xlabel('x')
+    plt.ylabel('y')
+    plt.title('Gaussian Process Regression')
+    plt.legend()
+    plt.show()
