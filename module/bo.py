@@ -25,7 +25,7 @@ from .plot_script import plot_GP_fit
 ## TODO Refactor code such that remove if in there
 ### By default the Optimization procedure maximize the objective function (acquisition function maximize)
 
-LIST_LABEL = ["SNES", "piqEI", "quad", "qEI"]
+LIST_LABEL = ["random", "SNES", "piqEI", "quad", "qEI"]
 
 def run(save_path: str,
         problem_name:str = "test_function",
@@ -100,8 +100,8 @@ def run(save_path: str,
         list_mu, list_sigma = [], []
         list_mu.append(quad_distrib.loc)
         list_sigma.append(quad_distrib.covariance_matrix)
-        
-    else:
+
+    if label not in LIST_LABEL:
         raise Exception(f"Wrong label, must be in {LIST_LABEL}")
 
     warnings.filterwarnings('ignore', category=BadInitialCandidatesWarning)
