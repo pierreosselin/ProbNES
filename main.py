@@ -1,5 +1,5 @@
 from module.bo import run
-from module.plot_script import plot_figure, plot_distribution_gif
+from module.plot_script import plot_figure, plot_distribution_gif, plot_distribution_path
 import os
 import argparse
 import yaml
@@ -127,6 +127,8 @@ if __name__ == "__main__":
 
     ## config["test_function"]
     plot_distribution_gif(config, n_seeds=1)
+    
+    plot_distribution_path(config, n_seeds=1)
 
     
     """

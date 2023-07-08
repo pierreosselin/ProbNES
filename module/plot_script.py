@@ -252,6 +252,48 @@ def plot_distribution_gif(config, n_seeds=1):
                 else:
                     raise Exception("Dimension of the problem should be less than 2")
 
+def plot_distribution_path(config, n_seeds=1):
+    """
+    n_seeds: Number of seeds one wants to plot the trajectory
+    """
+    ### Here make a loop to plot gif to all relevant configurations
+
+    save_path = config["save_dir"]
+    exp_name = [name for name in os.listdir(save_path) if os.path.isdir(os.path.join(save_path, name))]
+    for experiment in exp_name:
+        exp_dir = os.path.join(save_path, experiment)
+        alg_name = [name for name in os.listdir(exp_dir) if os.path.isdir(os.path.join(exp_dir, name))]        
+        dim = int(experiment.split("_")[2][-1])
+        for algo in tqdm(alg_name, desc="Processing Algorithms..."):
+            if (algo in ["quad", "SNES"]) and (dim == 1):
+                algo_path = os.path.join(exp_dir, algo)
+                _, ax = plt.subplots(1, 1, figsize=(8, 6))
+                data_path_seeds = [f for f in os.listdir(algo_path) if ".pt" in f][:n_seeds]
+                
+                plot_path = os.path.join(algo_path, "path_distribution")
+                if not os.path.exists(plot_path):
+                    os.mkdir(plot_path)
+                
+                for seed, df in enumerate(data_path_seeds):
+                    data_path = os.path.join(algo_path, df)
+                    with open(data_path, "rb") as _:
+                        data = torch.load(data_path, map_location="cpu")
+                    
+                    
+                    
+                    mu, sigma = data["mu"], data["sigma"]
+                    mu, sigma = [float(el) for el in mu], [float(el) for el in sigma]
+                    fig, ax = plt.subplots(1, 1, figsize=(8, 6))
+                    
+                    ax.set_xlim(left=-10., right=10.)
+                    ax.set_ylim(bottom=0., top=10)
+                    ax.scatter(mu, sigma, marker='o')
+                    for i in range(len(mu) - 1):
+                        ax.arrow(mu[i], sigma[i], mu[i+1] - mu[i], sigma[i+1] - sigma[i], width = 0.01)
+                    
+                    fig.savefig(os.path.join(plot_path, f"plot{seed}.png"))
+                    plt.close()
+
 if __name__ == "__main__":
     plot_distribution_gif("./logs/testfunction/sphere_test")
     #plot_distribution_gif("./logs/testfunction/function_1")
