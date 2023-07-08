@@ -15,7 +15,7 @@ bo_settings:
   mc_samples: 256 #For qEI and piqEI
   raw_samples: 512 #For qEI and piqEI
   batch_acq: 5 # Number of batches used to evaluate the acquisition function at the same time
-  verbose: True
+  verbose: 10
 
 problem_settings:
   function: ["ackley", "rosenbrock", "sphere"] # Name of the function in [airfoil, rosenbrock, sphere, ackley]

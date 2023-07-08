@@ -196,7 +196,8 @@ def run(save_path: str,
             # fit the models
             fit_gpytorch_mll(mll)
             if VERBOSE and problem.dim == 1:
-                plot_GP_fit(model, model.likelihood, train_x, train_obj, obj=objective, lb=-10., up=10., save_path=save_path, iteration=iteration)
+                if ((iteration + 1) % VERBOSE) == 0:
+                    plot_GP_fit(model, model.likelihood, train_x, train_obj, obj=objective, lb=-10., up=10., save_path=save_path, iteration=iteration)
             
             # define the qEI and qNEI acquisition modules using a QMC sampler
             qmc_sampler = SobolQMCNormalSampler(sample_shape=torch.Size([MC_SAMPLES]))
@@ -233,7 +234,8 @@ def run(save_path: str,
                 distribution=quad_distrib,
                 )
             if VERBOSE and problem.dim == 1:
-                plot_GP_fit(model, model.likelihood, train_x, train_obj, obj=objective, lb=-10., up=10., save_path=save_path, iteration=iteration)
+                if ((iteration + 1) % VERBOSE) == 0:
+                    plot_GP_fit(model, model.likelihood, train_x, train_obj, obj=objective, lb=-10., up=10., save_path=save_path, iteration=iteration)
     
         # optimize and get new observation
         if label in ["qEI", "piqEI", "quad"]:
