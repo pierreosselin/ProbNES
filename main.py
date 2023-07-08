@@ -5,9 +5,22 @@ import argparse
 import yaml
 from itertools import product
 
+
+def create_path(save_path, problem_name, problem_kwargs, bo_kwargs):
+    
+    if problem_name == "test_function":
+        s = "_".join([problem_kwargs["function"], f'noise-{problem_kwargs["noise"]}', f'dim-{problem_kwargs["dim"]}', f'initial_bounds-{problem_kwargs["initial_bounds"]}',
+            f'beta-{bo_kwargs["beta"]}', f'var_prior-{bo_kwargs["var_prior"]}'])
+    elif problem_name == "airfoil":
+        raise NotImplementedError
+        s = "_".join([f'beta-{problem_kwargs["beta"]}', f'gamma-{problem_kwargs["gamma"]}', f'fracinfect-{problem_kwargs["fraction_infected"]}'])
+    save_path = os.path.join(save_dir, s)
+    return save_path
+
+
 ## TODO Manage option for gpu
 if __name__ == "__main__":
-
+    OVERWRITE = True
     # parse arguments and load config
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', type=str, default='test')
@@ -52,6 +65,17 @@ if __name__ == "__main__":
                 elif type_param == "exp":
                     exp_kwargs[key] = el
 
+            #### Build new save dir ba_m-3_beta-0.01_gamma-0.005_n-5000_epsilon-5e-4_iter-100_abs
+            exp_path = create_path(save_dir, problem_name, problem_kwargs, bo_kwargs)
+            if not os.path.exists(exp_path):
+                os.makedirs(exp_path)
+                print("Processing", exp_path, "...")
+            else:
+                "If folder already exists then perform optimization depending on OVERWRITE"
+                if OVERWRITE == False:
+                    print(exp_path + "found without overwriting, next config...")
+                    continue
+
             for seed in range(exp_kwargs["n_exp"]):
                 """
                 try:
@@ -72,7 +96,7 @@ if __name__ == "__main__":
                     continue
                 """
                 algo = bo_kwargs["algorithm"]
-                save_path = os.path.join(save_dir, algo)
+                save_path = os.path.join(exp_path, algo)
                 if not os.path.exists(save_path):
                     os.makedirs(save_path)
                 initial_seed = config["seed"]
@@ -98,8 +122,8 @@ if __name__ == "__main__":
                 problem_kwargs=problem_kwargs,
                 )
     
-    plot_figure(os.path.dirname(save_path))
-    plot_figure(os.path.dirname(save_path), log_transform=True)
+    plot_figure(os.path.dirname(save_dir))
+    plot_figure(os.path.dirname(save_dir), log_transform=True)
 
     ## config["test_function"]
     plot_distribution_gif(config, n_seeds=1)

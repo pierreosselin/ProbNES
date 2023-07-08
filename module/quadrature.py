@@ -19,6 +19,8 @@ Be careful as:
 - Gaussian Process on Gpytorch is done with exponential and no constant for the density
 - Formula assume normal distribution + theta to take into account
 """
+
+### TODO separate function to update distribution and update data/model
 class Quadrature:
     def __init__(self, 
                  model=None,
@@ -118,8 +120,31 @@ class Quadrature:
     def update_distribution(self):
         updated_mu = self.distribution.loc + self.t_max*self.d_mu
         updated_Epsilon = nearestPD(self.distribution.covariance_matrix + self.t_max*self.d_epsilon)
-        return MultivariateNormal(updated_mu, updated_Epsilon)
-    
+        distribution = MultivariateNormal(updated_mu, updated_Epsilon)
+        self.__init__(model=self.model,
+                    distribution=distribution,
+                    c1=self.c1,
+                    c2=self.c2,
+                    t_max=self.t_max,
+                    budget=self.budget,
+                    maximize=self.maximize,
+                    device=self.device,
+                    dtype=self.dtype)
+ 
+    def update_distribution(self):
+        updated_mu = self.distribution.loc + self.t_max*self.d_mu
+        updated_Epsilon = nearestPD(self.distribution.covariance_matrix + self.t_max*self.d_epsilon)
+        distribution = MultivariateNormal(updated_mu, updated_Epsilon)
+        self.__init__(model=self.model,
+                    distribution=distribution,
+                    c1=self.c1,
+                    c2=self.c2,
+                    t_max=self.t_max,
+                    budget=self.budget,
+                    maximize=self.maximize,
+                    device=self.device,
+                    dtype=self.dtype)
+ 
     def maximize_step(self):
         t_linspace = torch.linspace(0, self.t_max, self.budget + 1, dtype=self.train_X.dtype, device=self.train_X.device)[1:]
         list_max = []
@@ -336,8 +361,8 @@ class QuadratureExplorationBis(AnalyticAcquisitionFunction):
         super().__init__(model=model, posterior_transform=posterior_transform, **kwargs)
         self.distribution=distribution
         self.train_X = self.model.train_inputs[0]
+        self.gp_covariance = (torch.diag(self.model.covar_module.base_kernel.lengthscale[0].detach().clone()))**2
         self.constant = self.model.covar_module.outputscale * torch.sqrt(torch.linalg.det(2*torch.pi*self.gp_covariance))
-
 
     @t_batch_mode_transform()
     def forward(self, X: Tensor) -> Tensor:
@@ -346,9 +371,8 @@ class QuadratureExplorationBis(AnalyticAcquisitionFunction):
         batch_size = X.shape[0]
         train_X_batch = torch.unsqueeze(self.train_X, 0).repeat(batch_size, 1, 1)
         X_full = torch.cat((train_X_batch, X), dim= 1)
-        gp_kernel = torch.diag(self.model.covar_module.base_kernel.lengthscale[0].detach().clone())
         noise_tensor = self.model.likelihood.noise.detach().clone() * torch.eye(X[0].shape[0] + self.train_X.shape[0], dtype=X.dtype, device=X.device)
-        t_X = self.constant * torch.exp(MultivariateNormal(loc = self.distribution.loc, covariance_matrix = self.distribution.covariance_matrix + gp_kernel).log_prob(X_full))
+        t_X = self.constant * torch.exp(MultivariateNormal(loc = self.distribution.loc, covariance_matrix = self.distribution.covariance_matrix + self.gp_covariance).log_prob(X_full))
         v = torch.linalg.solve((self.model.covar_module(X_full) + noise_tensor).evaluate(), t_X)
         return (v * t_X).sum(dim=-1)
     

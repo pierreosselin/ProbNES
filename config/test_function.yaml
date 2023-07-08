@@ -1,14 +1,14 @@
 problem_name: test_function #test_function, airfoil
-save_dir: ./logs/test_function/ackley_dim1
+save_dir: ./logs/test_function/
 seed: 0
 
 exp_settings:
-  n_exp: 2
+  n_exp: 10
   n_iter: 15
   batch_size: 5
 
 bo_settings:
-  algorithm: ["quad"]  #[random, qEI, SNES, piqEI, quad]
+  algorithm: ["random", "qEI", "SNES", "piqEI", "quad"]  #[random, qEI, SNES, piqEI, quad]
   beta: 1. #For piqei
   var_prior: 10. #For piqEI or quad, initial distribution
   num_restarts: 10 #For qEI and piqEI
@@ -18,7 +18,7 @@ bo_settings:
   verbose: True
 
 problem_settings:
-  function: "ackley" # Name of the function in [airfoil, rosenbrock, sphere, ackley]
-  noise: 0.
-  dim: 1
-  initial_bounds: 10.
+  function: ["ackley", "rosenbrock", "sphere"] # Name of the function in [airfoil, rosenbrock, sphere, ackley]
+  noise: [0., 0.1, 0.2]
+  dim: [1, 2, 5, 10]
+  initial_bounds: [1., 10.]

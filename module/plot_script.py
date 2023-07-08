@@ -103,45 +103,48 @@ def plot_figure_algo(alg_dir, ax):
     ax.fill_between(iters, y.mean(axis=0)-yerr, y.mean(axis=0)+yerr, alpha=0.1)
 
 def plot_figure(save_path, log_transform=False):
-    _, ax = plt.subplots(1, 1, figsize=(8, 6))
-    alg_name = [name for name in os.listdir(save_path) if os.path.isdir(os.path.join(save_path, name))]
-    for algo in alg_name:
-        alg_dir = os.path.join(save_path, algo)
-        data_path_seeds = [f for f in os.listdir(alg_dir) if ".pt" in f]
-        data_over_seeds = []
-        for _, df in enumerate(data_path_seeds):
-            data_path = os.path.join(alg_dir, df)
-            with open(data_path, "rb") as _:
-                data = torch.load(data_path, map_location="cpu")
-            data_over_seeds.append(data["regret"])
-        N_TRIALS = len(data_over_seeds)
-        N_BATCH = data["N_BATCH"]
-        BATCH_SIZE = data["BATCH_SIZE"]
-        iters = np.arange(N_BATCH + 1) * BATCH_SIZE
-        label = data["label"]
-        data_over_seeds = [t.detach().cpu().numpy() for t in data_over_seeds]
-        y = np.asarray(data_over_seeds)
-        if log_transform:
-            ax.plot(iters, np.log(y.mean(axis=0)), ".-", label=label)
+    exp_name = [name for name in os.listdir(save_path) if os.path.isdir(os.path.join(save_path, name))]
+    for experiment in exp_name:
+        exp_dir = os.path.join(save_path, experiment)
+        _, ax = plt.subplots(1, 1, figsize=(8, 6))
+        alg_name = [name for name in os.listdir(exp_dir) if os.path.isdir(os.path.join(exp_dir, name))]
+        for algo in alg_name:
+            alg_dir = os.path.join(exp_dir, algo)
+            data_path_seeds = [f for f in os.listdir(alg_dir) if ".pt" in f]
+            data_over_seeds = []
+            for _, df in enumerate(data_path_seeds):
+                data_path = os.path.join(alg_dir, df)
+                with open(data_path, "rb") as _:
+                    data = torch.load(data_path, map_location="cpu")
+                data_over_seeds.append(data["regret"])
+            N_TRIALS = len(data_over_seeds)
+            N_BATCH = data["N_BATCH"]
+            BATCH_SIZE = data["BATCH_SIZE"]
+            iters = np.arange(N_BATCH + 1) * BATCH_SIZE
+            label = data["label"]
+            data_over_seeds = [t.detach().cpu().numpy() for t in data_over_seeds]
+            y = np.asarray(data_over_seeds)
+            if log_transform:
+                ax.plot(iters, np.log(y.mean(axis=0)), ".-", label=label)
+            else:
+                ax.plot(iters, y.mean(axis=0), ".-", label=label)
+            yerr=ci(y, N_TRIALS)
+            if log_transform:
+                ax.fill_between(iters, np.log(np.clip(y.mean(axis=0)-yerr, a_min=1e-5, a_max=None)), np.log(np.clip(y.mean(axis=0)+yerr, a_min=1e-5, a_max=None)), alpha=0.1)
+            else:
+                ax.fill_between(iters, y.mean(axis=0)-yerr, y.mean(axis=0)+yerr, alpha=0.1)
+        if not log_transform:    
+            ax.plot([0, N_BATCH * BATCH_SIZE], [0.] * 2, 'k', label="true best objective", linewidth=2)
+            ax.set_ylim(0,10.)
+        ax.set(xlabel='number of observations (beyond initial points)', ylabel='best objective value')
+        #ax.set_ylim(0,10.)
+        ax.legend(loc="lower right")
+        if not log_transform:
+            plt.savefig(os.path.join(exp_dir, f"plot_regret.pdf"))
+            plt.savefig(os.path.join(exp_dir, f"plot_regret.png"))
         else:
-            ax.plot(iters, y.mean(axis=0), ".-", label=label)
-        yerr=ci(y, N_TRIALS)
-        if log_transform:
-            ax.fill_between(iters, np.log(np.clip(y.mean(axis=0)-yerr, a_min=1e-5, a_max=None)), np.log(np.clip(y.mean(axis=0)+yerr, a_min=1e-5, a_max=None)), alpha=0.1)
-        else:
-            ax.fill_between(iters, y.mean(axis=0)-yerr, y.mean(axis=0)+yerr, alpha=0.1)
-    if not log_transform:    
-        ax.plot([0, N_BATCH * BATCH_SIZE], [0.] * 2, 'k', label="true best objective", linewidth=2)
-        ax.set_ylim(0,10.)
-    ax.set(xlabel='number of observations (beyond initial points)', ylabel='best objective value')
-    #ax.set_ylim(0,10.)
-    ax.legend(loc="lower right")
-    if not log_transform:
-        plt.savefig(os.path.join(save_path, f"plot_regret.pdf"))
-        plt.savefig(os.path.join(save_path, f"plot_regret.png"))
-    else:
-        plt.savefig(os.path.join(save_path, f"plot_regret_log.pdf"))
-        plt.savefig(os.path.join(save_path, f"plot_regret_log.png"))
+            plt.savefig(os.path.join(exp_dir, f"plot_regret_log.pdf"))
+            plt.savefig(os.path.join(exp_dir, f"plot_regret_log.png"))
 
 def distribution_gif_2D(algo_path, objective, seed, data, ax):
     X = data["X"]
@@ -205,11 +208,13 @@ def distribution_gif_1D(algo_path, objective, seed, data, ax):
             ax.plot(b, nu)
             ax.set_xlabel('x')
             ax.set_ylabel('y')
+            x_lim, y_lim = ax.get_xlim(), ax.get_ylim()
             plot_X = X[(i-1)*BATCH_SIZE:i*BATCH_SIZE].numpy()
             ax.scatter(plot_X[:,0], np.zeros_like(plot_X[:,0]), s=16)
             if label in ["SNES", "quad"]:
-                x = np.linspace(mu[i] - 3*sigma[i], mu[i] + 3*sigma[i], 100).flatten()
-                plt.plot(x, stats.norm.pdf(x, mu[i], sigma[i]).flatten())
+                x = np.linspace(mu[i] - 3*torch.sqrt(sigma[i]), mu[i] + 3*torch.sqrt(sigma[i]), 100).flatten()
+                plt.plot(x, 0.5*(y_lim[1] - y_lim[0]) * stats.norm.pdf(x, mu[i], torch.sqrt(sigma[i])).flatten(), label = "N(" + "{:.1E}".format(float(mu[i])) + ", " + "{:.1E}".format(float(sigma[i]))+")"  )
+            plt.legend()
             fig.savefig(os.path.join(plot_path, f"plot{i}.png"))
             plt.close()
 
@@ -224,24 +229,28 @@ def plot_distribution_gif(config, n_seeds=1):
     """
     n_seeds: Number of seeds one wants to plot the trajectory
     """
+    ### Here make a loop to plot gif to all relevant configurations
     save_path = config["save_dir"]
-    alg_name = [name for name in os.listdir(save_path) if os.path.isdir(os.path.join(save_path, name))]
-    dim = config["problem_settings"]["dim"]
-    obj = get_objective(config["problem_name"], **config["problem_settings"])
-    for algo in tqdm(alg_name, desc="Processing Algorithms..."):
-        algo_path = os.path.join(save_path, algo)
-        _, ax = plt.subplots(1, 1, figsize=(8, 6))
-        data_path_seeds = [f for f in os.listdir(algo_path) if ".pt" in f][:n_seeds]
-        for seed, df in enumerate(data_path_seeds):
-            data_path = os.path.join(algo_path, df)
-            with open(data_path, "rb") as _:
-                data = torch.load(data_path, map_location="cpu")
-            if dim == 1:
-                distribution_gif_1D(algo_path, obj, seed, data, ax)
-            elif dim == 2:
-                distribution_gif_2D(algo_path, obj, seed, data, ax)
-            else:
-                raise Exception("Dimension of the problem should be less than 2")
+    exp_name = [name for name in os.listdir(save_path) if os.path.isdir(os.path.join(save_path, name))]
+    for experiment in exp_name:
+        exp_dir = os.path.join(save_path, experiment)
+        alg_name = [name for name in os.listdir(exp_dir) if os.path.isdir(os.path.join(exp_dir, name))]        
+        dim = int(experiment.split("_")[2][-1])
+        obj = get_objective(config["problem_name"], **{"function": experiment.split("_")[0], "dim":dim, "noise_std":float(experiment.split("_")[1][6:])})
+        for algo in tqdm(alg_name, desc="Processing Algorithms..."):
+            algo_path = os.path.join(exp_dir, algo)
+            _, ax = plt.subplots(1, 1, figsize=(8, 6))
+            data_path_seeds = [f for f in os.listdir(algo_path) if ".pt" in f][:n_seeds]
+            for seed, df in enumerate(data_path_seeds):
+                data_path = os.path.join(algo_path, df)
+                with open(data_path, "rb") as _:
+                    data = torch.load(data_path, map_location="cpu")
+                if dim == 1:
+                    distribution_gif_1D(algo_path, obj, seed, data, ax)
+                elif dim == 2:
+                    distribution_gif_2D(algo_path, obj, seed, data, ax)
+                else:
+                    raise Exception("Dimension of the problem should be less than 2")
 
 if __name__ == "__main__":
     plot_distribution_gif("./logs/testfunction/sphere_test")
