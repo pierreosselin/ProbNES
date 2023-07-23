@@ -121,29 +121,7 @@ class Quadrature:
         updated_mu = self.distribution.loc + self.t_max*self.d_mu
         updated_Epsilon = nearestPD(self.distribution.covariance_matrix + self.t_max*self.d_epsilon)
         distribution = MultivariateNormal(updated_mu, updated_Epsilon)
-        self.__init__(model=self.model,
-                    distribution=distribution,
-                    c1=self.c1,
-                    c2=self.c2,
-                    t_max=self.t_max,
-                    budget=self.budget,
-                    maximize=self.maximize,
-                    device=self.device,
-                    dtype=self.dtype)
- 
-    def update_distribution(self):
-        updated_mu = self.distribution.loc + self.t_max*self.d_mu
-        updated_Epsilon = nearestPD(self.distribution.covariance_matrix + self.t_max*self.d_epsilon)
-        distribution = MultivariateNormal(updated_mu, updated_Epsilon)
-        self.__init__(model=self.model,
-                    distribution=distribution,
-                    c1=self.c1,
-                    c2=self.c2,
-                    t_max=self.t_max,
-                    budget=self.budget,
-                    maximize=self.maximize,
-                    device=self.device,
-                    dtype=self.dtype)
+        return distribution
  
     def maximize_step(self):
         t_linspace = torch.linspace(0, self.t_max, self.budget + 1, dtype=self.train_X.dtype, device=self.train_X.device)[1:]

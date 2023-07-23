@@ -3,8 +3,8 @@ save_dir: ./logs/test_function/
 seed: 0
 
 exp_settings:
-  n_exp: 0
-  n_iter: 100
+  n_exp: 2
+  n_iter: 20
   batch_size: 5
 
 bo_settings:

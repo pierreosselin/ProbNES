@@ -19,7 +19,7 @@ from botorch.utils.transforms import standardize, normalize, unnormalize
 from evotorch.algorithms import SNES
 from evotorch import Problem
 from .quadrature import QuadratureExplorationBis, Quadrature
-from .plot_script import plot_GP_fit
+from .plot_script import plot_GP_fit, plot_synthesis
 
 
 ## TODO Refactor code such that remove if in there
@@ -54,9 +54,6 @@ def run(save_path: str,
     NORMALIZE = False
     STANDARDIZE_LABEL = True
     VERBOSE = bo_kwargs["verbose"]
-    if VERBOSE:
-        if not os.path.exists(os.path.join(save_path, "fitgp")):
-            os.makedirs(os.path.join(save_path, "fitgp"))
 
     #Set seed and device
     torch.manual_seed(seed)
@@ -107,7 +104,10 @@ def run(save_path: str,
     warnings.filterwarnings('ignore', category=BadInitialCandidatesWarning)
     warnings.filterwarnings('ignore', category=RuntimeWarning)
 
-    verbose = True
+    verbose = False
+    if VERBOSE:
+        if not os.path.exists(os.path.join(save_path, "fitgp")):
+            os.makedirs(os.path.join(save_path, "fitgp"))
 
     #train_yvar = torch.tensor(objective.noise_std**2, device=device, dtype=dtype)
     def initialize_model(train_x, train_obj, state_dict=None):
@@ -236,7 +236,12 @@ def run(save_path: str,
             if VERBOSE and problem.dim == 1:
                 if ((iteration + 1) % VERBOSE) == 0:
                     plot_GP_fit(model, model.likelihood, train_x, train_obj, obj=objective, lb=-10., up=10., save_path=save_path, iteration=iteration)
-    
+                    if STANDARDIZE_LABEL:
+                        std_y, mean_y = torch.std_mean(train_obj)
+                        plot_synthesis(model, quad_distrib, objective, problem_kwargs["initial_bounds"], iteration, bounds_t = 10., save_path=save_path, standardize=True, mean_Y=float(mean_y), std_Y=float(std_y))
+                    else:
+                        plot_synthesis(model, quad_distrib, objective, problem_kwargs["initial_bounds"], iteration, save_path=save_path)
+
         # optimize and get new observation
         if label in ["qEI", "piqEI", "quad"]:
             new_x, new_obj = optimize_acqf_and_get_observation(af)
@@ -297,7 +302,7 @@ def run(save_path: str,
             quad.maximize_step()
             #print(f"Current Epsilon {quad_distrib.covariance_matrix}, optimal step taken {quad.t_max * quad.d_epsilon}, final variance {quad_distrib.covariance_matrix + quad.t_max * quad.d_epsilon}")
             #print(f"Current mu {quad_distrib.loc}, optimal step taken {quad.t_max * quad.d_mu}, final variance {quad_distrib.loc + quad.t_max * quad.d_mu}")
-            quad.update_distribution()
+            quad_distrib = quad.update_distribution()
             list_mu.append(quad_distrib.loc.detach().clone())
             list_sigma.append(quad_distrib.covariance_matrix.detach().clone())
         
