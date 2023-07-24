@@ -34,7 +34,7 @@ def posterior_quad(model, theta, var):
             budget = 50)
     
     quad_test.quadrature()
-    return quad_test.m, quad_test.v
+    return quad_test.m.detach().clone(), quad_test.v.detach().clone()
 
 def plot_synthesis(model, quad_distrib, objective, bounds, iteration, bounds_t = 10., save_path=".", standardize=False, mean_Y=None, std_Y=None):
     

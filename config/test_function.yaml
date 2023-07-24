@@ -8,7 +8,7 @@ exp_settings:
   batch_size: 5
 
 bo_settings:
-  algorithm: ["quad"]  #[random, qEI, SNES, piqEI, quad]
+  algorithm: ["quad", "SNES"]  #[random, qEI, SNES, piqEI, quad]
   beta: 1. #For piqei
   var_prior: 10. #For piqEI or quad, initial distribution
   num_restarts: 10 #For qEI and piqEI
