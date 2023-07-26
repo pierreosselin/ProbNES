@@ -1,6 +1,8 @@
 problem_name: test_function #test_function, airfoil
-save_dir: ./logs/test_function/
+save_dir: ./logs/test_function
 seed: 0
+verbose_synthesis: 1
+gpu: 3
 
 exp_settings:
   n_exp: 2
@@ -8,9 +10,9 @@ exp_settings:
   batch_size: 5
 
 bo_settings:
-  algorithm: ["quad", "SNES"]  #[random, qEI, SNES, piqEI, quad]
+  algorithm: "quad"  #[random, qEI, SNES, piqEI, quad]
   beta: 1. #For piqei
-  var_prior: 10. #For piqEI or quad, initial distribution
+  var_prior: 5. #For piqEI or quad, initial distribution
   num_restarts: 10 #For qEI and piqEI
   mc_samples: 256 #For qEI and piqEI
   raw_samples: 512 #For qEI and piqEI

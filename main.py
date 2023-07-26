@@ -38,6 +38,10 @@ if __name__ == "__main__":
     exp_kwargs = config["exp_settings"]
     problem_kwargs = config["problem_settings"]
     bo_kwargs = config["bo_settings"]
+    gpu_label = config["gpu"]
+    verbose_synthesis = config["verbose_synthesis"]
+    if gpu_label:
+        os.environ["CUDA_VISIBLE_DEVICES"]=str(gpu_label)
 
     ### Make lists for multiple experiments
     list_keys, list_values = [], []
@@ -102,21 +106,38 @@ if __name__ == "__main__":
                 initial_seed = config["seed"]
                 run(save_path=save_path,
                     problem_name=problem_name,
-                    seed = initial_seed + seed,
+                    seed=initial_seed + seed,
+                    verbose_synthesis=verbose_synthesis,
                     exp_kwargs=exp_kwargs,
                     bo_kwargs=bo_kwargs,
                     problem_kwargs=problem_kwargs,
                     )
     else:
+        exp_path = create_path(save_dir, problem_name, problem_kwargs, bo_kwargs)
+        if not os.path.exists(exp_path):
+            os.makedirs(exp_path)
+            print("Processing", exp_path, "...")
+        else:
+            "If folder already exists then perform optimization depending on OVERWRITE"
+            if OVERWRITE == False:
+                print(exp_path + "found without overwriting, next config...")
+        
         for seed in range(exp_kwargs["n_exp"]):
             label = bo_kwargs["algorithm"]
             save_path = os.path.join(save_dir, label)
             if not os.path.exists(save_path):
                 os.makedirs(save_path)
+
+            algo = bo_kwargs["algorithm"]
+            save_path = os.path.join(exp_path, algo)
+            if not os.path.exists(save_path):
+                os.makedirs(save_path)
+                
             initial_seed = config["seed"]
             run(save_path=save_path,
                 problem_name=problem_name,
                 seed = initial_seed + seed,
+                verbose_synthesis=verbose_synthesis,
                 exp_kwargs=exp_kwargs,
                 bo_kwargs=bo_kwargs,
                 problem_kwargs=problem_kwargs,

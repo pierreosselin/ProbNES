@@ -19,6 +19,9 @@ from botorch.utils.transforms import standardize, normalize, unnormalize
 from evotorch.algorithms import SNES
 from evotorch import Problem
 from .quadrature import QuadratureExplorationBis, Quadrature
+from gpytorch.kernels import RBFKernel
+from gpytorch.kernels.scale_kernel import ScaleKernel
+from gpytorch.priors.torch_priors import GammaPrior
 from .plot_script import plot_GP_fit, plot_synthesis
 
 
@@ -30,6 +33,7 @@ LIST_LABEL = ["random", "SNES", "piqEI", "quad", "qEI"]
 def run(save_path: str,
         problem_name:str = "test_function",
         seed:int = 0,
+        verbose_synthesis:int = 0,
         exp_kwargs: Optional[Dict[str, Any]] = None,
         bo_kwargs: Optional[Dict[str, Any]] = None,
         problem_kwargs: Optional[Dict[str, Any]] = None,
@@ -54,7 +58,6 @@ def run(save_path: str,
     NORMALIZE = False
     STANDARDIZE_LABEL = True
     VERBOSE = bo_kwargs["verbose"]
-
     #Set seed and device
     torch.manual_seed(seed)
     np.random.seed(seed)
@@ -110,9 +113,22 @@ def run(save_path: str,
             os.makedirs(os.path.join(save_path, "fitgp"))
 
     #train_yvar = torch.tensor(objective.noise_std**2, device=device, dtype=dtype)
+    ### TODO Change model for quadrature, use rbf, for the rest, use default matern kernel
     def initialize_model(train_x, train_obj, state_dict=None):
         # define models for objective and constraint
-        model_obj = SingleTaskGP(train_x, train_obj).to(train_x)
+        if label == "quad":
+            covar_module = ScaleKernel(
+                RBFKernel(
+                    ard_num_dims=train_x.shape[-1],
+                    batch_shape=None,
+                    lengthscale_prior=GammaPrior(3.0, 6.0),
+                ),
+                batch_shape=None,
+                outputscale_prior=GammaPrior(2.0, 0.15),
+            )
+            model_obj = SingleTaskGP(train_x, train_obj, covar_module=covar_module).to(train_x)
+        else:
+            model_obj = SingleTaskGP(train_x, train_obj).to(train_x)
         #model_obj = FixedNoiseGP(train_x, train_obj, train_yvar.expand_as(train_obj)).to(train_x)
         mll = ExactMarginalLogLikelihood(model_obj.likelihood, model_obj)
         # load state dict if it is passed
@@ -233,14 +249,6 @@ def run(save_path: str,
                 model=model,
                 distribution=quad_distrib,
                 )
-            if VERBOSE and problem.dim == 1:
-                if ((iteration + 1) % VERBOSE) == 0:
-                    plot_GP_fit(model, model.likelihood, train_x, train_obj, obj=objective, lb=-10., up=10., save_path=save_path, iteration=iteration)
-                    if STANDARDIZE_LABEL:
-                        std_y, mean_y = torch.std_mean(train_obj)
-                        plot_synthesis(model, quad_distrib, objective, problem_kwargs["initial_bounds"], iteration, bounds_t = 10., save_path=save_path, standardize=True, mean_Y=float(mean_y), std_Y=float(std_y))
-                    else:
-                        plot_synthesis(model, quad_distrib, objective, problem_kwargs["initial_bounds"], iteration, save_path=save_path)
 
         # optimize and get new observation
         if label in ["qEI", "piqEI", "quad"]:
@@ -305,6 +313,15 @@ def run(save_path: str,
             quad_distrib = quad.update_distribution()
             list_mu.append(quad_distrib.loc.detach().clone())
             list_sigma.append(quad_distrib.covariance_matrix.detach().clone())
+
+            if (verbose_synthesis) and (problem.dim == 1):
+                if ((iteration + 1) % verbose_synthesis) == 0:
+                    plot_GP_fit(model, model.likelihood, train_x, train_obj, obj=objective, lb=-10., up=10., save_path=save_path, iteration=iteration)
+                    if STANDARDIZE_LABEL:
+                        std_y, mean_y = torch.std_mean(train_obj)
+                        plot_synthesis(model, quad, objective, problem_kwargs["initial_bounds"], iteration, save_path=save_path, standardize=True, mean_Y=float(mean_y), std_Y=float(std_y))
+                    else:
+                        plot_synthesis(model, quad, objective, problem_kwargs["initial_bounds"], iteration, save_path=save_path)
         
         if verbose:
             if (iteration + 1)%10 == 0:

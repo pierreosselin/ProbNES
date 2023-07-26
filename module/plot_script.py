@@ -36,20 +36,10 @@ def posterior_quad(model, theta, var):
     quad_test.quadrature()
     return quad_test.m.detach().clone(), quad_test.v.detach().clone()
 
-def plot_synthesis(model, quad_distrib, objective, bounds, iteration, bounds_t = 10., save_path=".", standardize=False, mean_Y=None, std_Y=None):
-    
+def plot_synthesis(model, quad, objective, bounds, iteration, save_path=".", standardize=False, mean_Y=None, std_Y=None):
     save_path_gp = os.path.join(save_path, f"fitgp/synthesis_{iteration}.png")
-    quad = Quadrature(model=model,
-            distribution=quad_distrib,
-            c1 = 0.1,
-            c2 = 0.2,
-            t_max = 50,
-            budget = 500)
-    quad.quadrature()
-    quad.gradient_direction()
-
     b = np.arange(-float(bounds), float(bounds), 0.2)
-    d = np.arange(0, 3, 0.05)[1:]**2
+    d = np.arange(0, 10, 0.5)[1:]
     B, D = np.meshgrid(b, d)
     n, m = b.shape[0], d.shape[0]
     res = torch.stack((torch.tensor(B.flatten()), torch.tensor(D.flatten())), axis = 1).numpy()
@@ -58,7 +48,8 @@ def plot_synthesis(model, quad_distrib, objective, bounds, iteration, bounds_t =
         post = posterior_quad(model, el[0], el[1])
         result.append(post)
     mean = torch.tensor(result).numpy()[:,0].reshape(m,n)
-    t_linspace = torch.linspace(-bounds_t, bounds_t, 200, dtype=quad.train_X.dtype)
+    
+    t_linspace = torch.linspace(0., quad.t_max, quad.budget, dtype=quad.train_X.dtype)[1:]
     result_wolfe = []
     for t in t_linspace:
         result_wolfe.append(quad.compute_p_wolfe(t))
@@ -75,11 +66,7 @@ def plot_synthesis(model, quad_distrib, objective, bounds, iteration, bounds_t =
         mean_distrib_grad, var_distrib_grad = torch.tensor([el[0]], dtype=torch.float64, device=model.train_inputs[0].device), torch.diag(torch.tensor([el[1]], dtype=torch.float64, device=model.train_inputs[0].device))
         quad_distrib_grad = MultivariateNormal(mean_distrib_grad, var_distrib_grad)
         quad_grad = Quadrature(model=model,
-                distribution=quad_distrib_grad,
-                c1 = 0.1,
-                c2 = 0.2,
-                t_max = 1,
-                budget = 50)
+                distribution=quad_distrib_grad)
         quad_grad.quadrature()
         quad_grad.gradient_direction()
         mu_grad, epsilon_grad = float(quad_grad.d_mu.detach().clone()), float(quad_grad.d_epsilon.detach().clone())
@@ -87,7 +74,7 @@ def plot_synthesis(model, quad_distrib, objective, bounds, iteration, bounds_t =
         result_grad.append([mu_grad, epsilon_grad])
         
     fig, axs = plt.subplots(2, 2, figsize=(16, 12))
-    plot_GP_fit_ax(axs[0,0], model, quad_distrib, model.train_inputs[0], model.train_targets, objective, standardize=standardize, lb=-float(bounds), up=float(bounds), mean_Y=mean_Y, std_Y=std_Y)
+    plot_GP_fit_ax(axs[0,0], model, quad.distribution, model.train_inputs[0], model.train_targets, objective, standardize=standardize, lb=-float(bounds), up=float(bounds), mean_Y=mean_Y, std_Y=std_Y)
 
     contour1 = axs[0,1].contourf(B, D, mean)
     # Gradient
@@ -103,7 +90,7 @@ def plot_synthesis(model, quad_distrib, objective, bounds, iteration, bounds_t =
     mu2 = float(quad.distribution.loc + float(t_linspace[np.argmax(wolfe_tensor)])*quad.d_mu)
     Epsilon2 = float(nearestPD(quad.distribution.covariance_matrix + float(t_linspace[np.argmax(wolfe_tensor)])*quad.d_epsilon))
 
-    axs[0,1].plot(t_linspace.numpy(), wolfe_tensor.numpy())
+    axs[1,0].plot(t_linspace.numpy(), wolfe_tensor.numpy())
 
     axs[1,1].scatter([float(quad.distribution.loc)], [float(quad.distribution.covariance_matrix)])
     axs[1,1].scatter([mu2], [Epsilon2])
@@ -118,6 +105,7 @@ def plot_synthesis(model, quad_distrib, objective, bounds, iteration, bounds_t =
 def plot_GP_fit(model, likelihood, train_X, targets, obj, lb=-10., up=10., save_path=".", iteration=1):
     """ Plot the figures corresponding to the Gaussian process fit
     """
+    fig, ax = plt.subplots()
     save_path_gp = os.path.join(save_path, f"fitgp/{iteration}.png")
     model.eval()
     likelihood.eval()
@@ -129,17 +117,15 @@ def plot_GP_fit(model, likelihood, train_X, targets, obj, lb=-10., up=10., save_
     Y_standard, Y_mean, Y_std = standardize_return(targets)
     value_ = ((obj(test_x.unsqueeze(-1)) - Y_mean)/Y_std).flatten()
 
-    plt.scatter(train_X.cpu().numpy(), Y_standard.cpu().numpy(), color='black', label='Training data')
-    plt.plot(test_x.cpu().numpy(), predictions.mean.cpu().numpy(), color='blue', label='Predictive mean')
-    plt.plot(test_x.cpu().numpy(), value_.cpu().numpy(), color='green', label='True Function')
-    plt.fill_between(test_x.cpu().numpy(), lower.cpu().numpy(), upper.cpu().numpy(), color='lightblue', alpha=0.5, label='Confidence region')
-    plt.xlabel('x')
-    plt.ylabel('y')
-    plt.title('Gaussian Process Regression')
-    plt.legend()
-    plt.savefig(save_path_gp)
-    plt.clf()
-
+    ax.scatter(train_X.cpu().numpy(), Y_standard.cpu().numpy(), color='black', label='Training data')
+    ax.plot(test_x.cpu().numpy(), predictions.mean.cpu().numpy(), color='blue', label='Predictive mean')
+    ax.plot(test_x.cpu().numpy(), value_.cpu().numpy(), color='green', label='True Function')
+    ax.fill_between(test_x.cpu().numpy(), lower.cpu().numpy(), upper.cpu().numpy(), color='lightblue', alpha=0.5, label='Confidence region')
+    ax.set_xlabel('x')
+    ax.set_ylabel('y')
+    ax.set_title('Gaussian Process Regression')
+    ax.legend()
+    fig.savefig(save_path_gp)
 
 def plot_GP_fit_ax(ax, model, distribution, train_X, targets, obj, standardize=False, lb=-10., up=10., mean_Y=None, std_Y=None):
     """ Plot the figures corresponding to the Gaussian process fit

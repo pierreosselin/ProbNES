@@ -356,7 +356,7 @@ def nearestPD(A):
     if isPD(A3):
         return A3
 
-    spacing = np.spacing(torch.norm(A).detach().numpy())
+    spacing = np.spacing(torch.norm(A).detach().cpu().numpy())
     # The above is different from [1]. It appears that MATLAB's `chol` Cholesky
     # decomposition will accept matrixes with exactly 0-eigenvalue, whereas
     # Numpy's will not. So where [1] uses `eps(mineig)` (where `eps` is Matlab
@@ -366,7 +366,7 @@ def nearestPD(A):
     # `spacing` will, for Gaussian random matrixes of small dimension, be on
     # othe order of 1e-16. In practice, both ways converge, as the unit test
     # below suggests.
-    I = torch.eye(A.shape[0])
+    I = torch.eye(A.shape[0]).to(A3)
     k = 1
     while not isPD(A3):
         mineig = torch.min(torch.real(torch.linalg.eigvals(A3)))

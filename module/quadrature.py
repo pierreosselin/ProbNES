@@ -16,8 +16,8 @@ from .utils import bounded_bivariate_normal_integral, nearestPD, isPD
 
 """ 
 Be careful as:
-- Gaussian Process on Gpytorch is done with exponential and no constant for the density
-- Formula assume normal distribution + theta to take into account
+- Gaussian Process on Gpytorch is done with exponential and kernel scalar (no normalization constant for the density)
+- Formula assume normal distribution and no theta => use formula with a constant outputscale * normalizing constant
 """
 
 ### TODO separate function to update distribution and update data/model
@@ -27,7 +27,7 @@ class Quadrature:
                  distribution=None,
                  c1 = 0.0001,
                  c2 = 0.9,
-                 t_max = 10,
+                 t_max = 20,
                  budget = 50,
                  maximize = True,
                  device=None,
@@ -137,7 +137,9 @@ class Quadrature:
         Wolfe conditions under the current GP model."""
         # Compute mu and PI
         mu1, mu2 = self.distribution.loc, self.distribution.loc + t*self.d_mu
-        Epsilon1, Epsilon2 = self.distribution.covariance_matrix, nearestPD(self.distribution.covariance_matrix + t*self.d_epsilon)
+        Epsilon1, Epsilon2 = self.distribution.covariance_matrix, self.distribution.covariance_matrix + t*self.d_epsilon
+        if not isPD(Epsilon2):
+            Epsilon2 = nearestPD(Epsilon2)
         Pi_1_2 = self.gp_covariance + Epsilon1 + Epsilon2
         Pi_2_2 = self.gp_covariance + 2*Epsilon2
         Pi_inv_1_2 = torch.linalg.inv(Pi_1_2)
@@ -213,6 +215,8 @@ class Quadrature:
         # Compute mean and covariance matrix of the two Wolfe quantities a and b
         # Compute mean and covariance structure for f(0), f'(0), f(t), f'(t)
         A_transform = torch.tensor([[1, self.c1*t, -1, 0], [0, -self.c2, 0, 1]], dtype=self.train_X.dtype, device=self.train_X.device)
+        
+        ##
         mean_joint = torch.tensor([self.mean_1, self.mean_prime_1, mean_2,  mean_prime_2], dtype=self.train_X.dtype, device=self.train_X.device)
         if self.maximize:
             mean_joint = -mean_joint
@@ -226,7 +230,7 @@ class Quadrature:
         #    for j in range(i+1,4):
         #        assert torch.abs(covar_joint[i,j]) <= torch.sqrt(covar_joint[i,i]*covar_joint[j,j])
         #
-        #assert isPD(covar_joint)
+        assert isPD(covar_joint)
 
 
         mean_wolfe = A_transform @ mean_joint
