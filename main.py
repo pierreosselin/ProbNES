@@ -18,7 +18,6 @@ def create_path(save_path, problem_name, problem_kwargs, bo_kwargs):
     return save_path
 
 
-## TODO Manage option for gpu
 if __name__ == "__main__":
     OVERWRITE = True
     # parse arguments and load config
