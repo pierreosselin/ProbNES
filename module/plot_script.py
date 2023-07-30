@@ -27,11 +27,7 @@ def posterior_quad(model, theta, var):
     mean_distrib_test, var_distrib_test = torch.tensor([theta], dtype=torch.float64, device=model.train_inputs[0].device), torch.diag(torch.tensor([var], dtype=torch.float64, device=model.train_inputs[0].device))
     quad_distrib_test = MultivariateNormal(mean_distrib_test, var_distrib_test)
     quad_test = Quadrature(model=model,
-            distribution=quad_distrib_test,
-            c1 = 0.1,
-            c2 = 0.2,
-            t_max = 1,
-            budget = 50)
+            distribution=quad_distrib_test)
     
     quad_test.quadrature()
     return quad_test.m.detach().clone(), quad_test.v.detach().clone()
@@ -48,8 +44,8 @@ def plot_synthesis(model, quad, objective, bounds, iteration, save_path=".", sta
         post = posterior_quad(model, el[0], el[1])
         result.append(post)
     mean = torch.tensor(result).numpy()[:,0].reshape(m,n)
-    
-    t_linspace = torch.linspace(0., quad.t_max, quad.budget, dtype=quad.train_X.dtype)[1:]
+
+    t_linspace = torch.linspace(0., quad.t_max, quad.budget + 1, dtype=quad.train_X.dtype)[1:]
     result_wolfe = []
     for t in t_linspace:
         result_wolfe.append(quad.compute_p_wolfe(t))
@@ -95,7 +91,8 @@ def plot_synthesis(model, quad, objective, bounds, iteration, save_path=".", sta
     axs[1,1].scatter([float(quad.distribution.loc)], [float(quad.distribution.covariance_matrix)])
     axs[1,1].scatter([mu2], [Epsilon2])
     axs[1,1].arrow(float(quad.distribution.loc), float(quad.distribution.covariance_matrix), float(t_linspace[np.argmax(wolfe_tensor)]*quad.d_mu), float(t_linspace[np.argmax(wolfe_tensor)]*quad.d_epsilon), width = 0.1)
-
+    if t_linspace[np.argmax(wolfe_tensor)] != quad.t_update:
+        print(f"Computation error: {quad.t_update} and {t_linspace[np.argmax(wolfe_tensor)]}")
     fig.colorbar(contour1, ax=axs[0,0])
     fig.colorbar(contour1, ax=axs[0,1])
     fig.colorbar(contour4, ax=axs[1,1])
@@ -225,7 +222,7 @@ def plot_figure(save_path, log_transform=False):
     exp_name = [name for name in os.listdir(save_path) if os.path.isdir(os.path.join(save_path, name))]
     for experiment in exp_name:
         exp_dir = os.path.join(save_path, experiment)
-        _, ax = plt.subplots(1, 1, figsize=(8, 6))
+        fig, ax = plt.subplots(1, 1, figsize=(8, 6))
         alg_name = [name for name in os.listdir(exp_dir) if os.path.isdir(os.path.join(exp_dir, name))]
         for algo in alg_name:
             alg_dir = os.path.join(exp_dir, algo)
@@ -259,11 +256,11 @@ def plot_figure(save_path, log_transform=False):
         #ax.set_ylim(0,10.)
         ax.legend(loc="lower right")
         if not log_transform:
-            plt.savefig(os.path.join(exp_dir, f"plot_regret.pdf"))
-            plt.savefig(os.path.join(exp_dir, f"plot_regret.png"))
+            fig.savefig(os.path.join(exp_dir, f"plot_regret.pdf"))
+            fig.savefig(os.path.join(exp_dir, f"plot_regret.png"))
         else:
-            plt.savefig(os.path.join(exp_dir, f"plot_regret_log.pdf"))
-            plt.savefig(os.path.join(exp_dir, f"plot_regret_log.png"))
+            fig.savefig(os.path.join(exp_dir, f"plot_regret_log.pdf"))
+            fig.savefig(os.path.join(exp_dir, f"plot_regret_log.png"))
 
 def distribution_gif_2D(algo_path, objective, seed, data, ax):
     X = data["X"]

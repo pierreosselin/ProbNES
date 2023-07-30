@@ -27,8 +27,8 @@ class Quadrature:
                  distribution=None,
                  c1 = 0.0001,
                  c2 = 0.9,
-                 t_max = 20,
-                 budget = 50,
+                 t_max = 100,
+                 budget = 500,
                  maximize = True,
                  device=None,
                  dtype=None) -> None:
@@ -118,8 +118,8 @@ class Quadrature:
                     + 0.25*((torch.unsqueeze(torch.unsqueeze(self.d_epsilon, -1), -1)) * self.R1_prime_1_prime_epsilon_epsilon * (torch.unsqueeze(torch.unsqueeze(self.d_epsilon, 0), 0).repeat(self.d,self.d,1,1))).sum()
 
     def update_distribution(self):
-        updated_mu = self.distribution.loc + self.t_max*self.d_mu
-        updated_Epsilon = nearestPD(self.distribution.covariance_matrix + self.t_max*self.d_epsilon)
+        updated_mu = self.distribution.loc + self.t_update*self.d_mu
+        updated_Epsilon = nearestPD(self.distribution.covariance_matrix + self.t_update*self.d_epsilon)
         distribution = MultivariateNormal(updated_mu, updated_Epsilon)
         return distribution
  
@@ -129,17 +129,38 @@ class Quadrature:
         for t in t_linspace:
             list_max.append(self.compute_p_wolfe(t))
         t_tensor = torch.tensor(list_max)
-        self.t_max = t_linspace[torch.argmax(t_tensor)]
+        self.t_update = t_linspace[torch.argmax(t_tensor)]
 
-    def compute_p_wolfe(self, t):
+    def compute_wolfe(self, mean_joint, covar_joint, t):
+        A_transform = torch.tensor([[1, self.c1*t, -1, 0], [0, -self.c2, 0, 1]], dtype=self.train_X.dtype, device=self.train_X.device)
+        if not isPD(covar_joint):
+            return 0
+        
+        mean_wolfe = A_transform @ mean_joint
+        covar_wolfe = A_transform @ covar_joint @ A_transform.T
+        # Very small variances can cause numerical problems. Safeguard against
+        # this with a deterministic evaluation of the Wolfe conditions.
+        
+        # Compute correlation factor and integration bounds for adjusted p_Wolfe
+        # and return the result of the bivariate normal integral.
+        rho = (covar_wolfe[0,1]/torch.sqrt(covar_wolfe[0,0]*covar_wolfe[1,1])).detach().cpu()
+        al = -(mean_wolfe[0]/torch.sqrt(covar_wolfe[0,0])).detach().cpu()
+        bl = -(mean_wolfe[1]/torch.sqrt(covar_wolfe[1,1])).detach().cpu()
+        
+        return bounded_bivariate_normal_integral(rho, al, torch.inf, bl, torch.inf)
+    
+    def compute_joint_distribution(self, t):
         # Already changed dCov and Covd here
         """Computes the probability that step size ``t`` satisfies the adjusted
         Wolfe conditions under the current GP model."""
         # Compute mu and PI
         mu1, mu2 = self.distribution.loc, self.distribution.loc + t*self.d_mu
         Epsilon1, Epsilon2 = self.distribution.covariance_matrix, self.distribution.covariance_matrix + t*self.d_epsilon
+        
         if not isPD(Epsilon2):
             Epsilon2 = nearestPD(Epsilon2)
+            #return None
+        
         Pi_1_2 = self.gp_covariance + Epsilon1 + Epsilon2
         Pi_2_2 = self.gp_covariance + 2*Epsilon2
         Pi_inv_1_2 = torch.linalg.inv(Pi_1_2)
@@ -187,7 +208,7 @@ class Quadrature:
 
         # Compute covariance structure
         ## Compute mean elements
-        mean_2 = t2X @ self.inverse_data_covar_y
+        mean_2 = self.model.mean_module.constant + t2X @ self.inverse_data_covar_y
         mean_prime_2 = (self.d_mu * (Tau2_mu.T @ self.inverse_data_covar_y)).sum() + (self.d_epsilon * (Tau_epsilon2.T @ self.inverse_data_covar_y)).sum()
 
         ## Compute Var elements
@@ -212,39 +233,21 @@ class Quadrature:
         var_prime_2 = self.d_mu @ R2_prime_2_prime_mu_mu @ self.d_mu \
                     + 0.25*((torch.unsqueeze(torch.unsqueeze(self.d_epsilon, -1), -1)) * R2_prime_2_prime_epsilon_epsilon * (torch.unsqueeze(torch.unsqueeze(self.d_epsilon, 0), 0).repeat(self.d,self.d,1,1))).sum()
 
-        # Compute mean and covariance matrix of the two Wolfe quantities a and b
-        # Compute mean and covariance structure for f(0), f'(0), f(t), f'(t)
-        A_transform = torch.tensor([[1, self.c1*t, -1, 0], [0, -self.c2, 0, 1]], dtype=self.train_X.dtype, device=self.train_X.device)
-        
-        ##
         mean_joint = torch.tensor([self.mean_1, self.mean_prime_1, mean_2,  mean_prime_2], dtype=self.train_X.dtype, device=self.train_X.device)
-        if self.maximize:
-            mean_joint = -mean_joint
         covar_joint = torch.tensor([[self.var_1, self.cov_1_1_prime, cov_1_2, cov_1_2_prime],
                                     [self.cov_1_1_prime, self.var_prime_1, cov_2_1_prime, cov_1_prime_2_prime],
                                     [cov_1_2, cov_2_1_prime, var_2, cov_2_2_prime],
                                     [cov_1_2_prime, cov_1_prime_2_prime, cov_2_2_prime, var_prime_2]], dtype=self.train_X.dtype, device=self.train_X.device)
-
-        ## Assert the covariance structure make sense (positive definite and cauchy covariance inequality)
-        #for i in range(3):
-        #    for j in range(i+1,4):
-        #        assert torch.abs(covar_joint[i,j]) <= torch.sqrt(covar_joint[i,i]*covar_joint[j,j])
-        #
-        assert isPD(covar_joint)
-
-
-        mean_wolfe = A_transform @ mean_joint
-        covar_wolfe = A_transform @ covar_joint @ A_transform.T
-        # Very small variances can cause numerical problems. Safeguard against
-        # this with a deterministic evaluation of the Wolfe conditions.
-        
-        # Compute correlation factor and integration bounds for adjusted p_Wolfe
-        # and return the result of the bivariate normal integral.
-        rho = (covar_wolfe[0,1]/torch.sqrt(covar_wolfe[0,0]*covar_wolfe[1,1])).detach().cpu()
-        al = -(mean_wolfe[0]/torch.sqrt(covar_wolfe[0,0])).detach().cpu()
-        bl = -(mean_wolfe[1]/torch.sqrt(covar_wolfe[1,1])).detach().cpu()
-        
-        return bounded_bivariate_normal_integral(rho, al, torch.inf, bl, torch.inf)
+        return mean_joint.detach(), covar_joint.detach()
+    
+    def compute_p_wolfe(self, t):
+        result = self.compute_joint_distribution(t)
+        if result:
+            mean_joint, covar_joint = result
+            mean_joint = -mean_joint ## wolfe is for minimization, we maximize by default
+            return self.compute_wolfe(mean_joint, covar_joint, t)
+        else:
+            return 0
 
 ## TODO Check if can be more efficient here use inversion block matrices
 class QuadratureExploration(AnalyticAcquisitionFunction):

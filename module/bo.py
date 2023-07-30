@@ -49,6 +49,7 @@ def run(save_path: str,
     #Get experiment settings
     BATCH_SIZE = exp_kwargs["batch_size"]
     N_BATCH = exp_kwargs["n_iter"]
+    N_INIT = exp_kwargs["n_init"]
 
     # Algorithm setting
     NUM_RESTARTS = bo_kwargs["num_restarts"]
@@ -82,7 +83,7 @@ def run(save_path: str,
             )
         if label == "SNES":
             VAR_PRIOR = bo_kwargs["var_prior"]
-            searcher = SNES(problem_ea, popsize=BATCH_SIZE, stdev_init=problem_kwargs["initial_bounds"])
+            searcher = SNES(problem_ea, popsize=BATCH_SIZE, stdev_init=VAR_PRIOR, center_init=0.)
         elif label == "NESWSABI":
             searcher = NESWSABI(problem_ea, popsize=BATCH_SIZE, stdev_init=problem_kwargs["initial_bounds"], ranking_method=bo_kwargs["ranking_method"], quad_kwargs=bo_kwargs["quadrature"])
         list_mu, list_sigma = [], []
@@ -178,7 +179,7 @@ def run(save_path: str,
     
     if label in ["qEI", "piqEI", "random", "quad"]:
         # call helper functions to generate initial training data and initialize model
-        train_x, train_obj, best_observed_value = problem.generate_initial_data(n=10)
+        train_x, train_obj, best_observed_value = problem.generate_initial_data(n=N_INIT)
 
     elif label == "SNES":
         searcher.run(1)
@@ -314,7 +315,7 @@ def run(save_path: str,
             list_mu.append(quad_distrib.loc.detach().clone())
             list_sigma.append(quad_distrib.covariance_matrix.detach().clone())
 
-            if (verbose_synthesis) and (problem.dim == 1):
+            if (verbose_synthesis) and (problem.dim == 1) and (seed == 0):
                 if ((iteration + 1) % verbose_synthesis) == 0:
                     plot_GP_fit(model, model.likelihood, train_x, train_obj, obj=objective, lb=-10., up=10., save_path=save_path, iteration=iteration)
                     if STANDARDIZE_LABEL:

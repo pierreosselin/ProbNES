@@ -142,8 +142,8 @@ if __name__ == "__main__":
                 problem_kwargs=problem_kwargs,
                 )
     
-    plot_figure(os.path.dirname(save_dir))
-    plot_figure(os.path.dirname(save_dir), log_transform=True)
+    plot_figure(save_dir)
+    plot_figure(save_dir, log_transform=True)
 
     ## config["test_function"]
     plot_distribution_gif(config, n_seeds=1)
