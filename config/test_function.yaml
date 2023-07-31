@@ -1,27 +1,28 @@
 problem_name: test_function #test_function, airfoil
 save_dir: ./logs/test_function
 seed: 0
-verbose_synthesis: 10
+verbose_synthesis: 5
 gpu: 3
 
 exp_settings:
-  n_exp: 10
-  n_iter: 60
+  n_exp: 2
+  n_iter: 10
   batch_size: 5
   n_init: 5
 
 bo_settings:
-  algorithm: ["quad", "SNES", "random", "qEI", "piqEI"] #["quad", "SNES", "random", "qEI", "piqEI"]  #[random, qEI, SNES, piqEI, quad]
+  algorithm: ["quad"] #["quad", "SNES", "random", "qEI", "piqEI"]  #[random, qEI, SNES, piqEI, quad]
   beta: 1. #For piqei
-  var_prior: [1., 5., 10, 20] #For piqEI or quad, initial distribution
+  var_prior: [10.] #For piqEI or quad, initial distribution
   num_restarts: 10 #For qEI and piqEI
   mc_samples: 256 #For qEI and piqEI
   raw_samples: 512 #For qEI and piqEI
   batch_acq: 5 # Number of batches used to evaluate the acquisition function at the same time
   verbose: 10
+  candidates_vr: 10000
 
 problem_settings:
-  function: ["ackley", "rosenbrock"] # Name of the function in [airfoil, rosenbrock, sphere, ackley]
+  function: "ackley" # Name of the function in [airfoil, rosenbrock, sphere, ackley]
   noise: 0.
   dim: 1
   initial_bounds: 10.

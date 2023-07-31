@@ -59,6 +59,7 @@ def run(save_path: str,
     NORMALIZE = False
     STANDARDIZE_LABEL = True
     VERBOSE = bo_kwargs["verbose"]
+    CANDIDATES_VR = bo_kwargs["candidates_vr"]
     #Set seed and device
     torch.manual_seed(seed)
     np.random.seed(seed)
@@ -166,6 +167,17 @@ def run(save_path: str,
         new_obj = exact_obj
         return new_x, new_obj
     
+    def optimize_acqf_and_get_observation_random(acq_func, dist):
+        """Optimizes the acquisition function, and returns a new candidate and a noisy observation."""
+        # optimize
+        candidates = dist.sample(torch.tensor([CANDIDATES_VR, BATCH_SIZE])).to(device = problem.device, dtype = problem.dtype)
+        res = acq_func(candidates)
+        new_x = candidates[torch.argmax(res)]
+
+        exact_obj = objective(new_x).unsqueeze(-1) # add output dimension
+        new_obj = exact_obj
+        return new_x, new_obj
+    
     def update_random_observations():
         """Simulates a random policy by taking a the current list of best values observed randomly,
         drawing a new random point, observing its value, and updating the list.
@@ -252,12 +264,12 @@ def run(save_path: str,
                 )
 
         # optimize and get new observation
-        if label in ["qEI", "piqEI", "quad"]:
+        if label in ["qEI", "piqEI"]:
             new_x, new_obj = optimize_acqf_and_get_observation(af)
-
+        elif label == "quad":
+            new_x, new_obj = optimize_acqf_and_get_observation_random(af, quad_distrib)
         elif label == "random":
             new_x, new_obj = update_random_observations()
-            
         elif label == "SNES":
             searcher.run(1)
             new_x, new_obj = searcher.population.values, searcher.population.evals

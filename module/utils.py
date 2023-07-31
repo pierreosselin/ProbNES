@@ -9,6 +9,7 @@ from gpytorch.settings import trace_mode
 from gpytorch.functions import RBFCovariance
 import matplotlib.pyplot as plt
 import scipy.stats as stats
+from torch.distributions.normal import Normal
 
 
 
@@ -415,3 +416,11 @@ def plot_GP_fit(model, distribution, train_X, targets, obj, normalize=False, lb=
     plt.title('Gaussian Process Regression')
     plt.legend()
     plt.show()
+
+def EI(mean, covar):
+   ### Compute E[max(f(x) - f(x*), 0)]
+   ### Assume first element of covar and mean is for the variable f(x*)
+   
+   mu, var = mean[1] - mean[0], covar[0,0] + covar[1,1] - 2*covar[0,1] # Apply transform
+   std, dist = torch.sqrt(var), Normal(0., 1.)
+   return mu*(1 - dist.cdf(-mu/std)) + std*torch.exp(dist.log_prob(mu/std))

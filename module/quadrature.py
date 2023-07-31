@@ -149,6 +149,51 @@ class Quadrature:
         
         return bounded_bivariate_normal_integral(rho, al, torch.inf, bl, torch.inf)
     
+
+    def compute_joint_distribution_zero_order(self, mu2, Epsilon2):
+        # Already changed dCov and Covd here
+        """Computes the probability that step size ``t`` satisfies the adjusted
+        Wolfe conditions under the current GP model."""
+        # Compute mu and PI
+        mu1 = self.distribution.loc
+        Epsilon1 = self.distribution.covariance_matrix
+        
+        if not isPD(Epsilon2):
+            Epsilon2 = nearestPD(Epsilon2)
+            #return None
+        
+        Pi_1_2 = self.gp_covariance + Epsilon1 + Epsilon2
+        Pi_2_2 = self.gp_covariance + 2*Epsilon2
+                
+        R22 = self.constant * torch.exp(MultivariateNormal(loc = mu2, covariance_matrix = Pi_2_2).log_prob(mu2))
+        R12 = self.constant * torch.exp(MultivariateNormal(loc = mu1, covariance_matrix = Pi_1_2).log_prob(mu2))
+
+        t2X = self.constant * torch.exp(MultivariateNormal(loc = mu2, covariance_matrix=Epsilon2 + self.gp_covariance).log_prob(self.train_X))
+
+        # Compute Tau mu 2
+        diff_data2 = (self.train_X - mu2) # Nxd
+        normal_data_unsqueezed2 = torch.unsqueeze(t2X, -1).repeat(1,self.d)
+
+        # Compute Tau Epsilon2
+        normal_data_unsqueezed2 = torch.unsqueeze(normal_data_unsqueezed2, -1).repeat(1,1,self.d)
+        outer_prod2 = torch.bmm(torch.unsqueeze(diff_data2, -1), torch.unsqueeze(diff_data2, 1))
+        outer_prod2 = (outer_prod2 - Epsilon2 - self.gp_covariance) * normal_data_unsqueezed2
+        
+        #Compute posterior term
+        inverse_data_covar_t2X = torch.linalg.solve(self.K_X_X, t2X) 
+
+        # Compute covariance structure
+        ## Compute mean elements
+        mean_2 = self.model.mean_module.constant + t2X @ self.inverse_data_covar_y
+
+        ## Compute Var elements
+        var_2 = R22 - t2X @ inverse_data_covar_t2X
+        cov_1_2 = R12 - self.t_1X @ inverse_data_covar_t2X
+        mean_joint = torch.tensor([self.mean_1, mean_2], dtype=self.train_X.dtype, device=self.train_X.device)
+        covar_joint = torch.tensor([[self.var_1, cov_1_2],
+                                    [cov_1_2, var_2]], dtype=self.train_X.dtype, device=self.train_X.device)
+        return mean_joint.detach(), covar_joint.detach()
+
     def compute_joint_distribution(self, t):
         # Already changed dCov and Covd here
         """Computes the probability that step size ``t`` satisfies the adjusted
