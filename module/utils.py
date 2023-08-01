@@ -18,6 +18,7 @@ from botorch.utils.probability.utils import (
     phi,
 )
 
+from pymanopt.manifolds.manifold import Manifold
 
 def bounded_bivariate_normal_integral(rho, xl, xu, yl, yu):
   """Computes the bounded bivariate normal integral.
@@ -426,21 +427,12 @@ def plot_GP_fit(model, distribution, train_X, targets, obj, normalize=False, lb=
 def EI(mean, covar):
    ### Compute E[max(f(x) - f(x*), 0)]
    ### Assume first element of covar and mean is for the variable f(x*)
-   
    mu, var = mean[1] - mean[0], covar[0,0] + covar[1,1] - 2*covar[0,1] # Apply transform
-   std, dist = torch.sqrt(var), Normal(0., 1.)
-   return mu*(1 - dist.cdf(-mu/std)) + std*torch.exp(dist.log_prob(mu/std))
+   std= torch.sqrt(var)
+   return mu*(1 - Phi(-mu/std)) + std*phi(mu/std)
 
-def _scaled_improvement(
-    mean: Tensor, sigma: Tensor, best_f: Tensor, maximize: bool
-) -> Tensor:
-    """Returns `u = (mean - best_f) / sigma`, -u if maximize == True."""
-    u = (mean - best_f) / sigma
-    return u if maximize else -u
+def log_EI(mean, covar):
+   assert NotImplementedError
 
-
-def _ei_helper(u: Tensor) -> Tensor:
-    """Computes phi(u) + u * Phi(u), where phi and Phi are the standard normal
-    pdf and cdf, respectively. This is used to compute Expected Improvement.
-    """
-    return phi(u) + u * Phi(u)
+class Cone(Manifold):
+   assert NotImplementedError

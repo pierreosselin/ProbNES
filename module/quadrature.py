@@ -9,14 +9,11 @@ import torch
 from torch.distributions.multivariate_normal import MultivariateNormal
 from botorch.acquisition.analytic import AnalyticAcquisitionFunction
 from botorch.models import SingleTaskGP
-from .utils import bounded_bivariate_normal_integral, nearestPD, isPD, _scaled_improvement, _ei_helper
-from botorch.utils.probability.utils import (
-    log_ndtr as log_Phi,
-    log_phi,
-    log_prob_normal_in,
-    ndtr as Phi,
-    phi,
-)
+from .utils import bounded_bivariate_normal_integral, nearestPD, isPD, EI
+import autograd.numpy as anp
+import pymanopt
+import pymanopt.manifolds
+import pymanopt.optimizers
 
 """ 
 Be careful as:
@@ -45,6 +42,9 @@ class Quadrature:
             self.c2=0.9
             self.t_max=100
             self.budget=500
+        if self.policy == "ei": # Change 
+
+            self.manifold = pymanopt.manifolds.Sphere(self.d)
         
         # Extract model quantities
         self.train_X = self.model.train_inputs[0]
@@ -130,6 +130,19 @@ class Quadrature:
             updated_Epsilon = nearestPD(self.distribution.covariance_matrix + self.t_update*self.d_epsilon)
             distribution = MultivariateNormal(updated_mu, updated_Epsilon)
             return distribution
+        ## TODO Modufy for mixture of Gaussian
+        elif self.policy == "ei":
+            self.manifold = pymanopt.manifolds.product.Product([pymanopt.manifolds.euclidean.Euclidean(self.d), pymanopt.manifolds.positive_definite.SymmetricPositiveDefinite(n=self.d, k=1)])
+            @pymanopt.function.autograd(self.manifold)
+            def cost(point):
+                mu, Epsilon = torch.tensor(point[:self.d].reshape(-1,self.d), dtype=self.dtype, device=self.device), torch.tensor(point[self.d:].reshape(self.d,self.d), dtype=self.dtype, device=self.device)
+                mean, covar = self.compute_joint_distribution_zero_order(mu, Epsilon)
+                return EI(mean, covar)
+            self.problem = pymanopt.Problem(self.manifold, cost)
+            mu, covar = quad_distrib.loc.detach().cpu().numpy(), quad_distrib.covariance_matrix.detach().cpu().numpy()
+            optimizer = pymanopt.optimizers.SteepestDescent(initial_point=[mu, covar])
+            result = optimizer.run(self.problem)
+            return result
  
     def maximize_step(self):
         t_linspace = torch.linspace(0, self.t_max, self.budget + 1, dtype=self.train_X.dtype, device=self.train_X.device)[1:]
@@ -157,21 +170,22 @@ class Quadrature:
         
         return bounded_bivariate_normal_integral(rho, al, torch.inf, bl, torch.inf)
     
-
     def compute_joint_distribution_zero_order(self, mu2, Epsilon2):
         """Computes the probability that step size ``t`` satisfies the adjusted
         Wolfe conditions under the current GP model."""
+        # For now assume mu2 and epsilon2 are of shape (b1xb2x....xbk)xd and (b1xb2x....xbk)xdxd (assume no batching)
         # Compute mu and PI
+
         mu1 = self.distribution.loc
         Epsilon1 = self.distribution.covariance_matrix
         
         if not isPD(Epsilon2):
-            Epsilon2 = nearestPD(Epsilon2)
-            #return None
+            return None
         
         Pi_1_2 = self.gp_covariance + Epsilon1 + Epsilon2
         Pi_2_2 = self.gp_covariance + 2*Epsilon2
-                
+
+
         R22 = self.constant * torch.exp(MultivariateNormal(loc = mu2, covariance_matrix = Pi_2_2).log_prob(mu2))
         R12 = self.constant * torch.exp(MultivariateNormal(loc = mu1, covariance_matrix = Pi_1_2).log_prob(mu2))
 
@@ -411,54 +425,7 @@ class QuadratureExplorationBis(AnalyticAcquisitionFunction):
         t_X = self.constant * torch.exp(MultivariateNormal(loc = self.distribution.loc, covariance_matrix = self.distribution.covariance_matrix + self.gp_covariance).log_prob(X_full))
         v = torch.linalg.solve((self.model.covar_module(X_full) + noise_tensor).evaluate(), t_X)
         return (v * t_X).sum(dim=-1)
-    
 
-class QuadratureExpectedImprovement(AnalyticAcquisitionFunction):
-    r"""Single-outcome Quadrature bRT.
-    Quadrature variance minimization acquisitiion function
-    """
-    def __init__(
-        self,
-        quad: Quadrature,
-        best_X: Union[float, Tensor],
-        posterior_transform: Optional[PosteriorTransform] = None,
-        maximize: bool = True,
-        **kwargs,
-    ):
-        r"""Single-outcome Expected Improvement (analytic).
-
-        Args:
-            model: A fitted single-outcome model.
-            best_f: Either a scalar or a `b`-dim Tensor (batch mode) representing
-                the best function value observed so far (assumed noiseless).
-            posterior_transform: A PosteriorTransform. If using a multi-output model,
-                a PosteriorTransform that transforms the multi-output posterior into a
-                single-output posterior is required.
-            maximize: If True, consider the problem a maximization problem.
-        """
-        super().__init__(model=model, posterior_transform=posterior_transform, **kwargs)
-        self.register_buffer("best_f", torch.as_tensor(best_X))
-        self.maximize = maximize
-
-    @t_batch_mode_transform(expected_q=1)
-    def forward(self, X: Tensor) -> Tensor:
-        r"""Evaluate Expected Improvement on the candidate set X.
-
-        Args:
-            X: A `(b1 x ... bk) x 1 x d`-dim batched tensor of `d`-dim design points.
-                Expected Improvement is computed for each point individually,
-                i.e., what is considered are the marginal posteriors, not the
-                joint.
-
-        Returns:
-            A `(b1 x ... bk)`-dim tensor of Expected Improvement values at the
-            given design points `X`.
-        """
-        
-        quad.compute_joint_distribution_zero_order(X)
-        
-        u = _scaled_improvement(mean, sigma, self.best_f, self.maximize)
-        return sigma * _ei_helper(u)
     
 
 

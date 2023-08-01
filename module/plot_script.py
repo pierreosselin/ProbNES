@@ -46,21 +46,21 @@ def plot_synthesis(model, quad, objective, bounds, iteration, batch_size, save_p
         mean_joint, covar_joint = quad.compute_joint_distribution_zero_order(torch.tensor([el[0]]).to(device=quad.device, dtype=quad.dtype), torch.tensor([[el[1]]]).to(device=quad.device, dtype=quad.dtype))
         result_ei.append(EI(mean_joint, covar_joint))
 
-    mean = torch.tensor(result).numpy()[:,0].reshape(m,n)
-    ei = torch.tensor(result_ei).numpy().reshape(m,n)
+    mean = torch.tensor(result).cpu().numpy()[:,0].reshape(m,n)
+    ei = torch.tensor(result_ei).cpu().numpy().reshape(m,n)
 
     t_linspace = torch.linspace(0., quad.t_max, quad.budget + 1, dtype=quad.train_X.dtype)[1:]
     result_wolfe = []
     for t in t_linspace:
         result_wolfe.append(quad.compute_p_wolfe(t))
-    wolfe_tensor = torch.tensor(result_wolfe)
+    wolfe_tensor = torch.tensor(result_wolfe).cpu().numpy()
 
     ## Compute gradients at multiple places
     b_grad = np.arange(-float(bounds), float(bounds), 1)
     d_grad = np.arange(0, 3, 0.5)[1:]**2
     B_grad, D_grad = np.meshgrid(b_grad, d_grad)
     #n_grad, m_grad = b_grad.shape[0], d_grad.shape[0]
-    res_grad = torch.stack((torch.tensor(B_grad.flatten()), torch.tensor(D_grad.flatten())), axis = 1).numpy()
+    res_grad = torch.stack((torch.tensor(B_grad.flatten()), torch.tensor(D_grad.flatten())), axis = 1).cpu().numpy()
     result_grad, max_length = [], 0
     for el in tqdm(res_grad):
         mean_distrib_grad, var_distrib_grad = torch.tensor([el[0]], dtype=torch.float64, device=model.train_inputs[0].device), torch.diag(torch.tensor([el[1]], dtype=torch.float64, device=model.train_inputs[0].device))
@@ -98,7 +98,7 @@ def plot_synthesis(model, quad, objective, bounds, iteration, batch_size, save_p
     mu2 = float(quad.distribution.loc + float(t_linspace[np.argmax(wolfe_tensor)])*quad.d_mu)
     Epsilon2 = float(nearestPD(quad.distribution.covariance_matrix + float(t_linspace[np.argmax(wolfe_tensor)])*quad.d_epsilon))
 
-    axs[1,0].plot(t_linspace.numpy(), wolfe_tensor.numpy())
+    axs[1,0].plot(t_linspace.cpu().numpy(), wolfe_tensor)
 
     axs[1,1].scatter([float(quad.distribution.loc)], [float(quad.distribution.covariance_matrix)])
     axs[1,1].scatter([mu2], [Epsilon2])
@@ -325,7 +325,7 @@ def distribution_gif_1D(algo_path, objective, seed, data, ax):
         mu = data["mu"]
         sigma = data["sigma"]
     b = np.arange(-bounds, bounds, 0.05)
-    nu = -objective(torch.tensor(b).reshape(-1,1)).numpy()
+    nu = -objective(torch.tensor(b).reshape(-1,1)).cpu().numpy()
     plot_path = os.path.join(algo_path, f"{seed}")
     if not os.path.exists(plot_path):
         os.mkdir(plot_path)
