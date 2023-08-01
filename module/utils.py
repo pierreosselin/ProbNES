@@ -10,7 +10,13 @@ from gpytorch.functions import RBFCovariance
 import matplotlib.pyplot as plt
 import scipy.stats as stats
 from torch.distributions.normal import Normal
-
+from botorch.utils.probability.utils import (
+    log_ndtr as log_Phi,
+    log_phi,
+    log_prob_normal_in,
+    ndtr as Phi,
+    phi,
+)
 
 
 def bounded_bivariate_normal_integral(rho, xl, xu, yl, yu):
@@ -424,3 +430,17 @@ def EI(mean, covar):
    mu, var = mean[1] - mean[0], covar[0,0] + covar[1,1] - 2*covar[0,1] # Apply transform
    std, dist = torch.sqrt(var), Normal(0., 1.)
    return mu*(1 - dist.cdf(-mu/std)) + std*torch.exp(dist.log_prob(mu/std))
+
+def _scaled_improvement(
+    mean: Tensor, sigma: Tensor, best_f: Tensor, maximize: bool
+) -> Tensor:
+    """Returns `u = (mean - best_f) / sigma`, -u if maximize == True."""
+    u = (mean - best_f) / sigma
+    return u if maximize else -u
+
+
+def _ei_helper(u: Tensor) -> Tensor:
+    """Computes phi(u) + u * Phi(u), where phi and Phi are the standard normal
+    pdf and cdf, respectively. This is used to compute Expected Improvement.
+    """
+    return phi(u) + u * Phi(u)

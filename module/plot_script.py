@@ -15,7 +15,7 @@ from torch.distributions.multivariate_normal import MultivariateNormal
 import matplotlib.pyplot as plt
 import scipy.stats as stats
 from tqdm import tqdm
-from module.utils import nearestPD
+from module.utils import nearestPD, EI
 
 
 """
@@ -32,18 +32,22 @@ def posterior_quad(model, theta, var):
     quad_test.quadrature()
     return quad_test.m.detach().clone(), quad_test.v.detach().clone()
 
-def plot_synthesis(model, quad, objective, bounds, iteration, save_path=".", standardize=False, mean_Y=None, std_Y=None):
+def plot_synthesis(model, quad, objective, bounds, iteration, batch_size, save_path=".", standardize=False, mean_Y=None, std_Y=None):
     save_path_gp = os.path.join(save_path, f"fitgp/synthesis_{iteration}.png")
     b = np.arange(-float(bounds), float(bounds), 0.2)
     d = np.arange(0, 10, 0.5)[1:]
     B, D = np.meshgrid(b, d)
     n, m = b.shape[0], d.shape[0]
-    res = torch.stack((torch.tensor(B.flatten()), torch.tensor(D.flatten())), axis = 1).numpy()
-    result, result_wolfe = [], []
+    res = torch.stack((torch.tensor(B.flatten()), torch.tensor(D.flatten())), axis = 1).cpu().numpy()
+    result, result_ei = [], []
     for el in tqdm(res):
         post = posterior_quad(model, el[0], el[1])
         result.append(post)
+        mean_joint, covar_joint = quad.compute_joint_distribution_zero_order(torch.tensor([el[0]]).to(device=quad.device, dtype=quad.dtype), torch.tensor([[el[1]]]).to(device=quad.device, dtype=quad.dtype))
+        result_ei.append(EI(mean_joint, covar_joint))
+
     mean = torch.tensor(result).numpy()[:,0].reshape(m,n)
+    ei = torch.tensor(result_ei).numpy().reshape(m,n)
 
     t_linspace = torch.linspace(0., quad.t_max, quad.budget + 1, dtype=quad.train_X.dtype)[1:]
     result_wolfe = []
@@ -69,8 +73,8 @@ def plot_synthesis(model, quad, objective, bounds, iteration, save_path=".", sta
         max_length = max(max_length, np.sqrt(mu_grad**2 + epsilon_grad**2))
         result_grad.append([mu_grad, epsilon_grad])
         
-    fig, axs = plt.subplots(2, 2, figsize=(16, 12))
-    plot_GP_fit_ax(axs[0,0], model, quad.distribution, model.train_inputs[0], model.train_targets, objective, standardize=standardize, lb=-float(bounds), up=float(bounds), mean_Y=mean_Y, std_Y=std_Y)
+    fig, axs = plt.subplots(2, 3, figsize=(22, 12))
+    plot_GP_fit_ax(axs[0,0], model, quad.distribution, model.train_inputs[0], model.train_targets, objective, batch_size,standardize=standardize, lb=-float(bounds), up=float(bounds), mean_Y=mean_Y, std_Y=std_Y)
 
     contour1 = axs[0,1].contourf(B, D, mean)
     # Gradient
@@ -81,8 +85,16 @@ def plot_synthesis(model, quad, objective, bounds, iteration, save_path=".", sta
     axs[0,1].set_ylabel(r'$\sigma^{2}$')
     axs[0,1].set_title(r"Predictive mean of $g(\theta)$")
 
+    contour3 = axs[1,1].contourf(B, D, ei)
+    axs[1,1].set_xlabel('$\mu$')
+    axs[1,1].set_ylabel('$\sigma^{2}$')
+    axs[1,1].set_title("Bivariate Expected improvement")
 
-    contour4 = axs[1,1].contourf(B, D, mean)
+    contour4 = axs[0,2].contourf(B, D, mean)
+    axs[0,2].set_xlabel('$\mu$')
+    axs[0,2].set_ylabel('$\sigma^{2}$')
+    axs[0,2].set_title("Predictive Mean")
+
     mu2 = float(quad.distribution.loc + float(t_linspace[np.argmax(wolfe_tensor)])*quad.d_mu)
     Epsilon2 = float(nearestPD(quad.distribution.covariance_matrix + float(t_linspace[np.argmax(wolfe_tensor)])*quad.d_epsilon))
 
@@ -93,11 +105,10 @@ def plot_synthesis(model, quad, objective, bounds, iteration, save_path=".", sta
     axs[1,1].arrow(float(quad.distribution.loc), float(quad.distribution.covariance_matrix), float(t_linspace[np.argmax(wolfe_tensor)]*quad.d_mu), float(t_linspace[np.argmax(wolfe_tensor)]*quad.d_epsilon), width = 0.1)
     if t_linspace[np.argmax(wolfe_tensor)] != quad.t_update:
         print(f"Computation error: {quad.t_update} and {t_linspace[np.argmax(wolfe_tensor)]}")
-    fig.colorbar(contour1, ax=axs[0,0])
     fig.colorbar(contour1, ax=axs[0,1])
-    fig.colorbar(contour4, ax=axs[1,1])
+    fig.colorbar(contour4, ax=axs[0,2])
+    fig.colorbar(contour3, ax=axs[1,1])
     fig.savefig(save_path_gp)
-
 
 def plot_GP_fit(model, likelihood, train_X, targets, obj, lb=-10., up=10., save_path=".", iteration=1):
     """ Plot the figures corresponding to the Gaussian process fit
@@ -124,7 +135,7 @@ def plot_GP_fit(model, likelihood, train_X, targets, obj, lb=-10., up=10., save_
     ax.legend()
     fig.savefig(save_path_gp)
 
-def plot_GP_fit_ax(ax, model, distribution, train_X, targets, obj, standardize=False, lb=-10., up=10., mean_Y=None, std_Y=None):
+def plot_GP_fit_ax(ax, model, distribution, train_X, targets, obj, batch, standardize=False, lb=-10., up=10., mean_Y=None, std_Y=None):
     """ Plot the figures corresponding to the Gaussian process fit
     """
     model.eval()
@@ -142,6 +153,7 @@ def plot_GP_fit_ax(ax, model, distribution, train_X, targets, obj, standardize=F
     value_ = (obj(test_x.unsqueeze(-1))).flatten()
 
     ax.scatter(train_X.cpu().numpy(), targets.cpu().numpy(), color='black', label='Training data')
+    ax.scatter(train_X.cpu().numpy()[(-batch):], targets.cpu().numpy()[(-batch):], color='red', label='Last selected points')
     ax.plot(test_x.cpu().numpy(), predictions.mean.cpu().numpy(), color='blue', label='Predictive mean')
     ax.plot(test_x.cpu().numpy(), value_.cpu().numpy(), color='green', label='True Function')
     ax.fill_between(test_x.cpu().numpy(), lower.cpu().numpy(), upper.cpu().numpy(), color='lightblue', alpha=0.5, label='Confidence region')

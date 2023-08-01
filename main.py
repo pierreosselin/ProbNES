@@ -4,7 +4,7 @@ import os
 import argparse
 import yaml
 from itertools import product
-
+import torch
 
 def create_path(save_path, problem_name, problem_kwargs, bo_kwargs):
     
@@ -39,8 +39,8 @@ if __name__ == "__main__":
     bo_kwargs = config["bo_settings"]
     gpu_label = config["gpu"]
     verbose_synthesis = config["verbose_synthesis"]
-    if gpu_label:
-        os.environ["CUDA_VISIBLE_DEVICES"]=str(gpu_label)
+    if gpu_label != 'cpu':
+        torch.set_default_device('cuda:'+str(gpu_label))
 
     ### Make lists for multiple experiments
     list_keys, list_values = [], []

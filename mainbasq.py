@@ -6,7 +6,6 @@ from module.BASQ._metric import KLdivergence
 import warnings
 warnings.filterwarnings('ignore')
 
-## TODO Change set_bask to the problem at hand
 def set_basq():
     """
     Bayesian Inference Modelling

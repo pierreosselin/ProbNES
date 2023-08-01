@@ -13,7 +13,6 @@ import torch
 from torch.distributions.multivariate_normal import MultivariateNormal
 
 
-## TODO Sample vs mean, step_size, how many samples?
 def bayesquad_from_initial_data(
     fun: Callable,
     nodes: np.ndarray,
@@ -103,7 +102,6 @@ def bayesquad_from_initial_data(
     return integral_belief, bqstate, info
 
 ## Should be able to compute integrale and gradient with uncertainty
-## TODO the gp from the gradient should be the same as the integrand but with modified kernel and mean function
 class Quadrature:
     def __init__(self, 
                  objective=None,

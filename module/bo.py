@@ -25,7 +25,6 @@ from gpytorch.priors.torch_priors import GammaPrior
 from .plot_script import plot_GP_fit, plot_synthesis
 
 
-## TODO Refactor code such that remove if in there
 ### By default the Optimization procedure maximize the objective function (acquisition function maximize)
 
 LIST_LABEL = ["random", "SNES", "piqEI", "quad", "qEI"]
@@ -60,6 +59,8 @@ def run(save_path: str,
     STANDARDIZE_LABEL = True
     VERBOSE = bo_kwargs["verbose"]
     CANDIDATES_VR = bo_kwargs["candidates_vr"]
+    POLICY = bo_kwargs["policy"]
+    POLICY_KWARGS = bo_kwargs["policy_setting"]
     #Set seed and device
     torch.manual_seed(seed)
     np.random.seed(seed)
@@ -115,7 +116,6 @@ def run(save_path: str,
             os.makedirs(os.path.join(save_path, "fitgp"))
 
     #train_yvar = torch.tensor(objective.noise_std**2, device=device, dtype=dtype)
-    ### TODO Change model for quadrature, use rbf, for the rest, use default matern kernel
     def initialize_model(train_x, train_obj, state_dict=None):
         # define models for objective and constraint
         if label == "quad":
@@ -318,7 +318,7 @@ def run(save_path: str,
                     model.state_dict(),
                 )
         if label == "quad":
-            quad = Quadrature(model=model, distribution=quad_distrib, device=train_x.device, dtype=train_x.dtype)
+            quad = Quadrature(model=model, distribution=quad_distrib, policy=POLICY, policy_kwargs=POLICY_KWARGS)
             quad.gradient_direction()
             quad.maximize_step()
             #print(f"Current Epsilon {quad_distrib.covariance_matrix}, optimal step taken {quad.t_max * quad.d_epsilon}, final variance {quad_distrib.covariance_matrix + quad.t_max * quad.d_epsilon}")
@@ -332,9 +332,9 @@ def run(save_path: str,
                     plot_GP_fit(model, model.likelihood, train_x, train_obj, obj=objective, lb=-10., up=10., save_path=save_path, iteration=iteration)
                     if STANDARDIZE_LABEL:
                         std_y, mean_y = torch.std_mean(train_obj)
-                        plot_synthesis(model, quad, objective, problem_kwargs["initial_bounds"], iteration, save_path=save_path, standardize=True, mean_Y=float(mean_y), std_Y=float(std_y))
+                        plot_synthesis(model, quad, objective, problem_kwargs["initial_bounds"], iteration, batch_size=BATCH_SIZE, save_path=save_path, standardize=True, mean_Y=float(mean_y), std_Y=float(std_y))
                     else:
-                        plot_synthesis(model, quad, objective, problem_kwargs["initial_bounds"], iteration, save_path=save_path)
+                        plot_synthesis(model, quad, objective, problem_kwargs["initial_bounds"], iteration, batch_size=BATCH_SIZE, save_path=save_path)
         
         if verbose:
             if (iteration + 1)%10 == 0:

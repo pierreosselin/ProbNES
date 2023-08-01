@@ -15,7 +15,6 @@ from datetime import datetime
 import torch
 from torch.distributions import MultivariateNormal
 from .BASQ._basq_search import BASQ
-# TODO Initial distribution should be mu = 0 for fairer comparison
 
 class NESWSABI(SNES):
 

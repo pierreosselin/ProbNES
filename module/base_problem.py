@@ -5,9 +5,6 @@ import numpy as np
 from sklearn.preprocessing import StandardScaler
 import random
 from botorch.utils.transforms import standardize, normalize, unnormalize
-import gpytorch
-# TODO Issue two Problem classes, unify them maybe
-# TODO Look into this Bound issue, code organisation
 
 class Problem:
     def __init__(self,

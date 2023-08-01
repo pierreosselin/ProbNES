@@ -1,4 +1,4 @@
-from typing import Dict, Optional, Tuple, Union
+from typing import Dict, Optional, Tuple, Union, Any
 from torch import Tensor
 from botorch.acquisition.objective import PosteriorTransform
 
@@ -9,39 +9,42 @@ import torch
 from torch.distributions.multivariate_normal import MultivariateNormal
 from botorch.acquisition.analytic import AnalyticAcquisitionFunction
 from botorch.models import SingleTaskGP
-from .utils import bounded_bivariate_normal_integral, nearestPD, isPD
-
-
-## TODO check if lengscale becomes non diagonal?
+from .utils import bounded_bivariate_normal_integral, nearestPD, isPD, _scaled_improvement, _ei_helper
+from botorch.utils.probability.utils import (
+    log_ndtr as log_Phi,
+    log_phi,
+    log_prob_normal_in,
+    ndtr as Phi,
+    phi,
+)
 
 """ 
 Be careful as:
 - Gaussian Process on Gpytorch is done with exponential and kernel scalar (no normalization constant for the density)
 - Formula assume normal distribution and no theta => use formula with a constant outputscale * normalizing constant
 """
-
-### TODO separate function to update distribution and update data/model
 class Quadrature:
     def __init__(self, 
                  model=None,
                  distribution=None,
-                 c1 = 0.0001,
-                 c2 = 0.9,
-                 t_max = 100,
-                 budget = 500,
-                 maximize = True,
-                 device=None,
-                 dtype=None) -> None:
+                 policy = "wolfe", ## Here decide which policy to use to update distribution, either wolfe, ei or wolfe_ei 
+                 policy_kwargs: Optional[Dict[str, Any]] = None,
+                 
+                 ) -> None:
         self.model=model
         self.distribution=distribution
-        self.device=device
-        self.dtype=dtype
         self.d = self.distribution.loc.shape[0]
-        self.c1 = c1
-        self.c2 = c2
-        self.t_max = t_max
-        self.budget = budget
-        self.maximize = maximize
+        self.policy=policy
+        self.device = model.train_inputs[0].device
+        self.dtype = model.train_inputs[0].dtype
+        if policy_kwargs:
+            for k, v in policy_kwargs.items():
+                setattr(self, k, v)
+        else:
+            self.c1=0.0001
+            self.c2=0.9
+            self.t_max=100
+            self.budget=500
         
         # Extract model quantities
         self.train_X = self.model.train_inputs[0]
@@ -117,11 +120,16 @@ class Quadrature:
         self.var_prime_1 = self.d_mu @ self.R1_prime_1_prime_mu_mu @ self.d_mu \
                     + 0.25*((torch.unsqueeze(torch.unsqueeze(self.d_epsilon, -1), -1)) * self.R1_prime_1_prime_epsilon_epsilon * (torch.unsqueeze(torch.unsqueeze(self.d_epsilon, 0), 0).repeat(self.d,self.d,1,1))).sum()
 
+
+
     def update_distribution(self):
-        updated_mu = self.distribution.loc + self.t_update*self.d_mu
-        updated_Epsilon = nearestPD(self.distribution.covariance_matrix + self.t_update*self.d_epsilon)
-        distribution = MultivariateNormal(updated_mu, updated_Epsilon)
-        return distribution
+        if self.policy == "wolfe":
+            self.gradient_direction()
+            self.maximize_step()
+            updated_mu = self.distribution.loc + self.t_update*self.d_mu
+            updated_Epsilon = nearestPD(self.distribution.covariance_matrix + self.t_update*self.d_epsilon)
+            distribution = MultivariateNormal(updated_mu, updated_Epsilon)
+            return distribution
  
     def maximize_step(self):
         t_linspace = torch.linspace(0, self.t_max, self.budget + 1, dtype=self.train_X.dtype, device=self.train_X.device)[1:]
@@ -151,7 +159,6 @@ class Quadrature:
     
 
     def compute_joint_distribution_zero_order(self, mu2, Epsilon2):
-        # Already changed dCov and Covd here
         """Computes the probability that step size ``t`` satisfies the adjusted
         Wolfe conditions under the current GP model."""
         # Compute mu and PI
@@ -294,7 +301,6 @@ class Quadrature:
         else:
             return 0
 
-## TODO Check if can be more efficient here use inversion block matrices
 class QuadratureExploration(AnalyticAcquisitionFunction):
     r"""Single-outcome Quadrature bRT.
     Quadrature variance minimization acquisitiion function
@@ -406,6 +412,56 @@ class QuadratureExplorationBis(AnalyticAcquisitionFunction):
         v = torch.linalg.solve((self.model.covar_module(X_full) + noise_tensor).evaluate(), t_X)
         return (v * t_X).sum(dim=-1)
     
+
+class QuadratureExpectedImprovement(AnalyticAcquisitionFunction):
+    r"""Single-outcome Quadrature bRT.
+    Quadrature variance minimization acquisitiion function
+    """
+    def __init__(
+        self,
+        quad: Quadrature,
+        best_X: Union[float, Tensor],
+        posterior_transform: Optional[PosteriorTransform] = None,
+        maximize: bool = True,
+        **kwargs,
+    ):
+        r"""Single-outcome Expected Improvement (analytic).
+
+        Args:
+            model: A fitted single-outcome model.
+            best_f: Either a scalar or a `b`-dim Tensor (batch mode) representing
+                the best function value observed so far (assumed noiseless).
+            posterior_transform: A PosteriorTransform. If using a multi-output model,
+                a PosteriorTransform that transforms the multi-output posterior into a
+                single-output posterior is required.
+            maximize: If True, consider the problem a maximization problem.
+        """
+        super().__init__(model=model, posterior_transform=posterior_transform, **kwargs)
+        self.register_buffer("best_f", torch.as_tensor(best_X))
+        self.maximize = maximize
+
+    @t_batch_mode_transform(expected_q=1)
+    def forward(self, X: Tensor) -> Tensor:
+        r"""Evaluate Expected Improvement on the candidate set X.
+
+        Args:
+            X: A `(b1 x ... bk) x 1 x d`-dim batched tensor of `d`-dim design points.
+                Expected Improvement is computed for each point individually,
+                i.e., what is considered are the marginal posteriors, not the
+                joint.
+
+        Returns:
+            A `(b1 x ... bk)`-dim tensor of Expected Improvement values at the
+            given design points `X`.
+        """
+        
+        quad.compute_joint_distribution_zero_order(X)
+        
+        u = _scaled_improvement(mean, sigma, self.best_f, self.maximize)
+        return sigma * _ei_helper(u)
+    
+
+
 if __name__ == "__main__":
     # from botorch import fit_gpytorch_mll
     # from gpytorch.mlls import ExactMarginalLogLikelihood
