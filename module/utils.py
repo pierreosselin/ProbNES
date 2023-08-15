@@ -17,6 +17,7 @@ from botorch.utils.probability.utils import (
     ndtr as Phi,
     phi,
 )
+from botorch.acquisition.analytic import _log_ei_helper, _ei_helper, _scaled_improvement
 
 from pymanopt.manifolds.manifold import Manifold
 
@@ -387,7 +388,9 @@ def nearestPD(A):
 def isPD(B):
     """Returns true when input is positive-definite, via Cholesky"""
     try:
-        _ = torch.cholesky(B)
+        res = torch.cholesky(B)
+        if bool(torch.isnan(res).any().cpu()): 
+          return False
         return True
     except:
         return False
@@ -424,15 +427,31 @@ def plot_GP_fit(model, distribution, train_X, targets, obj, normalize=False, lb=
     plt.legend()
     plt.show()
 
-def EI(mean, covar):
+def EI_bivariate(mean, covar):
    ### Compute E[max(f(x) - f(x*), 0)]
    ### Assume first element of covar and mean is for the variable f(x*)
    mu, var = mean[1] - mean[0], covar[0,0] + covar[1,1] - 2*covar[0,1] # Apply transform
-   std= torch.sqrt(var)
-   return mu*(1 - Phi(-mu/std)) + std*phi(mu/std)
+   std = torch.clamp(torch.sqrt(var), min=1e-9)
+   return  std * _ei_helper(mu/std)
 
-def log_EI(mean, covar):
-   assert NotImplementedError
+def log_EI_bivariate(mean, covar):
+   ### Compute E[max(f(x) - f(x*), 0)]
+   ### Assume first element of covar and mean is for the variable f(x*)
+   mu, var = mean[1] - mean[0], covar[0,0] + covar[1,1] - 2*covar[0,1] # Apply transform
+   std = torch.clamp(torch.sqrt(var), min=1e-9)
+   return _log_ei_helper(mu/std) + std.log()
+
+
+def log_EI(mean, sigma, best_f):
+  u = _scaled_improvement(mean, sigma, best_f, True)
+  return _log_ei_helper(u) + sigma.log()
+
+
+def EI(mean, sigma, best_f):
+  ### Compute E[max(f(x) - f(x*), 0)]
+  ### Assume first element of covar and mean is for the variable f(x*)
+  u = _scaled_improvement(mean, sigma, best_f, True)
+  return sigma * _ei_helper(u)
 
 class Cone(Manifold):
    assert NotImplementedError

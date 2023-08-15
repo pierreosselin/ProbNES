@@ -1,4 +1,4 @@
-/* {
+{
     // Use IntelliSense to learn about possible attributes.
     // Hover to view descriptions of existing attributes.
     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
@@ -9,15 +9,15 @@
             "type": "python",
             "request": "launch",
             "program": "${workspaceFolder}/main.py",
-            "args": ["--config", "test_function"],
+            "args": ["--config", "test_function_mountains_armijo"],
             "console": "integratedTerminal",
             "justMyCode": true
         }
     ]
-} */
+}
 
 
-{
+/* {
     // Use IntelliSense to learn about possible attributes.
     // Hover to view descriptions of existing attributes.
     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
@@ -32,4 +32,4 @@
             "justMyCode": true
         }
     ]
-}   
+}    */

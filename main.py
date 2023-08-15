@@ -10,7 +10,7 @@ def create_path(save_path, problem_name, problem_kwargs, bo_kwargs):
     
     if problem_name == "test_function":
         s = "_".join([problem_kwargs["function"], f'noise-{problem_kwargs["noise"]}', f'dim-{problem_kwargs["dim"]}', f'initial_bounds-{problem_kwargs["initial_bounds"]}',
-            f'beta-{bo_kwargs["beta"]}', f'var_prior-{bo_kwargs["var_prior"]}'])
+            f'beta-{bo_kwargs["beta"]}', f'var_prior-{bo_kwargs["var_prior"]}', f'policy-{bo_kwargs["policy"]}'])
     elif problem_name == "airfoil":
         raise NotImplementedError
         s = "_".join([f'beta-{problem_kwargs["beta"]}', f'gamma-{problem_kwargs["gamma"]}', f'fracinfect-{problem_kwargs["fraction_infected"]}'])

@@ -328,7 +328,7 @@ def run(save_path: str,
             list_sigma.append(quad_distrib.covariance_matrix.detach().clone())
 
             if (verbose_synthesis) and (problem.dim == 1) and (seed == 0):
-                if ((iteration + 1) % verbose_synthesis) == 0:
+                if (iteration % verbose_synthesis) == 0:
                     plot_GP_fit(model, model.likelihood, train_x, train_obj, obj=objective, lb=-10., up=10., save_path=save_path, iteration=iteration)
                     if STANDARDIZE_LABEL:
                         std_y, mean_y = torch.std_mean(train_obj)

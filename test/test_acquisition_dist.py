@@ -13,6 +13,7 @@ from gpytorch.mlls import ExactMarginalLogLikelihood
 from gpytorch.kernels import RBFKernel
 from gpytorch.kernels.scale_kernel import ScaleKernel
 from gpytorch.priors.torch_priors import GammaPrior
+from module.utils import EI
 
 objective = lambda x: 5*torch.exp(-2*(x - 1)**2) + 5*torch.exp(-2*(x + 1)**2)
 
@@ -52,10 +53,13 @@ fit_gpytorch_mll(mll)
 
 
 quad = Quadrature(model=model,
-            distribution=quad_distrib)
+            distribution=quad_distrib,
+            policy="ei")
 quad.quadrature()
 
-mu = Normal(0., 1.).sample(torch.tensor([3,1]))
-Epsilon= torch.abs(Normal(0., 1.).sample(torch.tensor([3,1,1])))
+mu, Epsilon = torch.tensor([1.]), torch.diag(torch.tensor([1.]))
 
-quad.compute_joint_distribution_zero_order(mu, Epsilon)
+mu.requires_grad = True
+Epsilon.requires_grad = True
+
+quad.update_distribution()

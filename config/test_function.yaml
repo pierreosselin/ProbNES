@@ -5,13 +5,13 @@ verbose_synthesis: 1
 gpu: 0
 
 exp_settings:
-  n_exp: 2
-  n_iter: 10
+  n_exp: 1
+  n_iter: 15
   batch_size: 5
   n_init: 5
 
 bo_settings:
-  algorithm: "quad" #["quad", "SNES", "random", "qEI", "piqEI"]  #[random, qEI, SNES, piqEI, quad]
+  algorithm: ["quad", "SNES"] #["quad", "SNES", "random", "qEI", "piqEI"]  #[random, qEI, SNES, piqEI, quad]
   beta: 1. #For piqei
   var_prior: [10.] #For piqEI or quad, initial distribution
   num_restarts: 10 #For qEI and piqEI
@@ -20,12 +20,13 @@ bo_settings:
   batch_acq: 5 # Number of batches used to evaluate the acquisition function at the same time
   verbose: 10
   candidates_vr: 5000
-  policy: "wolfe" # ["wolfe", "ei"]
+  policy: "ei" # ["wolfe", "ei", "armijo"]
   policy_setting:
     c1: 0.0001
     c2: 0.9
     t_max: 100
     budget: 500
+    iteration: 2000
 
 problem_settings:
   function: "ackley" # Name of the function in [airfoil, rosenbrock, sphere, ackley]

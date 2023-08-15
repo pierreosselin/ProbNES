@@ -76,6 +76,10 @@ def get_objective(
             obj_function = lambda x: torch.sin(x - 4.) + torch.sin((10./3.)*(x - 4.))
             dim = 1
             obj = Objective(obj_func=obj_function, noise_std=noise_std, best_value=0., negate=True)
+        elif test_function == "mountains":
+            obj_function = lambda x: torch.flatten(5*torch.exp(-2*(x - 1)**2) + 5*torch.exp(-2*(x + 1)**2))
+            obj = Objective(obj_func=obj_function, noise_std=noise_std, best_value=5., negate=False)
+
         else:
             raise NotImplementedError(f"Function {test_function} is not implemented")
     

@@ -15,7 +15,7 @@ from torch.distributions.multivariate_normal import MultivariateNormal
 import matplotlib.pyplot as plt
 import scipy.stats as stats
 from tqdm import tqdm
-from module.utils import nearestPD, EI
+from module.utils import nearestPD, EI, log_EI, EI_bivariate
 
 
 """
@@ -39,21 +39,25 @@ def plot_synthesis(model, quad, objective, bounds, iteration, batch_size, save_p
     B, D = np.meshgrid(b, d)
     n, m = b.shape[0], d.shape[0]
     res = torch.stack((torch.tensor(B.flatten()), torch.tensor(D.flatten())), axis = 1).cpu().numpy()
-    result, result_ei = [], []
+    result, result_ei, result_bivariate_ei = [], [], []
     for el in tqdm(res):
         post = posterior_quad(model, el[0], el[1])
         result.append(post)
         mean_joint, covar_joint = quad.compute_joint_distribution_zero_order(torch.tensor([el[0]]).to(device=quad.device, dtype=quad.dtype), torch.tensor([[el[1]]]).to(device=quad.device, dtype=quad.dtype))
-        result_ei.append(EI(mean_joint, covar_joint))
+        result_ei.append(log_EI(mean_joint[1], covar_joint[1,1], quad.best_f))
+        result_bivariate_ei.append(EI_bivariate(mean_joint, covar_joint))
 
     mean = torch.tensor(result).cpu().numpy()[:,0].reshape(m,n)
     ei = torch.tensor(result_ei).cpu().numpy().reshape(m,n)
+    ei_bivariate = torch.tensor(result_bivariate_ei).cpu().numpy().reshape(m,n)
 
     t_linspace = torch.linspace(0., quad.t_max, quad.budget + 1, dtype=quad.train_X.dtype)[1:]
-    result_wolfe = []
+    result_wolfe, result_armijo = [], []
     for t in t_linspace:
         result_wolfe.append(quad.compute_p_wolfe(t))
+        result_armijo.append(quad.compute_p_wolfe(t))
     wolfe_tensor = torch.tensor(result_wolfe).cpu().numpy()
+    armijo_tensor = torch.tensor(result_wolfe).cpu().numpy()
 
     ## Compute gradients at multiple places
     b_grad = np.arange(-float(bounds), float(bounds), 1)
@@ -88,26 +92,37 @@ def plot_synthesis(model, quad, objective, bounds, iteration, batch_size, save_p
     contour3 = axs[1,1].contourf(B, D, ei)
     axs[1,1].set_xlabel('$\mu$')
     axs[1,1].set_ylabel('$\sigma^{2}$')
-    axs[1,1].set_title("Bivariate Expected improvement")
+    axs[1,1].set_title("Log Expected improvement")
 
     contour4 = axs[0,2].contourf(B, D, mean)
     axs[0,2].set_xlabel('$\mu$')
     axs[0,2].set_ylabel('$\sigma^{2}$')
     axs[0,2].set_title("Predictive Mean")
 
-    mu2 = float(quad.distribution.loc + float(t_linspace[np.argmax(wolfe_tensor)])*quad.d_mu)
-    Epsilon2 = float(nearestPD(quad.distribution.covariance_matrix + float(t_linspace[np.argmax(wolfe_tensor)])*quad.d_epsilon))
+    contour5 = axs[1,2].contourf(B, D, ei_bivariate)
+    axs[1,2].set_xlabel('$\mu$')
+    axs[1,2].set_ylabel('$\sigma^{2}$')
+    axs[1,2].set_title("Bivariate Expected improvement")
 
-    axs[1,0].plot(t_linspace.cpu().numpy(), wolfe_tensor)
+    #mu2 = float(quad.distribution.loc + float(t_linspace[np.argmax(wolfe_tensor)])*quad.d_mu)
+    #Epsilon2 = float(nearestPD(quad.distribution.covariance_matrix + float(t_linspace[np.argmax(wolfe_tensor)])*quad.d_epsilon))
 
+    axs[1,0].plot(t_linspace.cpu().numpy(), wolfe_tensor, color='blue', label = "Probability Wolfe condition")
+    axs[1,0].plot(t_linspace.cpu().numpy(), armijo_tensor, color='red', label = "Probability Armijo condition")
+    axs[1,0].set_title("Probabilistic conditions line search")
+    axs[1,0].legend()
     axs[1,1].scatter([float(quad.distribution.loc)], [float(quad.distribution.covariance_matrix)])
-    axs[1,1].scatter([mu2], [Epsilon2])
-    axs[1,1].arrow(float(quad.distribution.loc), float(quad.distribution.covariance_matrix), float(t_linspace[np.argmax(wolfe_tensor)]*quad.d_mu), float(t_linspace[np.argmax(wolfe_tensor)]*quad.d_epsilon), width = 0.1)
-    if t_linspace[np.argmax(wolfe_tensor)] != quad.t_update:
-        print(f"Computation error: {quad.t_update} and {t_linspace[np.argmax(wolfe_tensor)]}")
+    ### Plot update rather than assuming wolfe
+    target_distribution = quad.update_distribution()
+    mu2, Epsilon2 = target_distribution.loc, target_distribution.covariance_matrix
+    axs[1,1].scatter([float(mu2)], [float(Epsilon2)])
+    axs[1,1].arrow(float(quad.distribution.loc), float(quad.distribution.covariance_matrix), float(mu2) - float(quad.distribution.loc),float(Epsilon2) - float(quad.distribution.covariance_matrix), width = 0.1)
+    #if t_linspace[np.argmax(wolfe_tensor)] != quad.t_update:
+    #    print(f"Computation error: {quad.t_update} and {t_linspace[np.argmax(wolfe_tensor)]}")
     fig.colorbar(contour1, ax=axs[0,1])
     fig.colorbar(contour4, ax=axs[0,2])
     fig.colorbar(contour3, ax=axs[1,1])
+    fig.colorbar(contour5, ax=axs[1,2])
     fig.savefig(save_path_gp)
 
 def plot_GP_fit(model, likelihood, train_X, targets, obj, lb=-10., up=10., save_path=".", iteration=1):
@@ -216,8 +231,7 @@ def plot_figure_algo(alg_dir, ax):
     data_over_seeds = []
     for _, df in enumerate(data_path_seeds):
         data_path = os.path.join(alg_dir, df)
-        with open(data_path, "rb") as _:
-            data = torch.load(data_path, map_location="cpu")
+        data = torch.load(data_path, map_location="cpu")
         data_over_seeds.append(data["regret"])
     N_TRIALS = len(data_over_seeds)
     N_BATCH = data["N_BATCH"]
@@ -242,8 +256,7 @@ def plot_figure(save_path, log_transform=False):
             data_over_seeds = []
             for _, df in enumerate(data_path_seeds):
                 data_path = os.path.join(alg_dir, df)
-                with open(data_path, "rb") as _:
-                    data = torch.load(data_path, map_location="cpu")
+                data = torch.load(data_path, map_location="cpu")
                 data_over_seeds.append(data["regret"])
             N_TRIALS = len(data_over_seeds)
             N_BATCH = data["N_BATCH"]
