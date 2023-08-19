@@ -6,6 +6,7 @@ from botorch.models.model import Model
 from botorch.utils.transforms import t_batch_mode_transform
 from typing import Callable, Optional, Tuple
 import torch
+from scipy.optimize import minimize_scalar
 from torch.distributions.multivariate_normal import MultivariateNormal
 from botorch.acquisition.analytic import AnalyticAcquisitionFunction
 from botorch.models import SingleTaskGP
@@ -31,6 +32,7 @@ class Quadrature:
                  distribution=None,
                  policy = "wolfe", ## Here decide which policy to use to update distribution, either wolfe, ei or wolfe_ei 
                  policy_kwargs: Optional[Dict[str, Any]] = None,
+                 manifold = True,
                  ) -> None:
         
         ### Create attributes
@@ -53,14 +55,17 @@ class Quadrature:
         assert self.c1 < self.c2
         assert self.c2 <= 1
 
-        if self.policy == "ei": # Change for multivariate gaussian 
-            ## Create Manifold
+        ## Create Manifold
+        if manifold:
             euclidean = geoopt.manifolds.Euclidean()
             spd = geoopt.manifolds.SymmetricPositiveDefinite()
             self.manifold = geoopt.manifolds.ProductManifold((euclidean, self.d), (spd, (self.d,self.d)))
-            mu, covar = self.distribution.loc, self.distribution.covariance_matrix
-            self.param = geoopt.ManifoldParameter(geoopt.ManifoldTensor(torch.cat((mu, covar.flatten())), manifold=self.manifold))
-            self.optimizer = geoopt.optim.RiemannianAdam((self.param,), lr=1e-2)
+        else:
+            self.manifold = geoopt.manifolds.ProductManifold((euclidean, self.d), (euclidean, (self.d,self.d)))
+        mu, covar = self.distribution.loc, self.distribution.covariance_matrix
+        self.manifold_point = geoopt.ManifoldTensor(torch.cat((mu, covar.flatten())), manifold=self.manifold)
+        self.manifold_point.requires_grad = True
+        self.param = geoopt.ManifoldParameter(self.manifold_point)
             
         # Extract model quantities
         self.train_X = self.model.train_inputs[0]
@@ -71,7 +76,28 @@ class Quadrature:
         self.mean_constant = self.model.mean_module.constant.detach().clone()
         self.inverse_data_covar_y = torch.linalg.solve(self.K_X_X, self.model.train_targets - self.mean_constant)
         self.inverse_data = torch.linalg.inv(self.K_X_X)
+
+        ## Create criterion
+        if self.policy == "ei": # Change for multivariate gaussian 
+            self.optimizer = geoopt.optim.RiemannianAdam((self.param,), lr=1e-2)
         
+        elif self.policy in ["wolfe", "armijo"]:
+            m, _ = self._quadrature(self.manifold.take_submanifold_value(self.manifold_point, 0), self.manifold.take_submanifold_value(self.manifold_point, 1))
+            m.backward()
+            if policy == "wolfe":
+                def criterion(t):
+                    target_point = self.manifold.expmap(self.manifold_point, t*self.manifold_point.grad)
+                    mean_joint, covar_joint = self.compute_joint_distribution(self.manifold.take_submanifold_value(target_point, 0), self.manifold.take_submanifold_value(target_point, 1))
+                    mean_joint = -mean_joint
+                    return -float(self.compute_wolfe(mean_joint, covar_joint, t))
+            elif policy == "armijo":
+                def criterion(t):
+                    target_point = self.manifold.expmap(self.manifold_point, t*self.manifold_point.grad)
+                    mean_joint, covar_joint = self.compute_joint_distribution_first_order(self.manifold.take_submanifold_value(target_point, 0), self.manifold.take_submanifold_value(target_point, 1))
+                    mean_joint = -mean_joint
+                    return -float(self.compute_armijo(mean_joint, covar_joint, t).detach().clone().cpu())
+            self.criterion = criterion
+
         #### Pre computation quantities for quadrature, gradient and method of lines
         # Constant necessary to use the formulae applicable for normal distribution
         self.covariance_gp_distr = self.gp_covariance + self.distribution.covariance_matrix
@@ -151,15 +177,13 @@ class Quadrature:
         self.var_prime_1 = self.d_mu @ self.R1_prime_1_prime_mu_mu @ self.d_mu \
                     + 0.25*((torch.unsqueeze(torch.unsqueeze(self.d_epsilon, -1), -1)) * self.R1_prime_1_prime_epsilon_epsilon * (torch.unsqueeze(torch.unsqueeze(self.d_epsilon, 0), 0).repeat(self.d,self.d,1,1))).sum()
 
-
-
+    
     def update_distribution(self):
         if self.policy in ["wolfe", "armijo"]:
-            self.gradient_direction()
-            self.maximize_step()
-            updated_mu = self.distribution.loc + self.t_update*self.d_mu
-            updated_Epsilon = nearestPD(self.distribution.covariance_matrix + self.t_update*self.d_epsilon)
-            distribution = MultivariateNormal(updated_mu, updated_Epsilon)
+            self.t_update = minimize_scalar(self.criterion).x
+            updated_manifold_point = self.manifold.expmap(self.manifold_point, self.t_update*self.manifold_point.grad)
+            mu_target, covar_target = self.manifold.take_submanifold_value(updated_manifold_point, 0), self.manifold.take_submanifold_value(updated_manifold_point, 1)
+            distribution = MultivariateNormal(mu_target, covar_target)
             return distribution
 
         ## TODO Modufy for mixture of Gaussian
@@ -174,6 +198,25 @@ class Quadrature:
             return MultivariateNormal(mu_target, covar_target)
  
     def maximize_step(self):
+
+        if self.policy in ["wolfe", "armijo"]:
+            self.t_update = minimize_scalar(self.criterion).x
+            updated_manifold_point = self.manifold.expmap(self.manifold_point, self.t_update*self.manifold_point.grad)
+            mu_target, covar_target = self.manifold.take_submanifold_value(updated_manifold_point, 0), self.manifold.take_submanifold_value(updated_manifold_point, 1)
+            distribution = MultivariateNormal(mu_target, covar_target)
+            return distribution
+
+        ## TODO Modufy for mixture of Gaussian
+        ## TODO Check for gradient 
+        elif self.policy == "ei":
+            for _ in range(self.iteration):
+                self.optimizer.zero_grad()
+                output = self.loss_ei()
+                output.backward()
+                self.optimizer.step()
+            mu_target, covar_target = self.manifold.take_submanifold_value(self.param, 0), self.manifold.take_submanifold_value(self.param, 1)
+            return MultivariateNormal(mu_target, covar_target)
+        
         if self.policy == "wolfe":
             criterion = self.compute_p_wolfe
         elif self.policy == "armijo":
@@ -185,11 +228,10 @@ class Quadrature:
         t_tensor = torch.tensor(list_max)
         self.t_update = t_linspace[torch.argmax(t_tensor)]
 
-
     def compute_armijo(self, mean_joint, covar_joint, t):
         A_transform = torch.tensor([[1, self.c1*t, -1]], dtype=self.train_X.dtype, device=self.train_X.device)
         if not isPD(covar_joint):
-            return 0
+            return torch.tensor(0.)
         
         mean_armijo = (A_transform @ mean_joint).squeeze(0)
         sigma_armijo = torch.sqrt(A_transform @ covar_joint @ A_transform.T).squeeze(0).squeeze(0)
@@ -204,7 +246,7 @@ class Quadrature:
     def compute_wolfe(self, mean_joint, covar_joint, t):
         A_transform = torch.tensor([[1, self.c1*t, -1, 0], [0, -self.c2, 0, 1]], dtype=self.train_X.dtype, device=self.train_X.device)
         if not isPD(covar_joint):
-            return 0
+            return torch.tensor(0.)
         
         mean_wolfe = A_transform @ mean_joint
         covar_wolfe = A_transform @ covar_joint @ A_transform.T
@@ -297,15 +339,13 @@ class Quadrature:
         var_2 = R22 - t2X @ inverse_data_covar_t2X
         return mean_2, var_2
     
-    def compute_joint_distribution_first_order(self, t):
+    def compute_joint_distribution_first_order(self, mu2, Epsilon2):
         """Computes joint distribution (f(0), f'(0), f(t))"""
         # Already changed dCov and Covd here
         """Computes the probability that step size ``t`` satisfies the adjusted
         Wolfe conditions under the current GP model."""
-        # Compute mu and PI
-        mu1, mu2 = self.distribution.loc, self.distribution.loc + t*self.d_mu
-        Epsilon1, Epsilon2 = self.distribution.covariance_matrix, self.distribution.covariance_matrix + t*self.d_epsilon
-        
+        mu1, Epsilon1 = self.distribution.loc, self.distribution.covariance_matrix
+
         if not isPD(Epsilon2):
             Epsilon2 = nearestPD(Epsilon2)
             return None
@@ -352,13 +392,12 @@ class Quadrature:
                                     [cov_1_2, cov_2_1_prime, var_2]], dtype=self.train_X.dtype, device=self.train_X.device)
         return mean_joint.detach(), covar_joint.detach()
 
-    def compute_joint_distribution(self, t):
+    def compute_joint_distribution(self, mu2, Epsilon2):
         # Already changed dCov and Covd here
         """Computes the probability that step size ``t`` satisfies the adjusted
         Wolfe conditions under the current GP model."""
         # Compute mu and PI
-        mu1, mu2 = self.distribution.loc, self.distribution.loc + t*self.d_mu
-        Epsilon1, Epsilon2 = self.distribution.covariance_matrix, self.distribution.covariance_matrix + t*self.d_epsilon
+        mu1, Epsilon1 = self.distribution.loc, self.distribution.covariance_matrix
         
         if not isPD(Epsilon2):
             Epsilon2 = nearestPD(Epsilon2)
@@ -459,7 +498,7 @@ class Quadrature:
             mean_joint = -mean_joint ## wolfe is for minimization, we maximize by default
             return self.compute_armijo(mean_joint, covar_joint, t)
         else:
-            return 0
+            return 0.
 
 class QuadratureExploration(AnalyticAcquisitionFunction):
     r"""Single-outcome Quadrature bRT.

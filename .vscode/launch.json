@@ -9,7 +9,7 @@
             "type": "python",
             "request": "launch",
             "program": "${workspaceFolder}/main.py",
-            "args": ["--config", "test_function_mountains_armijo"],
+            "args": ["--config", "test_function_new"],
             "console": "integratedTerminal",
             "justMyCode": true
         }
@@ -27,7 +27,7 @@
             "name": "Semisupervised",
             "type": "python",
             "request": "launch",
-            "program": "${workspaceFolder}/test/test_acquisition_dist.py",
+            "program": "${workspaceFolder}/test/test_geoopt.py",
             "console": "integratedTerminal",
             "justMyCode": true
         }

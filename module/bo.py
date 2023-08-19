@@ -26,20 +26,20 @@ from .plot_script import plot_GP_fit, plot_synthesis
 
 
 ### By default the Optimization procedure maximize the objective function (acquisition function maximize)
-
 LIST_LABEL = ["random", "SNES", "piqEI", "quad", "qEI"]
 
+### Simplify structure with objecive, problem loading, input scaling or not and step optimizer.
 def run(save_path: str,
         problem_name:str = "test_function",
         seed:int = 0,
         verbose_synthesis:int = 0,
         exp_kwargs: Optional[Dict[str, Any]] = None,
-        bo_kwargs: Optional[Dict[str, Any]] = None,
+        alg_kwargs: Optional[Dict[str, Any]] = None,
         problem_kwargs: Optional[Dict[str, Any]] = None,
         ):
 
     # Get Algorithm
-    label = bo_kwargs["algorithm"]
+    label = alg_kwargs["algorithm"]
 
     # Set device, dtype, seed
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -70,6 +70,7 @@ def run(save_path: str,
     problem = get_problem(label=problem_name, device=device, dtype=dtype, problem_kwargs=problem_kwargs)
     objective = problem.objective
     
+    # SNES 
     if label in ["SNES", "NESWSABI"]:
         # Get Problem for EA
         problem_ea = Problem(
@@ -115,7 +116,6 @@ def run(save_path: str,
         if not os.path.exists(os.path.join(save_path, "fitgp")):
             os.makedirs(os.path.join(save_path, "fitgp"))
 
-    #train_yvar = torch.tensor(objective.noise_std**2, device=device, dtype=dtype)
     def initialize_model(train_x, train_obj, state_dict=None):
         # define models for objective and constraint
         if label == "quad":

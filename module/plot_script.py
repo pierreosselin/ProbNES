@@ -48,14 +48,15 @@ def plot_synthesis(model, quad, objective, bounds, iteration, batch_size, save_p
         result_bivariate_ei.append(EI_bivariate(mean_joint, covar_joint))
 
     mean = torch.tensor(result).cpu().numpy()[:,0].reshape(m,n)
+    std = torch.std(torch.tensor(result)).cpu().numpy()[:,1].reshape(m,n)
     ei = torch.tensor(result_ei).cpu().numpy().reshape(m,n)
     ei_bivariate = torch.tensor(result_bivariate_ei).cpu().numpy().reshape(m,n)
 
     t_linspace = torch.linspace(0., quad.t_max, quad.budget + 1, dtype=quad.train_X.dtype)[1:]
     result_wolfe, result_armijo = [], []
     for t in t_linspace:
-        result_wolfe.append(quad.compute_p_wolfe(t))
-        result_armijo.append(quad.compute_p_wolfe(t))
+        result_wolfe.append(quad.criterion(t))
+        result_armijo.append(quad.criterion(t))
     wolfe_tensor = torch.tensor(result_wolfe).cpu().numpy()
     armijo_tensor = torch.tensor(result_wolfe).cpu().numpy()
 
@@ -94,10 +95,10 @@ def plot_synthesis(model, quad, objective, bounds, iteration, batch_size, save_p
     axs[1,1].set_ylabel('$\sigma^{2}$')
     axs[1,1].set_title("Log Expected improvement")
 
-    contour4 = axs[0,2].contourf(B, D, mean)
+    contour4 = axs[0,2].contourf(B, D, std)
     axs[0,2].set_xlabel('$\mu$')
     axs[0,2].set_ylabel('$\sigma^{2}$')
-    axs[0,2].set_title("Predictive Mean")
+    axs[0,2].set_title("Predictive Std of $g(\theta)$")
 
     contour5 = axs[1,2].contourf(B, D, ei_bivariate)
     axs[1,2].set_xlabel('$\mu$')

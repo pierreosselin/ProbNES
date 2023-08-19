@@ -21,6 +21,7 @@ class ExactGPModel(gpytorch.models.ExactGP):
 class Objective:
     def __init__(self,
                  obj_func: Callable,
+                 dim: int,
                  noise_std: Optional[float] = None,
                  best_value: Optional[float] = None,
                  negate: bool = False):
@@ -28,6 +29,7 @@ class Objective:
         self.noise_std = noise_std
         self.best_value = best_value
         self.negate = negate
+        self.dim = dim
 
     @torch.no_grad()
     def evaluate_true(self, X):
@@ -65,21 +67,19 @@ def get_objective(
         dim = problem_kwargs.get("dim", 2)
         noise_std = problem_kwargs.get("noise_std", 0.)
         if test_function == "rosenbrock":
-            obj = Objective(obj_func=Rosenbrock(dim), noise_std=noise_std, best_value=0., negate=True)
+            obj = Objective(obj_func=Rosenbrock(dim), dim=dim, noise_std=noise_std, best_value=0., negate=True)
         elif test_function == "ackley":
-            obj = Objective(obj_func=Ackley(dim), noise_std=noise_std, best_value=0., negate=True)
+            obj = Objective(obj_func=Ackley(dim), dim=dim, noise_std=noise_std, best_value=0., negate=True)
         elif test_function == "rastrigin":
-            obj = Objective(obj_func=Rastrigin(dim), noise_std=noise_std, best_value=0., negate=True)
+            obj = Objective(obj_func=Rastrigin(dim), dim=dim, noise_std=noise_std, best_value=0., negate=True)
         elif test_function == "sphere":
-            obj = Objective(obj_func=Sphere(dim), noise_std=noise_std, best_value=0., negate=True)
+            obj = Objective(obj_func=Sphere(dim), dim=dim, noise_std=noise_std, best_value=0., negate=True)
         elif test_function == "function_1":
             obj_function = lambda x: torch.sin(x - 4.) + torch.sin((10./3.)*(x - 4.))
-            dim = 1
-            obj = Objective(obj_func=obj_function, noise_std=noise_std, best_value=0., negate=True)
+            obj = Objective(obj_func=obj_function, dim=1, noise_std=noise_std, best_value=0., negate=True)
         elif test_function == "mountains":
             obj_function = lambda x: torch.flatten(5*torch.exp(-2*(x - 1)**2) + 5*torch.exp(-2*(x + 1)**2))
-            obj = Objective(obj_func=obj_function, noise_std=noise_std, best_value=5., negate=False)
-
+            obj = Objective(obj_func=obj_function, dim=1, noise_std=noise_std, best_value=5., negate=False)
         else:
             raise NotImplementedError(f"Function {test_function} is not implemented")
     

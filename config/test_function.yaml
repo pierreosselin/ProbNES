@@ -10,23 +10,35 @@ exp_settings:
   batch_size: 5
   n_init: 5
 
-bo_settings:
+## Change config for algorithm setting
+alg_settings:
   algorithm: ["quad", "SNES"] #["quad", "SNES", "random", "qEI", "piqEI"]  #[random, qEI, SNES, piqEI, quad]
-  beta: 1. #For piqei
-  var_prior: [10.] #For piqEI or quad, initial distribution
-  num_restarts: 10 #For qEI and piqEI
-  mc_samples: 256 #For qEI and piqEI
-  raw_samples: 512 #For qEI and piqEI
-  batch_acq: 5 # Number of batches used to evaluate the acquisition function at the same time
   verbose: 10
-  candidates_vr: 5000
-  policy: "ei" # ["wolfe", "ei", "armijo"]
-  policy_setting:
+  piqEI:
+    beta: 1.
+    var_prior: [10.]
+    num_restarts: 10 #For qEI and piqEI
+    mc_samples: 256 #For qEI and piqEI
+    raw_samples: 512 #For qEI and piqEI
+    batch_acq: 5 # Number of batches used to evaluate the acquisition function at the same time
+  qEI:
+    num_restarts: 10 #For qEI and piqEI
+    mc_samples: 256 #For qEI and piqEI
+    raw_samples: 512 #For qEI and piqEI
+    batch_acq: 5 # Number of batches used to evaluate the acquisition function at the same time
+  quad:
+    var_prior: [10.]
+    candidates_vr: 5000
+    policy: "ei" # ["wolfe", "ei", "armijo"]
     c1: 0.0001
     c2: 0.9
     t_max: 100
     budget: 500
-    iteration: 2000
+    manifold: False
+    gradient_direction: "expected" #["sample", "mpd"]
+  SNES:
+    var_prior: [10.]
+   #For piqei
 
 problem_settings:
   function: "ackley" # Name of the function in [airfoil, rosenbrock, sphere, ackley]
