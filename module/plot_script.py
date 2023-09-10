@@ -16,6 +16,8 @@ import matplotlib.pyplot as plt
 import scipy.stats as stats
 from tqdm import tqdm
 from module.utils import nearestPD, EI, log_EI, EI_bivariate
+from botorch.utils.transforms import standardize, normalize, unnormalize
+import geoopt
 
 
 """
@@ -32,54 +34,65 @@ def posterior_quad(model, theta, var):
     quad_test.quadrature()
     return quad_test.m.detach().clone(), quad_test.v.detach().clone()
 
-def plot_synthesis(model, quad, objective, bounds, iteration, batch_size, save_path=".", standardize=False, mean_Y=None, std_Y=None):
+def plot_synthesis_quad(optimizer, iteration, save_path=".", standardize=True):
+    iteration = optimizer.iteration
+    save_path = optimizer.plot_path
     save_path_gp = os.path.join(save_path, f"fitgp/synthesis_{iteration}.png")
-    b = np.arange(-float(bounds), float(bounds), 0.2)
+    bounds = optimizer.objective.bounds
+
+    b = np.arange(float(bounds[0][0]), float(bounds[1][0]), 0.2)
     d = np.arange(0, 10, 0.5)[1:]
     B, D = np.meshgrid(b, d)
     n, m = b.shape[0], d.shape[0]
     res = torch.stack((torch.tensor(B.flatten()), torch.tensor(D.flatten())), axis = 1).cpu().numpy()
     result, result_ei, result_bivariate_ei = [], [], []
+    
     for el in tqdm(res):
-        post = posterior_quad(model, el[0], el[1])
+        post = optimizer._quadrature(torch.tensor([el[0]]).to(device=optimizer.objective.device, dtype=optimizer.objective.dtype), torch.tensor([[el[1]]]).to(device=optimizer.objective.device, dtype=optimizer.objective.dtype))
         result.append(post)
-        mean_joint, covar_joint = quad.compute_joint_distribution_zero_order(torch.tensor([el[0]]).to(device=quad.device, dtype=quad.dtype), torch.tensor([[el[1]]]).to(device=quad.device, dtype=quad.dtype))
-        result_ei.append(log_EI(mean_joint[1], covar_joint[1,1], quad.best_f))
+        mean_joint, covar_joint = optimizer.compute_joint_distribution_zero_order(torch.tensor([el[0]]).to(device=optimizer.objective.device, dtype=optimizer.objective.dtype), torch.tensor([[el[1]]]).to(device=optimizer.objective.device, dtype=optimizer.objective.dtype))
+        result_ei.append(log_EI(mean_joint[1], covar_joint[1,1], optimizer.objective.best_value))
         result_bivariate_ei.append(EI_bivariate(mean_joint, covar_joint))
 
     mean = torch.tensor(result).cpu().numpy()[:,0].reshape(m,n)
-    std = torch.std(torch.tensor(result)).cpu().numpy()[:,1].reshape(m,n)
+    std = torch.sqrt(torch.tensor(result)).cpu().numpy()[:,1].reshape(m,n)
     ei = torch.tensor(result_ei).cpu().numpy().reshape(m,n)
     ei_bivariate = torch.tensor(result_bivariate_ei).cpu().numpy().reshape(m,n)
 
-    t_linspace = torch.linspace(0., quad.t_max, quad.budget + 1, dtype=quad.train_X.dtype)[1:]
+    t_linspace = torch.linspace(0., optimizer.t_max, optimizer.budget + 1, dtype=optimizer.train_x.dtype)[1:]
     result_wolfe, result_armijo = [], []
     for t in t_linspace:
-        result_wolfe.append(quad.criterion(t))
-        result_armijo.append(quad.criterion(t))
+        result_wolfe.append(optimizer.wolfe_criterion(t))
+        result_armijo.append(optimizer.armijo_criterion(t))
     wolfe_tensor = torch.tensor(result_wolfe).cpu().numpy()
-    armijo_tensor = torch.tensor(result_wolfe).cpu().numpy()
+    armijo_tensor = torch.tensor(result_armijo).cpu().numpy()
 
     ## Compute gradients at multiple places
-    b_grad = np.arange(-float(bounds), float(bounds), 1)
+    b_grad = np.arange(float(bounds[0][0]), float(bounds[1][0]), 1)
     d_grad = np.arange(0, 3, 0.5)[1:]**2
     B_grad, D_grad = np.meshgrid(b_grad, d_grad)
     #n_grad, m_grad = b_grad.shape[0], d_grad.shape[0]
     res_grad = torch.stack((torch.tensor(B_grad.flatten()), torch.tensor(D_grad.flatten())), axis = 1).cpu().numpy()
     result_grad, max_length = [], 0
     for el in tqdm(res_grad):
-        mean_distrib_grad, var_distrib_grad = torch.tensor([el[0]], dtype=torch.float64, device=model.train_inputs[0].device), torch.diag(torch.tensor([el[1]], dtype=torch.float64, device=model.train_inputs[0].device))
-        quad_distrib_grad = MultivariateNormal(mean_distrib_grad, var_distrib_grad)
-        quad_grad = Quadrature(model=model,
-                distribution=quad_distrib_grad)
-        quad_grad.quadrature()
-        quad_grad.gradient_direction()
-        mu_grad, epsilon_grad = float(quad_grad.d_mu.detach().clone()), float(quad_grad.d_epsilon.detach().clone())
+        mean_distrib_grad, var_distrib_grad = torch.tensor([el[0]], dtype=optimizer.objective.dtype, device=optimizer.objective.device), torch.diag(torch.tensor([el[1]], dtype=optimizer.objective.dtype, device=optimizer.objective.device))
+        manifold_point_grad = geoopt.ManifoldTensor(torch.cat((mean_distrib_grad, var_distrib_grad.flatten())), manifold=optimizer.manifold)
+        manifold_point_grad.requires_grad = True
+        
+        m, _ = optimizer._quadrature(optimizer.manifold.take_submanifold_value(manifold_point_grad, 0), optimizer.manifold.take_submanifold_value(manifold_point_grad, 1))
+        m.backward()
+        
+        d_manifold = manifold_point_grad.grad
+        d_mu, d_epsilon = optimizer.manifold.take_submanifold_value(d_manifold, 0), optimizer.manifold.take_submanifold_value(d_manifold, 1)
+
+        mu_grad, epsilon_grad = float(d_mu.detach().clone()), float(d_epsilon.detach().clone())
         max_length = max(max_length, np.sqrt(mu_grad**2 + epsilon_grad**2))
         result_grad.append([mu_grad, epsilon_grad])
         
     fig, axs = plt.subplots(2, 3, figsize=(22, 12))
-    plot_GP_fit_ax(axs[0,0], model, quad.distribution, model.train_inputs[0], model.train_targets, objective, batch_size,standardize=standardize, lb=-float(bounds), up=float(bounds), mean_Y=mean_Y, std_Y=std_Y)
+
+
+    plot_GP_fit_ax(axs[0,0], optimizer.model, optimizer.distribution, optimizer.train_y, optimizer.objective, optimizer.batch_size, standardize=standardize, lb=float(bounds[0][0]), up=float(bounds[1][0]))
 
     contour1 = axs[0,1].contourf(B, D, mean)
     # Gradient
@@ -105,44 +118,45 @@ def plot_synthesis(model, quad, objective, bounds, iteration, batch_size, save_p
     axs[1,2].set_ylabel('$\sigma^{2}$')
     axs[1,2].set_title("Bivariate Expected improvement")
 
-    #mu2 = float(quad.distribution.loc + float(t_linspace[np.argmax(wolfe_tensor)])*quad.d_mu)
-    #Epsilon2 = float(nearestPD(quad.distribution.covariance_matrix + float(t_linspace[np.argmax(wolfe_tensor)])*quad.d_epsilon))
-
     axs[1,0].plot(t_linspace.cpu().numpy(), wolfe_tensor, color='blue', label = "Probability Wolfe condition")
     axs[1,0].plot(t_linspace.cpu().numpy(), armijo_tensor, color='red', label = "Probability Armijo condition")
     axs[1,0].set_title("Probabilistic conditions line search")
     axs[1,0].legend()
-    axs[1,1].scatter([float(quad.distribution.loc)], [float(quad.distribution.covariance_matrix)])
+    axs[1,1].scatter([float(optimizer.distribution.loc)], [float(optimizer.distribution.covariance_matrix)])
+    
     ### Plot update rather than assuming wolfe
-    target_distribution = quad.update_distribution()
-    mu2, Epsilon2 = target_distribution.loc, target_distribution.covariance_matrix
+    mu2, Epsilon2 = optimizer.list_mu[-2], optimizer.list_covar[-2]
     axs[1,1].scatter([float(mu2)], [float(Epsilon2)])
-    axs[1,1].arrow(float(quad.distribution.loc), float(quad.distribution.covariance_matrix), float(mu2) - float(quad.distribution.loc),float(Epsilon2) - float(quad.distribution.covariance_matrix), width = 0.1)
-    #if t_linspace[np.argmax(wolfe_tensor)] != quad.t_update:
-    #    print(f"Computation error: {quad.t_update} and {t_linspace[np.argmax(wolfe_tensor)]}")
+    axs[1,1].arrow(float(mu2), float(Epsilon2), float(optimizer.distribution.loc) - float(mu2), float(optimizer.distribution.covariance_matrix) - float(Epsilon2), width = 0.1)
+    
     fig.colorbar(contour1, ax=axs[0,1])
     fig.colorbar(contour4, ax=axs[0,2])
     fig.colorbar(contour3, ax=axs[1,1])
     fig.colorbar(contour5, ax=axs[1,2])
     fig.savefig(save_path_gp)
 
-def plot_GP_fit(model, likelihood, train_X, targets, obj, lb=-10., up=10., save_path=".", iteration=1):
+def plot_GP_fit(model, likelihood, train_X, targets, obj, bounds, save_path=".", iteration=1):
     """ Plot the figures corresponding to the Gaussian process fit
     """
+    lb, up = float(bounds[0].cpu()), float(bounds[1].cpu())
     fig, ax = plt.subplots()
-    save_path_gp = os.path.join(save_path, f"fitgp/{iteration}.png")
+    save_path_gp = os.path.join(save_path, f"{iteration}.png")
     model.eval()
     likelihood.eval()
     test_x = torch.linspace(lb, up, 200, device=train_X.device, dtype=train_X.dtype)
+    test_x_normalised = normalize(test_x, bounds=bounds)
     with torch.no_grad():
         # Make predictions
-        predictions = likelihood(model(test_x))
+        predictions = likelihood(model(test_x_normalised))
         lower, upper = predictions.confidence_region()
-    Y_standard, Y_mean, Y_std = standardize_return(targets)
-    value_ = ((obj(test_x.unsqueeze(-1)) - Y_mean)/Y_std).flatten()
+    
+    value_ = obj(test_x.unsqueeze(-1)).flatten()
+    _, Y_mean, Y_std = standardize_return(targets)
+    Y_mean, Y_std = Y_mean.squeeze(0), Y_std.squeeze(0)
+    lower, upper = Y_std*lower + Y_mean, Y_std*upper + Y_mean
 
-    ax.scatter(train_X.cpu().numpy(), Y_standard.cpu().numpy(), color='black', label='Training data')
-    ax.plot(test_x.cpu().numpy(), predictions.mean.cpu().numpy(), color='blue', label='Predictive mean')
+    ax.scatter(train_X.cpu().numpy(), targets.cpu().numpy(), color='black', label='Training data')
+    ax.plot(test_x.cpu().numpy(), (Y_std*predictions.mean + Y_mean).cpu().numpy(), color='blue', label='Predictive mean')
     ax.plot(test_x.cpu().numpy(), value_.cpu().numpy(), color='green', label='True Function')
     ax.fill_between(test_x.cpu().numpy(), lower.cpu().numpy(), upper.cpu().numpy(), color='lightblue', alpha=0.5, label='Confidence region')
     ax.set_xlabel('x')
@@ -151,9 +165,11 @@ def plot_GP_fit(model, likelihood, train_X, targets, obj, lb=-10., up=10., save_
     ax.legend()
     fig.savefig(save_path_gp)
 
-def plot_GP_fit_ax(ax, model, distribution, train_X, targets, obj, batch, standardize=False, lb=-10., up=10., mean_Y=None, std_Y=None):
+def plot_GP_fit_ax(ax, model, distribution, train_y, obj, batch, standardize=False, lb=-10., up=10.):
     """ Plot the figures corresponding to the Gaussian process fit
     """
+
+    train_X, targets = model.train_inputs[0], model.train_targets
     model.eval()
     model.likelihood.eval()
     test_x = torch.linspace(lb, up, 200, device=train_X.device, dtype=train_X.dtype)
@@ -163,6 +179,7 @@ def plot_GP_fit_ax(ax, model, distribution, train_X, targets, obj, batch, standa
         lower, upper = predictions.confidence_region()
     
     if standardize:
+        _, mean_Y, std_Y = standardize_return(train_y)
         predictions = predictions*float(std_Y) + float(mean_Y)
         lower, upper = lower*float(std_Y) + float(mean_Y), upper*float(std_Y) + float(mean_Y)
         targets = targets*float(std_Y) + float(mean_Y)
@@ -253,28 +270,31 @@ def plot_figure(save_path, log_transform=False):
         alg_name = [name for name in os.listdir(exp_dir) if os.path.isdir(os.path.join(exp_dir, name))]
         for algo in alg_name:
             alg_dir = os.path.join(exp_dir, algo)
-            data_path_seeds = [f for f in os.listdir(alg_dir) if ".pt" in f]
-            data_over_seeds = []
-            for _, df in enumerate(data_path_seeds):
-                data_path = os.path.join(alg_dir, df)
-                data = torch.load(data_path, map_location="cpu")
-                data_over_seeds.append(data["regret"])
-            N_TRIALS = len(data_over_seeds)
-            N_BATCH = data["N_BATCH"]
-            BATCH_SIZE = data["BATCH_SIZE"]
-            iters = np.arange(N_BATCH + 1) * BATCH_SIZE
-            label = data["label"]
-            data_over_seeds = [t.detach().cpu().numpy() for t in data_over_seeds]
-            y = np.asarray(data_over_seeds)
-            if log_transform:
-                ax.plot(iters, np.log(y.mean(axis=0)), ".-", label=label)
-            else:
-                ax.plot(iters, y.mean(axis=0), ".-", label=label)
-            yerr=ci(y, N_TRIALS)
-            if log_transform:
-                ax.fill_between(iters, np.log(np.clip(y.mean(axis=0)-yerr, a_min=1e-5, a_max=None)), np.log(np.clip(y.mean(axis=0)+yerr, a_min=1e-5, a_max=None)), alpha=0.1)
-            else:
-                ax.fill_between(iters, y.mean(axis=0)-yerr, y.mean(axis=0)+yerr, alpha=0.1)
+            alg_dir_param_name = [name for name in os.listdir(alg_dir) if os.path.isdir(os.path.join(alg_dir, name))]
+            for algo_param in alg_dir_param_name:
+                algo_param_dir = os.path.join(alg_dir, algo_param)
+                data_path_seeds = [f for f in os.listdir(algo_param_dir) if ".pt" in f]
+                data_over_seeds = []
+                for _, df in enumerate(data_path_seeds):
+                    data_path = os.path.join(algo_param_dir, df)
+                    data = torch.load(data_path, map_location="cpu")
+                    data_over_seeds.append(data["regret"])
+                N_TRIALS = len(data_over_seeds)
+                N_BATCH = data["N_BATCH"]
+                BATCH_SIZE = data["BATCH_SIZE"]
+                iters = np.arange(N_BATCH + 1) * BATCH_SIZE
+                label = data["label"]
+                data_over_seeds = [t.detach().cpu().numpy() for t in data_over_seeds]
+                y = np.asarray(data_over_seeds)
+                if log_transform:
+                    ax.plot(iters, np.log(y.mean(axis=0)), ".-", label=label)
+                else:
+                    ax.plot(iters, y.mean(axis=0), ".-", label=label)
+                yerr=ci(y, N_TRIALS)
+                if log_transform:
+                    ax.fill_between(iters, np.log(np.clip(y.mean(axis=0)-yerr, a_min=1e-5, a_max=None)), np.log(np.clip(y.mean(axis=0)+yerr, a_min=1e-5, a_max=None)), alpha=0.1)
+                else:
+                    ax.fill_between(iters, y.mean(axis=0)-yerr, y.mean(axis=0)+yerr, alpha=0.1)
         if not log_transform:    
             ax.plot([0, N_BATCH * BATCH_SIZE], [0.] * 2, 'k', label="true best objective", linewidth=2)
             ax.set_ylim(0,10.)
@@ -378,21 +398,25 @@ def plot_distribution_gif(config, n_seeds=1):
         exp_dir = os.path.join(save_path, experiment)
         alg_name = [name for name in os.listdir(exp_dir) if os.path.isdir(os.path.join(exp_dir, name))]        
         dim = int(experiment.split("_")[2][-1])
-        obj = get_objective(config["problem_name"], **{"function": experiment.split("_")[0], "dim":dim, "noise_std":float(experiment.split("_")[1][6:])})
+        obj = get_objective(label=config["problem_name"], device=None, dtype=None, problem_kwargs=config["problem_settings"])
         for algo in tqdm(alg_name, desc="Processing Algorithms..."):
             algo_path = os.path.join(exp_dir, algo)
-            _, ax = plt.subplots(1, 1, figsize=(8, 6))
-            data_path_seeds = [f for f in os.listdir(algo_path) if ".pt" in f][:n_seeds]
-            for seed, df in enumerate(data_path_seeds):
-                data_path = os.path.join(algo_path, df)
-                with open(data_path, "rb") as _:
-                    data = torch.load(data_path, map_location="cpu")
-                if dim == 1:
-                    distribution_gif_1D(algo_path, obj, seed, data, ax)
-                elif dim == 2:
-                    distribution_gif_2D(algo_path, obj, seed, data, ax)
-                else:
-                    raise Exception("Dimension of the problem should be less than 2")
+            alg_dir_param_name = [name for name in os.listdir(algo_path) if os.path.isdir(os.path.join(algo_path, name))]
+            for algo_param in alg_dir_param_name:
+                algo_param_dir = os.path.join(algo_path, algo_param)
+                _, ax = plt.subplots(1, 1, figsize=(8, 6))
+                data_path_seeds = [f for f in os.listdir(algo_param_dir) if ".pt" in f][:n_seeds]
+                for seed, df in enumerate(data_path_seeds):
+                    data_path = os.path.join(algo_param_dir, df)
+                    with open(data_path, "rb") as _:
+                        data = torch.load(data_path, map_location="cpu")
+                    #if dim == 1:
+                    #    distribution_gif_1D(algo_param_dir, obj, seed, data, ax)
+                    if dim == 2:
+                        distribution_gif_2D(algo_param_dir, obj, seed, data, ax)
+                    else:
+                        return None
+                        raise Exception("Dimension of the problem should be 2")
 
 def plot_distribution_path(config, n_seeds=1):
     """

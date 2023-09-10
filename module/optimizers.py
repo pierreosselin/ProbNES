@@ -1,34 +1,87 @@
-from typing import Dict, Callable, Union, Optional, List, Any, int
+from typing import Dict, Callable, Union, Optional, List, Any
 from abc import ABC, abstractmethod
 import numpy as np
 import torch
+import os
 from torch.distributions import Normal
 import gpytorch
 from gpytorch.utils.cholesky import psd_safe_cholesky
 import botorch
 from module.model import DerivativeExactGPSEModel
 from module.environment_api import EnvironmentObjective
-from module.acquisition_function import GradientInformation, DownhillQuadratic
+from module.acquisition_function import GradientInformation, DownhillQuadratic, initialize_acqf_optimizer, piqExpectedImprovement, QuadratureExploration
+from module.plot_script import plot_GP_fit, plot_synthesis_quad
 from scipy.optimize import minimize_scalar
 from torch.distributions.multivariate_normal import MultivariateNormal
-from .utils import bounded_bivariate_normal_integral, nearestPD, isPD, EI, log_EI
+from .utils import bounded_bivariate_normal_integral, nearestPD, isPD, EI, log_EI, normalize_distribution
+from botorch import fit_gpytorch_mll
+from botorch.utils.transforms import standardize, normalize
+from .objective import Objective
 import geoopt
 from botorch.utils.probability.utils import (
     ndtr as Phi
 )
+from botorch.utils.transforms import standardize, normalize, unnormalize
+from gpytorch.kernels import RBFKernel
+from gpytorch.kernels.scale_kernel import ScaleKernel
+from gpytorch.priors.torch_priors import GammaPrior
+from botorch.models import SingleTaskGP
+from gpytorch.mlls import ExactMarginalLogLikelihood
+from botorch.acquisition.monte_carlo import qExpectedImprovement
+from botorch.sampling.normal import SobolQMCNormalSampler
 
 LIST_LABEL = ["random", "SNES", "piqEI", "quad", "qEI", "MPD", "BGA"]
 
-def load_optimizer(label, initial_params, problem, dict_parameter):
+def load_optimizer(label, n_init, objective, dict_parameter, plot_path):
     if label == "qEI":
-        optimizer = VanillaBayesianOptimization(initial_params, problem.objective)
+        optimizer = VanillaBayesianOptimization(n_init=n_init, objective=objective, batch_size=dict_parameter["batch_size"], optimizer_config=dict_parameter["qEI"], plot_path=plot_path)
     elif label == "piqEI":
-        optimizer = VanillaBayesianOptimization(initial_params)
+        optimizer = PiBayesianOptimization(n_init=n_init, objective=objective, batch_size=dict_parameter["batch_size"], optimizer_config=dict_parameter["piqEI"], plot_path=plot_path)
     elif label == "quad":
-        optimizer = VanillaBayesianOptimization(initial_params)
+        optimizer = ProbES(n_init=n_init, objective=objective, batch_size=dict_parameter["batch_size"], optimizer_config=dict_parameter["quad"], plot_path=plot_path)
 
     return optimizer
 
+
+## Function to generate initial data, either random in bounds or from domain informed distribution
+def generate_data(
+        label: str,
+        objective: Objective,
+        n_init: int,
+        distribution: torch.distributions.Distribution = None
+        ):
+
+    if label in ["random", "qEI"]:
+        train_x = unnormalize(torch.rand(n_init, objective.dim, device=objective.device, dtype=objective.dtype), objective.bounds) ### Change initializer normal or discrete
+        train_obj = objective(train_x).unsqueeze(-1)  # add output dimension
+        best_observed_value = train_obj.max().item()
+        
+    elif label in ["piqEI", "quad", "SNES"]:
+        train_x = distribution.sample((n_init,)).reshape(-1, objective.dim)
+        train_obj = objective(train_x).unsqueeze(-1)  # add output dimension
+        best_observed_value = train_obj.max().item()
+        
+    return train_x, train_obj, best_observed_value
+
+# Add option for matern kernel
+def initialize_model(train_x, train_obj, state_dict=None):
+        # define models for objective and constraint
+        covar_module = ScaleKernel(
+            RBFKernel(
+                ard_num_dims=train_x.shape[-1],
+                batch_shape=None,
+                lengthscale_prior=GammaPrior(3.0, 6.0),
+            ),
+            batch_shape=None,
+            outputscale_prior=GammaPrior(2.0, 0.15),
+        )
+        model_obj = SingleTaskGP(train_x, train_obj, covar_module=covar_module).to(train_x)
+    
+        mll = ExactMarginalLogLikelihood(model_obj.likelihood, model_obj)
+        # load state dict if it is passed
+        if state_dict is not None:
+            model_obj.load_state_dict(state_dict)
+        return mll, model_obj
 
 ## For now, initial data generation depends on optimizer to take domain information into account
 class AbstractOptimizer(ABC):
@@ -58,6 +111,7 @@ class AbstractOptimizer(ABC):
         self.params = torch.empty((self.D, 0))
         self.param_args_ignore = param_args_ignore
         self.objective = objective
+        self.iteration = 0
 
     def __call__(self):
         """Call method of optimizers."""
@@ -65,6 +119,10 @@ class AbstractOptimizer(ABC):
 
     @abstractmethod
     def step(self) -> None:
+        """One parameter update step."""
+        pass
+
+    def plot_synthesis(self) -> None:
         """One parameter update step."""
         pass
 
@@ -186,7 +244,6 @@ class RandomSearch(AbstractOptimizer):
             if self.standard_deviation_scaling:
                 print(f"Std of perturbation rewards {std_reward:.2f}.")
 
-
 class CMAES(AbstractOptimizer):
     """CMA-ES: Evolutionary Strategy with Covariance Matrix Adaptation for
     nonlinear function optimization.
@@ -273,6 +330,7 @@ class CMAES(AbstractOptimizer):
         self.hs = 0
 
         self.verbose = verbose
+        self.list_mu, self.list_covar = [self.xmean.detach().clone()], [self.C.detach().clone()]
 
     def step(self):
 
@@ -355,7 +413,8 @@ class CMAES(AbstractOptimizer):
         )  # Return the best point of the last generation. Notice that xmean is expected to be even better.
 
         self.params_history_list.append(self.params.clone())
-
+        self.list_mu.append(self.xmean.detach().clone())
+        self.list_covar.append(self.C.detach().clone())
         if self.verbose:
             print(f"Parameter: {self.params.numpy()}.")
             print(f"Function value: {self.arfitness[args[0]]}.")
@@ -389,77 +448,78 @@ class VanillaBayesianOptimization(AbstractOptimizer):
     def __init__(
         self,
         n_init: int = 5,
-        objective: Callable[[torch.Tensor], torch.Tensor] = None
+        objective: Callable[[torch.Tensor], torch.Tensor] = None,
+        batch_size: int = 1,
+        optimizer_config: Dict=None,
+        plot_path=None
     ):
         """Inits the vanilla BO optimizer."""
         super(VanillaBayesianOptimization, self).__init__(n_init, objective)
 
-        # Parameter initialization.
-        self.params_history_list = [self.params.clone()]
-
+        self.batch_size = batch_size
+        self.plot_path = plot_path
         # Initialization of training data.
-        generate_initial_data(n=N_INIT)
-
-        # Add initialization parameter to training data.
-        train_x_init = torch.cat([train_x_init, self.params])
-        train_y_init = torch.cat(
-            [train_y_init, self.objective(self.params).reshape(-1, 1)]
-        )
-
-        # Model initialization and optional hyperparameter settings.
+        self.unit_cube = torch.tensor([[0.]*self.objective.dim, [1.]*self.objective.dim], dtype=self.objective.dtype, device=self.objective.device)
+        self.train_x, self.train_y, _ = generate_data("qEI", objective=objective, n_init=n_init)
         
-        self.model = Model(train_x_init, train_y_init, **model_config)
-        if hyperparameter_config["hypers"]:
-            self.model.initialize(**hyperparameter_config["hypers"])
-        if hyperparameter_config["no_noise_optimization"]:
-            # Switch off the optimization of the noise parameter.
-            self.model.likelihood.noise_covar.raw_noise.requires_grad = False
-
-        self.optimize_hyperparamters = hyperparameter_config["optimize_hyperparameters"]
+        self.params_history_list = [self.train_x.clone()]
+        self.values_history = [self.train_y.clone()]
 
         # Acquistion function and its optimization properties.
-        self.acquisition_function = acquisition_function
-        self.acqf_config = acqf_config
-        self.optimize_acqf = optimize_acqf
-        self.optimize_acqf_config = optimize_acqf_config
-
-        self.verbose = verbose
+        self.qmc_sampler = SobolQMCNormalSampler(sample_shape=torch.Size([optimizer_config["mc_samples"]]))
+        
+        self.optimize_acqf = initialize_acqf_optimizer(random=False,
+                                                       bounds=self.unit_cube,
+                                                       batch_size=self.batch_size,
+                                                       num_restarts=optimizer_config["num_restarts"],
+                                                       raw_samples=optimizer_config["raw_samples"],
+                                                       batch_acq=optimizer_config["batch_acq"],
+                                                       maxiter=200)
 
     def step(self) -> None:
+        covar_module = ScaleKernel(
+            RBFKernel(
+                ard_num_dims=self.train_x.shape[-1],
+                batch_shape=None,
+                lengthscale_prior=GammaPrior(3.0, 6.0),
+            ),
+            batch_shape=None,
+            outputscale_prior=GammaPrior(2.0, 0.15),
+        )
+        train_y_init_standardized = standardize(self.train_y)
+        self.model = SingleTaskGP(normalize(self.train_x, bounds=self.objective.bounds),
+                                  train_y_init_standardized,
+                                  covar_module=covar_module).to(self.train_x)
+        
+        self.acquisition_function = qExpectedImprovement(
+                    model=self.model, 
+                    best_f=train_y_init_standardized.max(),
+                    sampler=self.qmc_sampler
+                )
+        
         # Optionally optimize hyperparameters.
-        if self.optimize_hyperparamters and self.model.train_targets.shape[0] > 20: 
-            mll = gpytorch.mlls.ExactMarginalLogLikelihood(
-                self.model.likelihood, self.model
-            )
-            botorch.fit.fit_gpytorch_model(mll)
-
-        # Optionally update best_f for acquistion function.
-        if "best_f" in self.acqf_config.keys():
-            self.acqf_config["best_f"] = self.model.train_targets.max()
+        mll = ExactMarginalLogLikelihood(
+            self.model.likelihood, self.model
+        )
+        fit_gpytorch_mll(mll)
 
         # Optimize acquistion function and get new observation.
-        new_x = self.optimize_acqf(
-            self.acquisition_function(self.model, **self.acqf_config),
-            **self.optimize_acqf_config,
-        )
-        new_y = self.objective(new_x)
-        self.params = new_x.clone()
+        new_x_normalized = self.optimize_acqf(self.acquisition_function)
+        new_x = unnormalize(new_x_normalized, bounds=self.objective.bounds)
+        new_y = self.objective(new_x).unsqueeze(-1)
 
         # Update training points.
-        train_x = torch.cat([self.model.train_inputs[0], new_x])
-        train_y = torch.cat([self.model.train_targets, new_y])
-        self.model.set_train_data(inputs=train_x, targets=train_y, strict=False)
+        self.train_x = torch.cat([self.train_x, new_x])
+        self.train_y = torch.cat([self.train_y, new_y])
+        self.params_history_list.append(new_x.clone())
+        self.values_history.append(new_y.clone())
+        self.iteration += 1
 
-        self.params_history_list.append(self.params)
-
-        if self.verbose:
-            posterior = self.model.posterior(self.params)
-            print(
-                f"Parameter {self.params.numpy()} with mean {posterior.mvn.mean.item(): .2f} and variance {posterior.mvn.variance.item(): .2f} of the posterior of the GP model."
-            )
-            print(
-                f"lengthscale: {self.model.covar_module.base_kernel.lengthscale.detach().numpy()}, outputscale: {self.model.covar_module.outputscale.detach().numpy(): .2f},  noise {self.model.likelihood.noise.detach().numpy()}"
-            )
+    def plot_synthesis(self):
+        if self.objective.dim == 1:
+            plot_GP_fit(self.model, self.model.likelihood, self.train_x, targets=self.train_y, bounds=self.objective.bounds, obj=self.objective, save_path=self.plot_path, iteration=self.iteration)
+        
+ 
 
 class PiBayesianOptimization(AbstractOptimizer):
     """Optimizer class for vanilla Bayesian optimization.
@@ -487,94 +547,87 @@ class PiBayesianOptimization(AbstractOptimizer):
 
     def __init__(
         self,
-        params_init: torch.Tensor,
-        objective: Callable[[torch.Tensor], torch.Tensor],
-        Model,
-        model_config: Dict,
-        hyperparameter_config: Optional[Dict],
-        acquisition_function,
-        acqf_config: Dict,
-        optimize_acqf: Callable,
-        optimize_acqf_config: Dict[str, torch.Tensor],
-        generate_initial_data=Optional[
-            Callable[[Callable[[torch.Tensor], torch.Tensor]], torch.Tensor]
-        ],
-        verbose=True,
+        n_init: int = 5,
+        objective: Callable[[torch.Tensor], torch.Tensor] = None,
+        batch_size: int = 1,
+        optimizer_config: Dict = None,
+        plot_path=None
     ):
         """Inits the vanilla BO optimizer."""
-        super(VanillaBayesianOptimization, self).__init__(params_init, objective)
+        super(PiBayesianOptimization, self).__init__(n_init, objective)
 
-        # Parameter initialization.
-        self.params_history_list = [self.params.clone()]
-        self.D = self.params.shape[-1]
+        self.batch_size = batch_size
+        self.plot_path = plot_path
+        # Initialization of training data.
+        
+        ## Load parameter distribution TODO Transform distribution with respect to bounds
+        BETA, VAR_PRIOR = optimizer_config["beta"], optimizer_config["var_prior"]
+        self.beta = BETA
+        mean, loc = torch.zeros(objective.dim, device=objective.device, dtype=objective.dtype), VAR_PRIOR*torch.eye(objective.dim, device=objective.device, dtype=objective.dtype)
+        self.distribution = MultivariateNormal(mean, loc)
+        self.distribution_normalized = normalize_distribution(self.distribution, self.objective.bounds)
 
         # Initialization of training data.
-        if generate_initial_data is None:
-            train_x_init, train_y_init = torch.empty(0, self.D), torch.empty(0, 1)
-        else:
-            train_x_init, train_y_init = generate_initial_data(self.objective)
-
-        # Add initialization parameter to training data.
-        train_x_init = torch.cat([train_x_init, self.params])
-        train_y_init = torch.cat(
-            [train_y_init, self.objective(self.params).reshape(-1, 1)]
-        )
-
-        # Model initialization and optional hyperparameter settings.
-        self.model = Model(train_x_init, train_y_init, **model_config)
-        if hyperparameter_config["hypers"]:
-            self.model.initialize(**hyperparameter_config["hypers"])
-        if hyperparameter_config["no_noise_optimization"]:
-            # Switch off the optimization of the noise parameter.
-            self.model.likelihood.noise_covar.raw_noise.requires_grad = False
-
-        self.optimize_hyperparamters = hyperparameter_config["optimize_hyperparameters"]
-
+        self.unit_cube = torch.tensor([[0.]*self.objective.dim, [1.]*self.objective.dim], dtype=self.objective.dtype, device=self.objective.device)
+        self.train_x, self.train_y, _ = generate_data("piqEI", objective=objective, n_init=n_init, distribution=self.distribution)
+        
+        self.params_history_list = [self.train_x.clone()]
+        self.values_history = [self.train_y.clone()]
+        
         # Acquistion function and its optimization properties.
-        self.acquisition_function = acquisition_function
-        self.acqf_config = acqf_config
-        self.optimize_acqf = optimize_acqf
-        self.optimize_acqf_config = optimize_acqf_config
-
-        self.verbose = verbose
-
+        self.qmc_sampler = SobolQMCNormalSampler(sample_shape=torch.Size([optimizer_config["mc_samples"]]))
+        self.optimize_acqf = initialize_acqf_optimizer(random=False,
+                                                bounds=self.unit_cube,
+                                                batch_size=self.batch_size,
+                                                num_restarts=optimizer_config["num_restarts"],
+                                                raw_samples=optimizer_config["raw_samples"],
+                                                batch_acq=optimizer_config["batch_acq"],
+                                                maxiter=200)
     def step(self) -> None:
+        covar_module = ScaleKernel(
+            RBFKernel(
+                ard_num_dims=self.train_x.shape[-1],
+                batch_shape=None,
+                lengthscale_prior=GammaPrior(3.0, 6.0),
+            ),
+            batch_shape=None,
+            outputscale_prior=GammaPrior(2.0, 0.15),
+        )
+        train_y_init_standardized = standardize(self.train_y)
+        self.model = SingleTaskGP(normalize(self.train_x, bounds=self.objective.bounds),
+                                    train_y_init_standardized,
+                                    covar_module=covar_module).to(self.train_x)
+        
+        self.acquisition_function = piqExpectedImprovement(
+                    model=self.model, 
+                    best_f=self.model.train_targets.max(),
+                    pi_distrib=self.distribution_normalized,
+                    n_iter=self.iteration+1, ## here iteration starts at 0
+                    beta=self.beta,
+                    sampler=self.qmc_sampler
+                )
+        
         # Optionally optimize hyperparameters.
-        if self.optimize_hyperparamters and self.model.train_targets.shape[0] > 20:
-            mll = gpytorch.mlls.ExactMarginalLogLikelihood(
-                self.model.likelihood, self.model
-            )
-            botorch.fit.fit_gpytorch_model(mll)
-
-        # Optionally update best_f for acquistion function.
-        if "best_f" in self.acqf_config.keys():
-            self.acqf_config["best_f"] = self.model.train_targets.max()
+        mll = ExactMarginalLogLikelihood(
+            self.model.likelihood, self.model
+        )
+        fit_gpytorch_mll(mll)
 
         # Optimize acquistion function and get new observation.
-        new_x = self.optimize_acqf(
-            self.acquisition_function(self.model, **self.acqf_config),
-            **self.optimize_acqf_config,
-        )
-        new_y = self.objective(new_x)
-        self.params = new_x.clone()
+        new_x_normalized = self.optimize_acqf(self.acquisition_function)
+        new_x = unnormalize(new_x_normalized, bounds=self.objective.bounds)
+        new_y = self.objective(new_x).unsqueeze(-1)
 
         # Update training points.
-        train_x = torch.cat([self.model.train_inputs[0], new_x])
-        train_y = torch.cat([self.model.train_targets, new_y])
-        self.model.set_train_data(inputs=train_x, targets=train_y, strict=False)
-
-        self.params_history_list.append(self.params)
-
-        if self.verbose:
-            posterior = self.model.posterior(self.params)
-            print(
-                f"Parameter {self.params.numpy()} with mean {posterior.mvn.mean.item(): .2f} and variance {posterior.mvn.variance.item(): .2f} of the posterior of the GP model."
-            )
-            print(
-                f"lengthscale: {self.model.covar_module.base_kernel.lengthscale.detach().numpy()}, outputscale: {self.model.covar_module.outputscale.detach().numpy(): .2f},  noise {self.model.likelihood.noise.detach().numpy()}"
-            )
-
-
+        self.train_x = torch.cat([self.train_x, new_x])
+        self.train_y = torch.cat([self.train_y, new_y])
+        self.params_history_list.append(new_x.clone())
+        self.values_history.append(new_y.clone())
+        self.iteration += 1
+    
+    def plot_synthesis(self):
+        if self.objective.dim == 1:
+            plot_GP_fit(self.model, self.model.likelihood, self.train_x, targets=self.train_y, bounds=self.objective.bounds, obj=self.objective, save_path=self.plot_path, iteration=self.iteration)
 class BayesianGradientAscent(AbstractOptimizer):
     """Optimizer for Bayesian gradient ascent.
 
@@ -925,7 +978,6 @@ class BayesianGradientAscent(AbstractOptimizer):
 
         else:
             raise ValueError("invalid move method")
-
 
 class MPDOptimizer(AbstractOptimizer):
     def __init__(
@@ -1412,7 +1464,6 @@ class MPDOptimizer(AbstractOptimizer):
         else:
             raise ValueError("invalid move method")
 
-
 class FiniteDiffGradientAscentOptimizer(AbstractOptimizer):
     def __init__(
         self,
@@ -1495,7 +1546,6 @@ class FiniteDiffGradientAscentOptimizer(AbstractOptimizer):
             )
         else:
             self.params_history_list.append(self.params.clone())
-
 
 class FiniteDiffGradientAscentOptimizerv2(FiniteDiffGradientAscentOptimizer):
     def __init__(
@@ -1590,47 +1640,117 @@ class FiniteDiffGradientAscentOptimizerv2(FiniteDiffGradientAscentOptimizer):
 ## - Direction (expected gradient, max probability descent)
 ## - Line search (Euclidean, Riemannian)
 ## - Step (Constant, Wolfe Condition)
-class ProbES:
-    def __init__(self,
-                 model=None,
-                 distribution=None,
-                 policy = "wolfe", ## Here decide which policy to use to update distribution, either wolfe, ei or wolfe_ei 
-                 policy_kwargs: Optional[Dict[str, Any]] = None,
-                 manifold = True,
-                 ) -> None:
+## TODO Be careful computational graphs when using .copy() as not deleted and can result in using too much memory
+class ProbES(AbstractOptimizer):
+    def __init__(
+        self,
+        n_init: int = 5,
+        objective: Callable[[torch.Tensor], torch.Tensor] = None,
+        batch_size: int = 1,
+        optimizer_config: Dict = None,
+        plot_path=None
+    ):
         
-        ### Create attributes
-        self.model=model
-        self.distribution=distribution
-        self.d = self.distribution.loc.shape[0]
-        self.policy=policy
-        self.device = model.train_inputs[0].device
-        self.dtype = model.train_inputs[0].dtype
-        self.best_f = self.model.train_targets.max() ## Needs to be deleted for policy different than ei
+        super(ProbES, self).__init__(n_init, objective)
 
-        # Policy options
-        policy_options = dict(c1=0.1, c2=0.9, t_max=100, budget=500, iteration=1000)
-        policy_options.update(policy_kwargs or {})        
-        for k, v in policy_options.items():
-            setattr(self, k, v)
+        self.batch_size = batch_size
+        self.plot_path = plot_path
+        if not os.path.exists(os.path.join(self.plot_path, "fitgp")):
+            os.makedirs(os.path.join(self.plot_path, "fitgp"))
+        ## Load parameter distribution
+        mu, var = 0., optimizer_config["var_prior"] ## TODO option for different starting point
+        mean, loc = mu*torch.ones(objective.dim, device=objective.device, dtype=objective.dtype), var*torch.eye(objective.dim, device=objective.device, dtype=objective.dtype)
+        self.distribution = MultivariateNormal(mean, loc)
+
+        self.train_x, self.train_y, _ = generate_data("quad", objective=objective, n_init = n_init, distribution=self.distribution)
+        #self.params = self.train_x.clone()
+        self.params_history_list = [self.train_x.clone()]
+        self.values_history = [self.train_y.clone()]
+        self.d = self.objective.dim
         
-        # Do one computation
+        self.policy=optimizer_config["line_search"]
+        self.c1=optimizer_config["c1"]
+        self.c2=optimizer_config["c2"]
+        self.t_max=optimizer_config["t_max"]
+        self.budget=optimizer_config["budget"]
+        self.manifold=optimizer_config["manifold"]
+        self.gradient_direction = optimizer_config["gradient_direction"]
+        # Assert wolfe condition of parameters
         assert 0 <= self.c1
         assert self.c1 < self.c2
         assert self.c2 <= 1
 
         ## Create Manifold
-        if manifold:
+        if self.manifold:
             euclidean = geoopt.manifolds.Euclidean()
             spd = geoopt.manifolds.SymmetricPositiveDefinite()
-            self.manifold = geoopt.manifolds.ProductManifold((euclidean, self.d), (spd, (self.d,self.d)))
+            self.manifold = geoopt.manifolds.ProductManifold((euclidean, objective.dim), (spd, (objective.dim,objective.dim)))
         else:
-            self.manifold = geoopt.manifolds.ProductManifold((euclidean, self.d), (euclidean, (self.d,self.d)))
+            self.manifold = geoopt.manifolds.ProductManifold((euclidean, objective.dim), (euclidean, (objective.dim,objective.dim)))
+
+        ## Define criterion
+        if self.policy == "ei": # Change for multivariate gaussian 
+            self.optimizer = geoopt.optim.RiemannianAdam((self.param,), lr=1e-2)
+        
+        elif self.policy in ["wolfe", "armijo"]:
+            if self.policy == "wolfe":
+                self.criterion = self.wolfe_criterion
+            elif self.policy == "armijo":
+                self.criterion = self.armijo_criterion
+            
+        ## TODO Make option to make it an optimization pb instead of samples
+        self.optimize_acqf = initialize_acqf_optimizer(random=True, candidate_vr=optimizer_config["candidates_vr"], batch_size=batch_size)
+
+        ## Register mu and covariance history
+        self.list_mu, self.list_covar = [self.distribution.loc.detach().clone()], [self.distribution.covariance_matrix.detach().clone()]
+
+
+        ## Create grads points for autodiff
         mu, covar = self.distribution.loc, self.distribution.covariance_matrix
         self.manifold_point = geoopt.ManifoldTensor(torch.cat((mu, covar.flatten())), manifold=self.manifold)
         self.manifold_point.requires_grad = True
         self.param = geoopt.ManifoldParameter(self.manifold_point)
-            
+
+        ### Make model
+        # Model initialization and optional hyperparameter settings.
+        covar_module = ScaleKernel(
+            RBFKernel(
+                ard_num_dims=self.train_x.shape[-1],
+                batch_shape=None,
+                lengthscale_prior=GammaPrior(3.0, 6.0),
+            ),
+            batch_shape=None,
+            outputscale_prior=GammaPrior(2.0, 0.15),
+        )
+        train_y_init_standardized = standardize(self.train_y)
+        self.model = SingleTaskGP(self.train_x, train_y_init_standardized, covar_module=covar_module).to(self.train_x)
+
+        # Optionally optimize hyperparameters.
+        mll = ExactMarginalLogLikelihood(
+            self.model.likelihood, self.model
+        )
+        fit_gpytorch_mll(mll)
+
+        # Optimize acquistion function and get new observation.
+        self.acquisition_function = QuadratureExploration(
+            model=self.model,
+            distribution=self.distribution)
+        
+    def wolfe_criterion(self, t):
+        target_point = self.manifold.expmap(self.manifold_point, t*self.d_manifold)
+        mean_joint, covar_joint = self.compute_joint_distribution(self.manifold.take_submanifold_value(target_point, 0), self.manifold.take_submanifold_value(target_point, 1))
+        mean_joint = -mean_joint
+        return -float(self.compute_wolfe(mean_joint, covar_joint, t))
+    
+    def armijo_criterion(self, t):
+        target_point = self.manifold.expmap(self.manifold_point, t*self.d_manifold)
+        mean_joint, covar_joint = self.compute_joint_distribution_first_order(self.manifold.take_submanifold_value(target_point, 0), self.manifold.take_submanifold_value(target_point, 1))
+        mean_joint = -mean_joint
+        return -float(self.compute_armijo(mean_joint, covar_joint, t).detach().clone().cpu())
+    
+    def step(self):
+        """Make a gradient step toward"""
+
         # Extract model quantities
         self.train_X = self.model.train_inputs[0]
         self.noise_tensor = self.model.likelihood.noise.detach().clone() * torch.eye(self.train_X.shape[0], dtype=self.train_X.dtype, device=self.train_X.device)
@@ -1641,29 +1761,7 @@ class ProbES:
         self.inverse_data_covar_y = torch.linalg.solve(self.K_X_X, self.model.train_targets - self.mean_constant)
         self.inverse_data = torch.linalg.inv(self.K_X_X)
 
-        ## Create criterion
-        if self.policy == "ei": # Change for multivariate gaussian 
-            self.optimizer = geoopt.optim.RiemannianAdam((self.param,), lr=1e-2)
-        
-        elif self.policy in ["wolfe", "armijo"]:
-            m, _ = self._quadrature(self.manifold.take_submanifold_value(self.manifold_point, 0), self.manifold.take_submanifold_value(self.manifold_point, 1))
-            m.backward()
-            if policy == "wolfe":
-                def criterion(t):
-                    target_point = self.manifold.expmap(self.manifold_point, t*self.manifold_point.grad)
-                    mean_joint, covar_joint = self.compute_joint_distribution(self.manifold.take_submanifold_value(target_point, 0), self.manifold.take_submanifold_value(target_point, 1))
-                    mean_joint = -mean_joint
-                    return -float(self.compute_wolfe(mean_joint, covar_joint, t))
-            elif policy == "armijo":
-                def criterion(t):
-                    target_point = self.manifold.expmap(self.manifold_point, t*self.manifold_point.grad)
-                    mean_joint, covar_joint = self.compute_joint_distribution_first_order(self.manifold.take_submanifold_value(target_point, 0), self.manifold.take_submanifold_value(target_point, 1))
-                    mean_joint = -mean_joint
-                    return -float(self.compute_armijo(mean_joint, covar_joint, t).detach().clone().cpu())
-            self.criterion = criterion
-
-        #### Pre computation quantities for quadrature, gradient and method of lines
-        # Constant necessary to use the formulae applicable for normal distribution
+        #### Compute Quadrature
         self.covariance_gp_distr = self.gp_covariance + self.distribution.covariance_matrix
         self.constant = (self.model.covar_module.outputscale * torch.sqrt(torch.linalg.det(2*torch.pi*self.gp_covariance))).detach().clone()
         self.t_1X = self.constant * torch.exp(MultivariateNormal(loc = self.distribution.loc, covariance_matrix = self.covariance_gp_distr).log_prob(self.train_X))
@@ -1672,20 +1770,107 @@ class ProbES:
         self.mean_1 = self.mean_constant + (self.t_1X.T @ self.inverse_data_covar_y)
         self.var_1 = self.R_11 - self.t_1X.T @ self.inverse_data_covar_t1X
 
-        ## For higher order in derivation
-        Pi_1_1 = self.gp_covariance + 2*self.distribution.covariance_matrix
-        self.Pi_inv_1_1 = torch.linalg.inv(Pi_1_1)
-        self.fourth_order_Pi1_Pi1 = torch.einsum("ij,kl->ijkl", self.Pi_inv_1_1, self.Pi_inv_1_1)
+        ## Compute direction (sampled, expected , mdp ect...).
+        if self.gradient_direction == "expected":
+            m, _ = self._quadrature(self.manifold.take_submanifold_value(self.manifold_point, 0), self.manifold.take_submanifold_value(self.manifold_point, 1))
+            m.backward()
+            self.d_manifold = self.manifold_point.grad
+            self.d_mu, self.d_epsilon = self.manifold.take_submanifold_value(self.d_manifold, 0), self.manifold.take_submanifold_value(self.d_manifold, 1)
 
-        # Compute tau matrix
-        self.diff_data = (self.train_X - self.distribution.loc) # Nxd
-        self.normal_data_unsqueezed = torch.unsqueeze(self.t_1X, -1).repeat(1,self.d)
-        self.Tau_mu1 = torch.linalg.solve(self.covariance_gp_distr, self.diff_data * self.normal_data_unsqueezed, left=False)
+        elif self.gradient_direction == "sampled": ## TODO implement the sampled gradient (require running backprop on v as well)
+            raise NotImplementedError
+            m, v = self._quadrature(self.manifold.take_submanifold_value(self.manifold_point, 0), self.manifold.take_submanifold_value(self.manifold_point, 1))
+            m.backward()
+            v.backward()
+            s = torch.normal(0, 1, size=(1,), device = self.train_X.device, dtype=self.train_X.dtype)
+            self.grad_direction = self.manifold_point.grad + s
+            self.d_mu = self.manifold.take_submanifold_value(self.manifold_point.grad, 0) +s*self.manifold.take_submanifold_value(self.manifold_point.grad, 0)
+
+            self.d_epsilon = self.manifold.take_submanifold_value(self.manifold_point.grad, 1) + s*self.manifold.take_submanifold_value(self.manifold_point.grad, 1)
+        else:
+            raise NotImplementedError
         
-        self.normal_data_unsqueezed = torch.unsqueeze(self.normal_data_unsqueezed, -1).repeat(1,1,self.d)
-        self.outer_prod = torch.bmm(torch.unsqueeze(self.diff_data, -1), torch.unsqueeze(self.diff_data, 1))
-        self.outer_prod = (self.outer_prod - self.covariance_gp_distr) * self.normal_data_unsqueezed
-        self.Tau_epsilon1 = 0.5 * torch.linalg.solve(self.covariance_gp_distr, torch.linalg.solve(self.covariance_gp_distr, self.outer_prod, left=False))
+        ## Line search mehod;
+        if self.policy == "constant":
+            self.t_update = self.constant
+        elif self.policy in ["wolfe", "armijo"]:
+            ## Precompute quantities for method of lines
+            Pi_1_1 = self.gp_covariance + 2*self.distribution.covariance_matrix
+            self.Pi_inv_1_1 = torch.linalg.inv(Pi_1_1)
+            self.fourth_order_Pi1_Pi1 = torch.einsum("ij,kl->ijkl", self.Pi_inv_1_1, self.Pi_inv_1_1)
+
+            # Compute tau matrix
+            self.diff_data = (self.train_X - self.distribution.loc) # Nxd
+            self.normal_data_unsqueezed = torch.unsqueeze(self.t_1X, -1).repeat(1,self.d)
+            self.Tau_mu1 = torch.linalg.solve(self.covariance_gp_distr, self.diff_data * self.normal_data_unsqueezed, left=False)
+            
+            self.normal_data_unsqueezed = torch.unsqueeze(self.normal_data_unsqueezed, -1).repeat(1,1,self.d)
+            self.outer_prod = torch.bmm(torch.unsqueeze(self.diff_data, -1), torch.unsqueeze(self.diff_data, 1))
+            self.outer_prod = (self.outer_prod - self.covariance_gp_distr) * self.normal_data_unsqueezed
+            self.Tau_epsilon1 = 0.5 * torch.linalg.solve(self.covariance_gp_distr, torch.linalg.solve(self.covariance_gp_distr, self.outer_prod, left=False))
+            
+            self.R11_prime_epsilon = -0.5*self.R_11*self.Pi_inv_1_1
+            self.R1_prime_1_prime_mu_mu = self.Pi_inv_1_1 * self.R_11
+            self.R1_prime_1_prime_epsilon_epsilon = (self.fourth_order_Pi1_Pi1 + torch.einsum("ijkl->ikjl" ,self.fourth_order_Pi1_Pi1) + torch.einsum("ijkl->iljk" ,self.fourth_order_Pi1_Pi1)) * self.R_11
+
+            self.mean_prime_1 = (self.d_mu * (self.Tau_mu1.T @ self.inverse_data_covar_y)).sum() + (self.d_epsilon * (self.Tau_epsilon1.T @ self.inverse_data_covar_y)).sum()
+            self.cov_1_1_prime = (self.d_epsilon*self.R11_prime_epsilon).sum() - (self.d_mu * (self.Tau_mu1.T @ self.inverse_data_covar_t1X)).sum() - (self.d_epsilon * (self.Tau_epsilon1.T @ self.inverse_data_covar_t1X)).sum()
+            self.var_prime_1 = self.d_mu @ self.R1_prime_1_prime_mu_mu @ self.d_mu \
+                        + 0.25*((torch.unsqueeze(torch.unsqueeze(self.d_epsilon, -1), -1)) * self.R1_prime_1_prime_epsilon_epsilon * (torch.unsqueeze(torch.unsqueeze(self.d_epsilon, 0), 0).repeat(self.d,self.d,1,1))).sum()
+            self.t_update = minimize_scalar(self.criterion).x
+        
+        ## TODO if manifold is euclidean need to project back to semi definite matrices
+        self.manifold_point = self.manifold.expmap(self.manifold_point, self.t_update*self.manifold_point.grad)
+        mu_target, covar_target = self.manifold.take_submanifold_value(self.manifold_point, 0), self.manifold.take_submanifold_value(self.manifold_point, 1)
+        self.distribution = MultivariateNormal(mu_target, covar_target)
+
+        """
+        Check the grad of mu target
+        """
+
+        # Optimize acquistion function and get new observation.
+        self.acquisition_function = QuadratureExploration(
+                    model=self.model,
+                    distribution=self.distribution)
+        
+        new_x = self.optimize_acqf(self.acquisition_function, self.distribution)
+        new_y = self.objective(new_x).unsqueeze(-1)
+
+        # Update training points.
+        self.train_x = torch.cat([self.train_x, new_x])
+        self.train_y = torch.cat([self.train_y, new_y])
+        
+        self.list_mu.append(self.distribution.loc.detach().clone())
+        self.list_covar.append(self.distribution.covariance_matrix.detach().clone())
+
+        ## Create grads points for autodiff
+        mu, covar = self.distribution.loc, self.distribution.covariance_matrix
+        self.manifold_point = geoopt.ManifoldTensor(torch.cat((mu, covar.flatten())), manifold=self.manifold)
+        self.manifold_point.requires_grad = True
+        self.param = geoopt.ManifoldParameter(self.manifold_point)
+
+        ### Make model
+        # Model initialization and optional hyperparameter settings.
+        covar_module = ScaleKernel(
+            RBFKernel(
+                ard_num_dims=self.train_x.shape[-1],
+                batch_shape=None,
+                lengthscale_prior=GammaPrior(3.0, 6.0),
+            ),
+            batch_shape=None,
+            outputscale_prior=GammaPrior(2.0, 0.15),
+        )
+        train_y_init_standardized = standardize(self.train_y)
+        self.model = SingleTaskGP(self.train_x, train_y_init_standardized, covar_module=covar_module).to(self.train_x) ## Can input subset of the dataset
+
+        # Optionally optimize hyperparameters.
+        mll = ExactMarginalLogLikelihood(
+            self.model.likelihood, self.model
+        )
+        fit_gpytorch_mll(mll)
+        self.params_history_list.append(new_x.clone())
+        self.values_history.append(new_y.clone())
+        self.iteration += 1
 
     # The rbf kernel is not a Gaussian kernel (a multiplicative constant is missing)
     def _quadrature(self, mean, covariance):
@@ -1703,10 +1888,6 @@ class ProbES:
         return mean_1, var_1
 
     # The rbf kernel is not a Gaussian kernel (a multiplicative constant is missing)
-    def quadrature(self):
-        self.m = self.mean_1
-        self.v = self.var_1
-
     def loss_ei(self):
         mu, Epsilon = self.manifold.take_submanifold_value(self.param, 0), self.manifold.take_submanifold_value(self.param, 1)
         mean, covar = self.compute_target_distribution_zero_order(mu, Epsilon)
@@ -1741,57 +1922,6 @@ class ProbES:
         self.var_prime_1 = self.d_mu @ self.R1_prime_1_prime_mu_mu @ self.d_mu \
                     + 0.25*((torch.unsqueeze(torch.unsqueeze(self.d_epsilon, -1), -1)) * self.R1_prime_1_prime_epsilon_epsilon * (torch.unsqueeze(torch.unsqueeze(self.d_epsilon, 0), 0).repeat(self.d,self.d,1,1))).sum()
 
-    
-    def update_distribution(self):
-        if self.policy in ["wolfe", "armijo"]:
-            self.t_update = minimize_scalar(self.criterion).x
-            updated_manifold_point = self.manifold.expmap(self.manifold_point, self.t_update*self.manifold_point.grad)
-            mu_target, covar_target = self.manifold.take_submanifold_value(updated_manifold_point, 0), self.manifold.take_submanifold_value(updated_manifold_point, 1)
-            distribution = MultivariateNormal(mu_target, covar_target)
-            return distribution
-
-        ## TODO Modufy for mixture of Gaussian
-        ## TODO Check for gradient 
-        elif self.policy == "ei":
-            for _ in range(self.iteration):
-                self.optimizer.zero_grad()
-                output = self.loss_ei()
-                output.backward()
-                self.optimizer.step()
-            mu_target, covar_target = self.manifold.take_submanifold_value(self.param, 0), self.manifold.take_submanifold_value(self.param, 1)
-            return MultivariateNormal(mu_target, covar_target)
- 
-    def maximize_step(self):
-
-        if self.policy in ["wolfe", "armijo"]:
-            self.t_update = minimize_scalar(self.criterion).x
-            updated_manifold_point = self.manifold.expmap(self.manifold_point, self.t_update*self.manifold_point.grad)
-            mu_target, covar_target = self.manifold.take_submanifold_value(updated_manifold_point, 0), self.manifold.take_submanifold_value(updated_manifold_point, 1)
-            distribution = MultivariateNormal(mu_target, covar_target)
-            return distribution
-
-        ## TODO Modufy for mixture of Gaussian
-        ## TODO Check for gradient 
-        elif self.policy == "ei":
-            for _ in range(self.iteration):
-                self.optimizer.zero_grad()
-                output = self.loss_ei()
-                output.backward()
-                self.optimizer.step()
-            mu_target, covar_target = self.manifold.take_submanifold_value(self.param, 0), self.manifold.take_submanifold_value(self.param, 1)
-            return MultivariateNormal(mu_target, covar_target)
-        
-        if self.policy == "wolfe":
-            criterion = self.compute_p_wolfe
-        elif self.policy == "armijo":
-            criterion = self.compute_p_armijo
-        t_linspace = torch.linspace(0, self.t_max, self.budget + 1, dtype=self.train_X.dtype, device=self.train_X.device)[1:]
-        list_max = []
-        for t in t_linspace:
-            list_max.append(criterion(t))
-        t_tensor = torch.tensor(list_max)
-        self.t_update = t_linspace[torch.argmax(t_tensor)]
-
     def compute_armijo(self, mean_joint, covar_joint, t):
         A_transform = torch.tensor([[1, self.c1*t, -1]], dtype=self.train_X.dtype, device=self.train_X.device)
         if not isPD(covar_joint):
@@ -1825,6 +1955,22 @@ class ProbES:
         
         return bounded_bivariate_normal_integral(rho, al, torch.inf, bl, torch.inf)
     
+    def compute_p_wolfe(self, t):
+        result = self.compute_joint_distribution(t)
+        if not result:
+            return 0
+        mean_joint, covar_joint = result
+        mean_joint = -mean_joint ## wolfe is for minimization, we maximize by default
+        return self.compute_wolfe(mean_joint, covar_joint, t)
+        
+    def compute_p_armijo(self, t):
+        result = self.compute_joint_distribution_first_order(t)
+        if not result:
+            return 0
+        mean_joint, covar_joint = result
+        mean_joint = -mean_joint ## wolfe is for minimization, we maximize by default
+        return self.compute_armijo(mean_joint, covar_joint, t)
+        
     def compute_joint_distribution_zero_order(self, mu2, Epsilon2):
         """Computes the probability that step size ``t`` satisfies the adjusted
         Wolfe conditions under the current GP model."""
@@ -2045,21 +2191,17 @@ class ProbES:
                                     [cov_1_2, cov_2_1_prime, var_2, cov_2_2_prime],
                                     [cov_1_2_prime, cov_1_prime_2_prime, cov_2_2_prime, var_prime_2]], dtype=self.train_X.dtype, device=self.train_X.device)
         return mean_joint.detach(), covar_joint.detach()
-    
-    def compute_p_wolfe(self, t):
-        result = self.compute_joint_distribution(t)
-        if result:
-            mean_joint, covar_joint = result
-            mean_joint = -mean_joint ## wolfe is for minimization, we maximize by default
-            return self.compute_wolfe(mean_joint, covar_joint, t)
-        else:
-            return 0
 
-    def compute_p_armijo(self, t):
-        result = self.compute_joint_distribution_first_order(t)
-        if result:
-            mean_joint, covar_joint = result
-            mean_joint = -mean_joint ## wolfe is for minimization, we maximize by default
-            return self.compute_armijo(mean_joint, covar_joint, t)
-        else:
-            return 0.
+    def plot_synthesis(self, save_path=".", iteration=0):
+        plot_synthesis_quad(self, iteration=iteration, save_path=save_path, standardize=True)
+        
+""" ## Add normalization as algorithm parameter
+if label in ["qEI", "piqEI", "quad"]:
+    if NORMALIZE and STANDARDIZE_LABEL:
+        mll, model = initialize_model(normalize(train_x, bounds=objective.bounds), standardize(train_obj))
+    elif STANDARDIZE_LABEL:
+        mll, model = initialize_model(train_x, standardize(train_obj))
+    elif NORMALIZE:
+        mll, model = initialize_model(normalize(train_x, bounds=objective.bounds), train_obj)
+    else:
+        mll, model = initialize_model(train_x, train_obj) """

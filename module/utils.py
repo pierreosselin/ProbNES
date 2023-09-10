@@ -18,6 +18,7 @@ from botorch.utils.probability.utils import (
     phi,
 )
 from botorch.acquisition.analytic import _log_ei_helper, _ei_helper, _scaled_improvement
+from torch.distributions.multivariate_normal import MultivariateNormal
 
 from pymanopt.manifolds.manifold import Manifold
 
@@ -453,5 +454,9 @@ def EI(mean, sigma, best_f):
   u = _scaled_improvement(mean, sigma, best_f, True)
   return sigma * _ei_helper(u)
 
-class Cone(Manifold):
-   assert NotImplementedError
+def normalize_distribution(distribution, bounds):
+  mean, covar = distribution.loc.clone(), distribution.covariance_matrix.clone()
+  diff = 1/(torch.tensor([[-1., 1.]]).to(bounds) @ bounds).flatten()
+  A, b = torch.diag(diff), -bounds[0]*diff
+  mean, covar = A @ mean + b, A @ covar @ A.T
+  return MultivariateNormal(mean, covar)

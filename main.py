@@ -16,14 +16,14 @@ def create_path_exp(save_path, problem_name, problem_kwargs):
 
 def create_path_alg(save_path, algorithm_name, alg_kwargs):
     if algorithm_name == "quad":  #["quad", "SNES", "random", "qEI", "piqEI"]
-        s = "_".join([f'policy-{alg_kwargs[algorithm_name]["policy"]}', f'gradient-{alg_kwargs[algorithm_name]["gradient_direction"]}', f'manifold-{alg_kwargs[algorithm_name]["manifold"]}', f'var_prior-{alg_kwargs[algorithm_name]["var_prior"]}'])
+        s = "_".join([f'line_search-{alg_kwargs[algorithm_name]["line_search"]}', f'gradient-{alg_kwargs[algorithm_name]["gradient_direction"]}', f'manifold-{alg_kwargs[algorithm_name]["manifold"]}', f'var_prior-{alg_kwargs[algorithm_name]["var_prior"]}', f'batch_size-{alg_kwargs["batch_size"]}'])
     elif algorithm_name == "SNES":
-        s = "_".join([f'var_prior-{alg_kwargs[algorithm_name]["var_prior"]}'])
+        s = "_".join([f'var_prior-{alg_kwargs[algorithm_name]["var_prior"]}', f'batch_size-{alg_kwargs["batch_size"]}'])
     elif algorithm_name == "qEI":
-        s = "_".join(['qEI'])
+        s = "_".join([f'batch_size-{alg_kwargs["batch_size"]}'])
     elif algorithm_name == "piqEI":
-        s = "_".join([f'beta-{alg_kwargs[algorithm_name]["beta"]}', f'var_prior-{alg_kwargs[algorithm_name]["var_prior"]}']) 
-    save_path = os.path.join(save_dir, s)
+        s = "_".join([f'beta-{alg_kwargs[algorithm_name]["beta"]}', f'var_prior-{alg_kwargs[algorithm_name]["var_prior"]}', f'batch_size-{alg_kwargs["batch_size"]}']) 
+    save_path = os.path.join(save_path, s)
     return save_path
 
 if __name__ == "__main__":
@@ -68,111 +68,82 @@ if __name__ == "__main__":
             list_values.append(value)
     
     if type(alg_kwargs["algorithm"]) == list:
-        dict_keys_algo = {}
-        for algo in alg_kwargs["algorithm"]:
-            list_keys_algo, list_values_algo = [], []
-            for key, value in alg_kwargs[algo].items():
-                if type(value) == list:
-                    list_keys_algo.append(key)
-                    list_values_algo.append(value)
-            dict_keys_algo[algo] = tuple([list_keys_algo, list_values_algo])
+        list_algos = alg_kwargs["algorithm"]
+    else:
+        list_algos = [alg_kwargs["algorithm"]]
+    
+    dict_keys_algo = {}
+    for algo in list_algos:
+        list_keys_algo, list_values_algo = [], []
+        for key, value in alg_kwargs[algo].items():
+            if type(value) == list:
+                list_keys_algo.append(key)
+                list_values_algo.append(value)
+        dict_keys_algo[algo] = tuple([list_keys_algo, list_values_algo])
 
-    if len(list_values) > 0:
-        for t in product(*list_values): ## For loop on experiment problem parameters and algorithms
-            for i, el in enumerate(t):
-                type_param, key = list_keys[i]
-                if type_param == "pb":
-                    problem_kwargs[key] = el
-                elif type_param == "alg":
-                    alg_kwargs[key] = el
-                elif type_param == "exp":
-                    exp_kwargs[key] = el
-            
-            ## Loop on algorithm configurations
-            list_keys_algo, list_values_algo = dict_keys_algo[alg_kwargs["algorithm"]]
-            for t_algo in product(*list_values_algo):
-                for i, el in enumerate(t_algo):
-                    alg_kwargs[alg_kwargs["algorithm"]][list_keys_algo[i]] = el
+    for t in product(*list_values): ## For loop on experiment problem parameters and algorithms
+        for i, el in enumerate(t):
+            type_param, key = list_keys[i]
+            if type_param == "pb":
+                problem_kwargs[key] = el
+            elif type_param == "alg":
+                alg_kwargs[key] = el
+            elif type_param == "exp":
+                exp_kwargs[key] = el
+        
+        ## Loop on algorithm configurations
+        list_keys_algo, list_values_algo = dict_keys_algo[alg_kwargs["algorithm"]]
+        for t_algo in product(*list_values_algo):
+            for i, el in enumerate(t_algo):
+                alg_kwargs[alg_kwargs["algorithm"]][list_keys_algo[i]] = el
 
-                exp_path = create_path_exp(save_dir, problem_name, problem_kwargs)
-                #### Build new save dir for problem
+            exp_path = create_path_exp(save_dir, problem_name, problem_kwargs)
+            #### Build new save dir for problem
 
-                if not os.path.exists(exp_path):
-                    os.makedirs(exp_path)
-                    print("Processing", exp_path, "...")
+            if not os.path.exists(exp_path):
+                os.makedirs(exp_path)
 
-                algo = alg_kwargs["algorithm"]
-                algo_path = os.path.join(exp_path, algo)
-                if not os.path.exists(algo_path):
-                    os.makedirs(algo_path)
+            algo = alg_kwargs["algorithm"]
+            algo_path = os.path.join(exp_path, algo)
+            if not os.path.exists(algo_path):
+                os.makedirs(algo_path)
 
-                alg_path = create_path_alg(algo_path, algo, alg_kwargs)
-                if not os.path.exists(alg_path):
-                    os.makedirs(alg_path)
-                    print("Processing", alg_path, "...")
-                else:
-                    if OVERWRITE == False:
-                        print(alg_path + "found without overwriting, next config...")
-                        continue
-                
-                for seed in range(exp_kwargs["n_exp"]):
-                    """ To uncomment later when debug no longer needed
-                    try:
-                        algo = alg_kwargs["algorithm"]
-                        save_path = os.path.join(save_dir, algo)
-                        if not os.path.exists(save_path):
-                            os.makedirs(save_path)
-                        initial_seed = config["seed"]
-                        run(save_path=save_path,
-                            problem_name=problem_name,
-                            seed = initial_seed + seed,
-                            exp_kwargs=exp_kwargs,
-                            alg_kwargs=alg_kwargs,
-                            problem_kwargs=problem_kwargs,
-                            )
-                    except:
-                        print(f"Run failed at parameters {t}, proceeding to the next parameters...")
-                        continue
-                    """
+            alg_path = create_path_alg(algo_path, algo, alg_kwargs)
+            if not os.path.exists(alg_path):
+                os.makedirs(alg_path)
+            else:
+                if OVERWRITE == False:
+                    print(alg_path + "found without overwriting, next config...")
+                    continue
+            print("Processing", alg_path, "...")
+            for seed in range(exp_kwargs["n_exp"]):
+                """ To uncomment later when debug no longer needed
+                try:
+                    algo = alg_kwargs["algorithm"]
+                    save_path = os.path.join(save_dir, algo)
+                    if not os.path.exists(save_path):
+                        os.makedirs(save_path)
                     initial_seed = config["seed"]
-                    run(save_path=alg_path,
+                    run(save_path=save_path,
                         problem_name=problem_name,
-                        seed=initial_seed + seed,
-                        verbose_synthesis=verbose_synthesis,
+                        seed = initial_seed + seed,
                         exp_kwargs=exp_kwargs,
                         alg_kwargs=alg_kwargs,
                         problem_kwargs=problem_kwargs,
                         )
-    else: ## Correct here for also algorithm list config, not taken into account (error if one config everywhere except algorithm config)
-        exp_path = create_path_exp(save_dir, problem_name, problem_kwargs)
-
-        if not os.path.exists(exp_path):
-            os.makedirs(exp_path)
-            print("Processing", exp_path, "...")
-
-        algo = alg_kwargs["algorithm"]
-        algo_path = os.path.join(exp_path, algo)
-        if not os.path.exists(algo_path):
-            os.makedirs(algo_path)
-
-        alg_path = create_path_alg(algo_path, algo, alg_kwargs)
-        
-        if not os.path.exists(alg_path):
-            os.makedirs(alg_path)
-            print("Processing", alg_path, "...")
-        else:
-            if OVERWRITE == False:
-                print(alg_path + "found without overwriting, next config...")
-        for seed in range(exp_kwargs["n_exp"]):    
-            initial_seed = config["seed"]
-            run(save_path=alg_path,
-                problem_name=problem_name,
-                seed = initial_seed + seed,
-                verbose_synthesis=verbose_synthesis,
-                exp_kwargs=exp_kwargs,
-                alg_kwargs=alg_kwargs,
-                problem_kwargs=problem_kwargs,
-                )
+                except:
+                    print(f"Run failed at parameters {t}, proceeding to the next parameters...")
+                    continue
+                """
+                initial_seed = config["seed"]
+                run(save_path=alg_path,
+                    problem_name=problem_name,
+                    seed=initial_seed + seed,
+                    verbose_synthesis=verbose_synthesis,
+                    exp_kwargs=exp_kwargs,
+                    alg_kwargs=alg_kwargs,
+                    problem_kwargs=problem_kwargs,
+                    )
     
     plot_figure(save_dir)
     plot_figure(save_dir, log_transform=True)

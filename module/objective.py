@@ -6,22 +6,13 @@ from botorch.test_functions.synthetic import Ackley, Rosenbrock, Rastrigin
 from .utils import Sphere
 import gpytorch
 
-# We will use the simplest form of GP model, exact inference
-class ExactGPModel(gpytorch.models.ExactGP):
-    def __init__(self, train_x, train_y, likelihood):
-        super(ExactGPModel, self).__init__(train_x, train_y, likelihood)
-        self.mean_module = gpytorch.means.ConstantMean()
-        self.covar_module = gpytorch.kernels.ScaleKernel(gpytorch.kernels.RBFKernel())
-
-    def forward(self, x):
-        mean_x = self.mean_module(x)
-        covar_x = self.covar_module(x)
-        return gpytorch.distributions.MultivariateNormal(mean_x, covar_x)
-
 class Objective:
     def __init__(self,
                  obj_func: Callable,
                  dim: int,
+                 device: Any,
+                 dtype: Any,
+                 bounds: torch.Tensor,
                  noise_std: Optional[float] = None,
                  best_value: Optional[float] = None,
                  negate: bool = False):
@@ -30,6 +21,9 @@ class Objective:
         self.best_value = best_value
         self.negate = negate
         self.dim = dim
+        self.device = device
+        self.dtype = dtype
+        self.bounds = bounds
 
     @torch.no_grad()
     def evaluate_true(self, X):
@@ -59,27 +53,31 @@ class Objective:
     
 def get_objective(
         label: str,
-        **problem_kwargs,
+        device: Any,
+        dtype: Any,
+        problem_kwargs: Dict,
 ) -> Objective:
     problem_kwargs = problem_kwargs or {}
     if label == "test_function":
         test_function = problem_kwargs.get("function", "rosenbrock")
         dim = problem_kwargs.get("dim", 2)
         noise_std = problem_kwargs.get("noise_std", 0.)
+        initial_bounds = problem_kwargs.get("initial_bounds", 1.)
+        bounds = torch.tensor([[-initial_bounds] * dim, [initial_bounds] * dim], device=device, dtype=dtype)
         if test_function == "rosenbrock":
-            obj = Objective(obj_func=Rosenbrock(dim), dim=dim, noise_std=noise_std, best_value=0., negate=True)
+            obj = Objective(obj_func=Rosenbrock(dim), dim=dim, device=device, dtype=dtype, bounds=bounds, noise_std=noise_std, best_value=0., negate=True)
         elif test_function == "ackley":
-            obj = Objective(obj_func=Ackley(dim), dim=dim, noise_std=noise_std, best_value=0., negate=True)
+            obj = Objective(obj_func=Ackley(dim), dim=dim, device=device, dtype=dtype, bounds=bounds, noise_std=noise_std, best_value=0., negate=True)
         elif test_function == "rastrigin":
-            obj = Objective(obj_func=Rastrigin(dim), dim=dim, noise_std=noise_std, best_value=0., negate=True)
+            obj = Objective(obj_func=Rastrigin(dim), dim=dim, device=device, dtype=dtype, bounds=bounds, noise_std=noise_std, best_value=0., negate=True)
         elif test_function == "sphere":
-            obj = Objective(obj_func=Sphere(dim), dim=dim, noise_std=noise_std, best_value=0., negate=True)
+            obj = Objective(obj_func=Sphere(dim), dim=dim, device=device, dtype=dtype, bounds=bounds, noise_std=noise_std, best_value=0., negate=True)
         elif test_function == "function_1":
             obj_function = lambda x: torch.sin(x - 4.) + torch.sin((10./3.)*(x - 4.))
-            obj = Objective(obj_func=obj_function, dim=1, noise_std=noise_std, best_value=0., negate=True)
+            obj = Objective(obj_func=obj_function, dim=1, device=device, dtype=dtype, bounds=bounds, noise_std=noise_std, best_value=0., negate=True)
         elif test_function == "mountains":
             obj_function = lambda x: torch.flatten(5*torch.exp(-2*(x - 1)**2) + 5*torch.exp(-2*(x + 1)**2))
-            obj = Objective(obj_func=obj_function, dim=1, noise_std=noise_std, best_value=5., negate=False)
+            obj = Objective(obj_func=obj_function, dim=1, device=device, dtype=dtype, bounds=bounds, noise_std=noise_std, best_value=5., negate=False)
         else:
             raise NotImplementedError(f"Function {test_function} is not implemented")
     
@@ -94,7 +92,7 @@ def get_objective(
         n = train_x.shape[0]
         noises = torch.ones(n, dtype=dtype, device=device) * 1e-5
         likelihood = gpytorch.likelihoods.FixedNoiseGaussianLikelihood(noise=noises)
-        model = ExactGPModel(train_x, train_y, likelihood=likelihood)  # Create a new GP model
+        #model = ExactGPModel(train_x, train_y, likelihood=likelihood)  # Create a new GP model
         model.load_state_dict(state_dict)
         model = model.to(dtype=dtype, device=device)
         target_value = train_y.cpu().max()

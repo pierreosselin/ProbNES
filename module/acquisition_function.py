@@ -24,7 +24,6 @@ from gpytorch.kernels import RBFKernel
 from gpytorch.kernels.scale_kernel import ScaleKernel
 from gpytorch.priors.torch_priors import GammaPrior
 
-
 class GradientInformation(botorch.acquisition.AnalyticAcquisitionFunction):
     """Acquisition function to sample points for gradient information.
 
@@ -123,7 +122,6 @@ class GradientInformation(botorch.acquisition.AnalyticAcquisitionFunction):
             variances.append(torch.trace(variance_d.view(D, D)).view(1))
 
         return -torch.cat(variances, dim=0)
-
 
 class DownhillQuadratic(GradientInformation):
     def update_theta_i(self, theta_i: torch.Tensor):
@@ -308,13 +306,12 @@ class DownhillQuadratic(GradientInformation):
 
         return results
 
-
 class piqExpectedImprovement(qExpectedImprovement):
     def __init__(
         self,
         model: Model,
         best_f: Union[float, Tensor],
-        pi_distrib: Distribution,
+        pi_distrib: torch.distributions.Distribution,
         n_iter: int,
         beta: float,
         sampler: Optional[MCSampler] = None,
@@ -361,70 +358,43 @@ class piqExpectedImprovement(qExpectedImprovement):
         q_ei = obj.max(dim=-1)[0].mean(dim=0)
         pi_X = (self.beta / self.n_iter)*self.pi_dist.log_prob(X).sum(axis = 1)
         return q_ei * torch.exp(pi_X)
-    
-
-
-def optimize_acqf_custom_bo(
-    acq_func: botorch.acquisition.AcquisitionFunction,
-    bounds: torch.Tensor,
-    q: int,
-    num_restarts: int,
-    raw_samples: int,
-) -> Tuple[torch.Tensor, torch.Tensor]:
-    """Function to optimize the GradientInformation acquisition function for custom Bayesian optimization.
-
-    Args:
-        acq_function: An AcquisitionFunction.
-        bounds: A 2 x D tensor of lower and upper bounds for each column of X.
-        q: The number of candidates.
-        num_restarts: The number of starting points for multistart acquisition function optimization.
-        raw_samples: The number of samples for initialization.
-
-    Returns:
-        A two-element tuple containing:
-            - a q x D-dim tensor of generated candidates.
-            - a tensor of associated acquisition values.
+        
+class QuadratureExploration(botorch.acquisition.AnalyticAcquisitionFunction):
+    r"""Single-outcome Quadrature bRT.
+    Quadrature variance minimization acquisitiion function
     """
-    candidates, acq_value = botorch.optim.optimize_acqf(
-        acq_function=acq_func,
-        bounds=bounds,
-        q=q,  # Analytic acquisition function.
-        num_restarts=num_restarts,
-        raw_samples=raw_samples,  # Used for initialization heuristic.
-        options={"nonnegative": True, "batch_limit": 5},
-        return_best_only=True,
-        sequential=False,
-    )
-    # Observe new values.
-    new_x = candidates.detach()
-    return new_x, acq_value
+    def __init__(
+        self,
+        model: Model,
+        distribution: torch.distributions.MultivariateNormal,
+        posterior_transform: Optional[PosteriorTransform] = None,
+        **kwargs,
+    ):
+        r"""Single-outcome Quadrature bRT.
+        Args:
+            model: A fitted single-outcome model.
+            distribution: A fitted single-outcome model.
+            posterior_transform: A PosteriorTransform. If using a multi-output model,
+                a PosteriorTransform that transforms the multi-output posterior into a
+                single-output posterior is required.
+        """
+        super().__init__(model=model, posterior_transform=posterior_transform, **kwargs)
+        self.distribution=distribution
+        self.train_X = self.model.train_inputs[0]
+        self.gp_covariance = (torch.diag(self.model.covar_module.base_kernel.lengthscale[0].detach().clone()))**2
+        self.constant = self.model.covar_module.outputscale * torch.sqrt(torch.linalg.det(2*torch.pi*self.gp_covariance))
 
-
-def optimize_acqf_vanilla_bo(
-    acq_func: botorch.acquisition.AcquisitionFunction, bounds: torch.Tensor
-) -> torch.Tensor:
-    """Function to optimize the acquisition function for vanilla Bayesian optimization.
-
-    For instance for expected improvement (botorch.acquisition.analytic.ExpectedImprovement).
-
-    Args:
-        acq_function: An AcquisitionFunction.
-        bounds: A 2 x D tensor of lower and upper bounds for each column of X.
-
-    Returns:
-        A q x D-dim tensor of generated candidates.
-    """
-    candidates, _ = botorch.optim.optimize_acqf(
-        acq_function=acq_func,
-        bounds=bounds,
-        q=1,  # Analytic acquisition function.
-        num_restarts=5,
-        raw_samples=64,  # Used for initialization heuristic.
-        options={},
-    )
-    # Observe new values.
-    new_x = candidates.detach()
-    return new_x
+    @t_batch_mode_transform()
+    def forward(self, X: Tensor) -> Tensor:
+        r"""Evaluate the Exploration Quadrature value
+        """
+        batch_size = X.shape[0]
+        train_X_batch = torch.unsqueeze(self.train_X, 0).repeat(batch_size, 1, 1)
+        X_full = torch.cat((train_X_batch, X), dim= 1)
+        noise_tensor = self.model.likelihood.noise.detach().clone() * torch.eye(X[0].shape[0] + self.train_X.shape[0], dtype=X.dtype, device=X.device)
+        t_X = self.constant * torch.exp(torch.distributions.MultivariateNormal(loc = self.distribution.loc, covariance_matrix = self.distribution.covariance_matrix + self.gp_covariance).log_prob(X_full))
+        v = torch.linalg.solve((self.model.covar_module(X_full) + noise_tensor).evaluate(), t_X)
+        return (v * t_X).sum(dim=-1)
 
 def initialize_model(train_x, train_obj, label, state_dict=None):
     # define models for objective and constraint
@@ -448,50 +418,40 @@ def initialize_model(train_x, train_obj, label, state_dict=None):
         model_obj.load_state_dict(state_dict)
     return mll, model_obj
 
-def optimize_acqf_and_get_observation(acq_func):
-    """Optimizes the acquisition function, and returns a new candidate and a noisy observation."""
-    # optimize
-    if NORMALIZE:
-        bounds=torch.stack(
-            [
-                torch.zeros(problem.dim, dtype=dtype, device=device),
-                torch.ones(problem.dim, dtype=dtype, device=device),
-            ])
+def initialize_acqf_optimizer(random = False, **kwargs):
+    """Acquisition function initializer"""
+
+    def optimize_acqfunction(acq_func):
+        """Optimizes the acquisition function, and returns a new candidate."""
+        # optimize
+
+        candidates, _ = optimize_acqf(
+            acq_function=acq_func,
+            bounds=bounds,
+            q=BATCH_SIZE,
+            num_restarts=NUM_RESTARTS,
+            raw_samples=RAW_SAMPLES,  # used for intialization heuristic
+            options={"batch_limit": ACQUISITION_BATCH_OPTIMIZATION, "maxiter": maxiter},
+        )
+        return candidates
+    
+    def optimize_acqfunction_random(acq_func, dist):
+        """Optimizes the acquisition function via random sampling, and returns a new candidate."""
+        # optimize
+        candidates = dist.sample(torch.tensor([CANDIDATES_VR, BATCH_SIZE])).to(device = dist.loc.device, dtype = dist.loc.dtype)
+        res = acq_func(candidates)
+        new_x = candidates[torch.argmax(res)]
+        return new_x
+    
+    if random:
+        CANDIDATES_VR = kwargs.get("candidates_vr", 5000)
+        BATCH_SIZE = kwargs.get("batch_size", 1)
+        return optimize_acqfunction_random
     else:
-        bounds=problem.bounds
-
-    candidates, _ = optimize_acqf(
-        acq_function=acq_func,
-        bounds=bounds,
-        q=BATCH_SIZE,
-        num_restarts=NUM_RESTARTS,
-        raw_samples=RAW_SAMPLES,  # used for intialization heuristic
-        options={"batch_limit": ACQUISITION_BATCH_OPTIMIZATION, "maxiter": 200},
-    )
-    # observe new values 
-    if NORMALIZE:
-        new_x = unnormalize(candidates.detach(), bounds=problem.bounds)
-    else:
-        new_x = candidates
-    exact_obj = objective(new_x).unsqueeze(-1) # add output dimension
-    new_obj = exact_obj
-    return new_x, new_obj
-
-def optimize_acqf_and_get_observation_random(acq_func, dist):
-    """Optimizes the acquisition function, and returns a new candidate and a noisy observation."""
-    # optimize
-    candidates = dist.sample(torch.tensor([CANDIDATES_VR, BATCH_SIZE])).to(device = problem.device, dtype = problem.dtype)
-    res = acq_func(candidates)
-    new_x = candidates[torch.argmax(res)]
-
-    exact_obj = objective(new_x).unsqueeze(-1) # add output dimension
-    new_obj = exact_obj
-    return new_x, new_obj
-
-def update_random_observations():
-    """Simulates a random policy by taking a the current list of best values observed randomly,
-    drawing a new random point, observing its value, and updating the list.
-    """
-    rand_x = unnormalize(torch.rand(BATCH_SIZE, problem.dim, device=device, dtype=dtype), bounds=problem.bounds)
-    rand_y = objective(rand_x).unsqueeze(-1)
-    return rand_x, rand_y
+        bounds = kwargs.get("bounds", None)
+        BATCH_SIZE = kwargs.get("batch_size", 1)
+        NUM_RESTARTS = kwargs.get("num_restarts", 10)
+        RAW_SAMPLES = kwargs.get("raw_samples", 512)
+        ACQUISITION_BATCH_OPTIMIZATION = kwargs.get("batch_acq", 5)
+        maxiter = kwargs.get("maxiter", 200)
+        return optimize_acqfunction
