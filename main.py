@@ -47,8 +47,8 @@ if __name__ == "__main__":
     alg_kwargs = config["alg_settings"]
     gpu_label = config["gpu"]
     verbose_synthesis = config["verbose_synthesis"]
-    if gpu_label != 'cpu':
-        torch.set_default_device('cuda:'+str(gpu_label))
+    #if gpu_label != 'cpu':
+    #    torch.set_default_device('cuda:'+str(gpu_label))
 
     ### Make lists for multiple experiments
     list_keys, list_values = [], []

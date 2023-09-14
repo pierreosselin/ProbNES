@@ -22,18 +22,52 @@ import geoopt
 
 """
 Scripts to produce plots from the files contained in path
+Refactor in the following manner:
+- have a function for:
+    - plotting gp fit
+    - plotting distribution (1D and 2D ellipse)
+    - plot data
+
 """ 
 
-
-def posterior_quad(model, theta, var):
-    mean_distrib_test, var_distrib_test = torch.tensor([theta], dtype=torch.float64, device=model.train_inputs[0].device), torch.diag(torch.tensor([var], dtype=torch.float64, device=model.train_inputs[0].device))
-    quad_distrib_test = MultivariateNormal(mean_distrib_test, var_distrib_test)
-    quad_test = Quadrature(model=model,
-            distribution=quad_distrib_test)
+def plot_gp_fit(ax, model, train_X, targets, obj, batch, normalize_flag=False):
+    """Plot the gp fit, normalize parameter in case of input normalization"""
+    bounds = obj.bounds
+    lb, up = float(bounds[0][0]), float(bounds[1][0])
     
-    quad_test.quadrature()
-    return quad_test.m.detach().clone(), quad_test.v.detach().clone()
+    model.eval()
+    model.likelihood.eval()
 
+    test_x_unormalized = torch.linspace(lb, up, 200, device=train_X.device, dtype=train_X.dtype)
+    if normalize_flag:
+        test_x = normalize(test_x_unormalized, bounds=bounds)
+    else:
+        test_x = test_x_unormalized
+    
+    with torch.no_grad():
+        # Make predictions
+        predictions = model.likelihood(model(test_x))
+        lower, upper = predictions.confidence_region()
+    
+    _, mean_Y, std_Y = standardize_return(targets)
+    lower, upper = lower*float(std_Y) + float(mean_Y), upper*float(std_Y) + float(mean_Y)
+    value_ = (obj(test_x_unormalized.unsqueeze(-1))).flatten()
+
+    ax.scatter(train_X.cpu().numpy(), targets.cpu().numpy(), color='black', label='Training data')
+    ax.scatter(train_X.cpu().numpy()[(-batch):], targets.cpu().numpy()[(-batch):], color='red', label='Last selected points')
+    ax.plot(test_x_unormalized.cpu().numpy(), predictions.mean.cpu().numpy()*float(std_Y) + float(mean_Y), color='blue', label='Predictive mean')
+    ax.plot(test_x_unormalized.cpu().numpy(), value_.cpu().numpy(), color='green', label='True Function')
+    ax.fill_between(test_x_unormalized.cpu().numpy(), lower.cpu().numpy(), upper.cpu().numpy(), color='lightblue', alpha=0.5, label='Confidence region')
+    ax.set_xlabel('x')
+    ax.set_ylabel('y')
+    ax.set_title('Gaussian Process Regression')
+    ax.legend()
+
+def plot_distribution_1D(ax, distribution):
+    x = np.linspace((distribution.loc - 3*distribution.covariance_matrix).cpu().detach().numpy(), (distribution.loc + 3*distribution.covariance_matrix).cpu().detach().numpy(), 100).flatten()
+    y_lim = ax.get_ylim()
+    ax.plot(x, (y_lim[1] - y_lim[0])*stats.norm.pdf(x, distribution.loc.cpu().detach().numpy(), distribution.covariance_matrix.cpu().detach().numpy()).flatten(), "k")
+    
 def plot_synthesis_quad(optimizer, iteration, save_path=".", standardize=True):
     iteration = optimizer.iteration
     save_path = optimizer.plot_path
@@ -58,14 +92,21 @@ def plot_synthesis_quad(optimizer, iteration, save_path=".", standardize=True):
     std = torch.sqrt(torch.tensor(result)).cpu().numpy()[:,1].reshape(m,n)
     ei = torch.tensor(result_ei).cpu().numpy().reshape(m,n)
     ei_bivariate = torch.tensor(result_bivariate_ei).cpu().numpy().reshape(m,n)
+    fig, axs = plt.subplots(2, 3, figsize=(22, 12))
 
-    t_linspace = torch.linspace(0., optimizer.t_max, optimizer.budget + 1, dtype=optimizer.train_x.dtype)[1:]
-    result_wolfe, result_armijo = [], []
-    for t in t_linspace:
-        result_wolfe.append(optimizer.wolfe_criterion(t))
-        result_armijo.append(optimizer.armijo_criterion(t))
-    wolfe_tensor = torch.tensor(result_wolfe).cpu().numpy()
-    armijo_tensor = torch.tensor(result_armijo).cpu().numpy()
+    if optimizer.policy in ["wolfe", "armijo"]:
+        t_linspace = torch.linspace(0., optimizer.t_max, optimizer.budget + 1, dtype=optimizer.train_x.dtype)[1:]
+        result_wolfe, result_armijo = [], []
+        for t in t_linspace:
+            result_wolfe.append(optimizer.wolfe_criterion(t))
+            result_armijo.append(optimizer.armijo_criterion(t))
+        wolfe_tensor = torch.tensor(result_wolfe).cpu().numpy()
+        armijo_tensor = torch.tensor(result_armijo).cpu().numpy()
+
+        axs[1,0].plot(t_linspace.cpu().numpy(), wolfe_tensor, color='blue', label = "Probability Wolfe condition")
+        axs[1,0].plot(t_linspace.cpu().numpy(), armijo_tensor, color='red', label = "Probability Armijo condition")
+        axs[1,0].set_title("Probabilistic conditions line search")
+        axs[1,0].legend()
 
     ## Compute gradients at multiple places
     b_grad = np.arange(float(bounds[0][0]), float(bounds[1][0]), 1)
@@ -90,9 +131,10 @@ def plot_synthesis_quad(optimizer, iteration, save_path=".", standardize=True):
         result_grad.append([mu_grad, epsilon_grad])
         
     fig, axs = plt.subplots(2, 3, figsize=(22, 12))
-
-
-    plot_GP_fit_ax(axs[0,0], optimizer.model, optimizer.distribution, optimizer.train_y, optimizer.objective, optimizer.batch_size, standardize=standardize, lb=float(bounds[0][0]), up=float(bounds[1][0]))
+    lb, up = float(bounds[0][0]), float(bounds[1][0])
+    axs[0,0].set_xlim(lb, up)
+    plot_gp_fit(axs[0,0], optimizer.model, optimizer.train_x, optimizer.train_y, optimizer.objective, optimizer.batch_size, normalize_flag=False)
+    plot_distribution_1D(axs[0,0], optimizer.distribution)
 
     contour1 = axs[0,1].contourf(B, D, mean)
     # Gradient
@@ -118,10 +160,6 @@ def plot_synthesis_quad(optimizer, iteration, save_path=".", standardize=True):
     axs[1,2].set_ylabel('$\sigma^{2}$')
     axs[1,2].set_title("Bivariate Expected improvement")
 
-    axs[1,0].plot(t_linspace.cpu().numpy(), wolfe_tensor, color='blue', label = "Probability Wolfe condition")
-    axs[1,0].plot(t_linspace.cpu().numpy(), armijo_tensor, color='red', label = "Probability Armijo condition")
-    axs[1,0].set_title("Probabilistic conditions line search")
-    axs[1,0].legend()
     axs[1,1].scatter([float(optimizer.distribution.loc)], [float(optimizer.distribution.covariance_matrix)])
     
     ### Plot update rather than assuming wolfe
@@ -134,71 +172,6 @@ def plot_synthesis_quad(optimizer, iteration, save_path=".", standardize=True):
     fig.colorbar(contour3, ax=axs[1,1])
     fig.colorbar(contour5, ax=axs[1,2])
     fig.savefig(save_path_gp)
-
-def plot_GP_fit(model, likelihood, train_X, targets, obj, bounds, save_path=".", iteration=1):
-    """ Plot the figures corresponding to the Gaussian process fit
-    """
-    lb, up = float(bounds[0].cpu()), float(bounds[1].cpu())
-    fig, ax = plt.subplots()
-    save_path_gp = os.path.join(save_path, f"{iteration}.png")
-    model.eval()
-    likelihood.eval()
-    test_x = torch.linspace(lb, up, 200, device=train_X.device, dtype=train_X.dtype)
-    test_x_normalised = normalize(test_x, bounds=bounds)
-    with torch.no_grad():
-        # Make predictions
-        predictions = likelihood(model(test_x_normalised))
-        lower, upper = predictions.confidence_region()
-    
-    value_ = obj(test_x.unsqueeze(-1)).flatten()
-    _, Y_mean, Y_std = standardize_return(targets)
-    Y_mean, Y_std = Y_mean.squeeze(0), Y_std.squeeze(0)
-    lower, upper = Y_std*lower + Y_mean, Y_std*upper + Y_mean
-
-    ax.scatter(train_X.cpu().numpy(), targets.cpu().numpy(), color='black', label='Training data')
-    ax.plot(test_x.cpu().numpy(), (Y_std*predictions.mean + Y_mean).cpu().numpy(), color='blue', label='Predictive mean')
-    ax.plot(test_x.cpu().numpy(), value_.cpu().numpy(), color='green', label='True Function')
-    ax.fill_between(test_x.cpu().numpy(), lower.cpu().numpy(), upper.cpu().numpy(), color='lightblue', alpha=0.5, label='Confidence region')
-    ax.set_xlabel('x')
-    ax.set_ylabel('y')
-    ax.set_title('Gaussian Process Regression')
-    ax.legend()
-    fig.savefig(save_path_gp)
-
-def plot_GP_fit_ax(ax, model, distribution, train_y, obj, batch, standardize=False, lb=-10., up=10.):
-    """ Plot the figures corresponding to the Gaussian process fit
-    """
-
-    train_X, targets = model.train_inputs[0], model.train_targets
-    model.eval()
-    model.likelihood.eval()
-    test_x = torch.linspace(lb, up, 200, device=train_X.device, dtype=train_X.dtype)
-    with torch.no_grad():
-        # Make predictions
-        predictions = model.likelihood(model(test_x))
-        lower, upper = predictions.confidence_region()
-    
-    if standardize:
-        _, mean_Y, std_Y = standardize_return(train_y)
-        predictions = predictions*float(std_Y) + float(mean_Y)
-        lower, upper = lower*float(std_Y) + float(mean_Y), upper*float(std_Y) + float(mean_Y)
-        targets = targets*float(std_Y) + float(mean_Y)
-    value_ = (obj(test_x.unsqueeze(-1))).flatten()
-
-    ax.scatter(train_X.cpu().numpy(), targets.cpu().numpy(), color='black', label='Training data')
-    ax.scatter(train_X.cpu().numpy()[(-batch):], targets.cpu().numpy()[(-batch):], color='red', label='Last selected points')
-    ax.plot(test_x.cpu().numpy(), predictions.mean.cpu().numpy(), color='blue', label='Predictive mean')
-    ax.plot(test_x.cpu().numpy(), value_.cpu().numpy(), color='green', label='True Function')
-    ax.fill_between(test_x.cpu().numpy(), lower.cpu().numpy(), upper.cpu().numpy(), color='lightblue', alpha=0.5, label='Confidence region')
-    
-    x = np.linspace((distribution.loc - 3*distribution.covariance_matrix).cpu().detach().numpy(), (distribution.loc + 3*distribution.covariance_matrix).cpu().detach().numpy(), 100).flatten()
-    y_lim = ax.get_ylim()
-    ax.plot(x, (y_lim[1] - y_lim[0])*stats.norm.pdf(x, distribution.loc.cpu().detach().numpy(), distribution.covariance_matrix.cpu().detach().numpy()).flatten(), "k")
-    
-    ax.set_xlabel('x')
-    ax.set_ylabel('y')
-    ax.set_title('Gaussian Process Regression')
-    ax.legend()
 
 def plot_cov_ellipse(cov, pos, nstd=2, ax=None, **kwargs):
     """
@@ -239,10 +212,8 @@ def plot_cov_ellipse(cov, pos, nstd=2, ax=None, **kwargs):
     ax.add_artist(ellip)
     return ellip
 
-
 def ci(y, N_TRIALS):
     return 1.96 * y.std(axis=0) / np.sqrt(N_TRIALS)
-
 
 def plot_figure_algo(alg_dir, ax):
     data_path_seeds = [f for f in os.listdir(alg_dir) if ".pt" in f]
@@ -348,7 +319,6 @@ def distribution_gif_2D(algo_path, objective, seed, data, ax):
             images.append(imageio.imread(os.path.join(plot_path, f"plot{i}.png")))
     imageio.mimsave(os.path.join(algo_path, f"gif{seed}.gif"), images)
 
-
 def distribution_gif_1D(algo_path, objective, seed, data, ax):
     X = data["X"]
     label = data["label"]
@@ -385,7 +355,6 @@ def distribution_gif_1D(algo_path, objective, seed, data, ax):
         if ((i+1) % 5) == 0:
             images.append(imageio.imread(os.path.join(plot_path, f"plot{i}.png")))
     imageio.mimsave(os.path.join(algo_path, f"gif{seed}.gif"), images)
-
 
 def plot_distribution_gif(config, n_seeds=1):
     """

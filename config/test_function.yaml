@@ -41,7 +41,7 @@ alg_settings:
    #For piqei
 
 problem_settings:
-  function: "ackley" # Name of the function in [airfoil, rosenbrock, sphere, ackley]
+  function: "sin3" # Name of the function in [airfoil, rosenbrock, sphere, ackley]
   noise: 0.
   dim: 1
   initial_bounds: 10.

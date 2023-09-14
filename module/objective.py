@@ -78,6 +78,10 @@ def get_objective(
         elif test_function == "mountains":
             obj_function = lambda x: torch.flatten(5*torch.exp(-2*(x - 1)**2) + 5*torch.exp(-2*(x + 1)**2))
             obj = Objective(obj_func=obj_function, dim=1, device=device, dtype=dtype, bounds=bounds, noise_std=noise_std, best_value=5., negate=False)
+        elif test_function == "sin3":
+            obj_function = lambda x: (-(1.4 - 3*(x/15+0.6))*torch.sin(18*(x/15+0.6))).flatten()
+            dim = 1
+            obj = Objective(obj_func=obj_function, dim=1, device=device, dtype=dtype, bounds=bounds, noise_std=noise_std, best_value=1.6, negate=True)
         else:
             raise NotImplementedError(f"Function {test_function} is not implemented")
     

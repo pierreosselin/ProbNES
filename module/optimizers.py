@@ -10,7 +10,7 @@ import botorch
 from module.model import DerivativeExactGPSEModel
 from module.environment_api import EnvironmentObjective
 from module.acquisition_function import GradientInformation, DownhillQuadratic, initialize_acqf_optimizer, piqExpectedImprovement, QuadratureExploration
-from module.plot_script import plot_GP_fit, plot_synthesis_quad
+from module.plot_script import plot_gp_fit, plot_synthesis_quad, plot_distribution_1D
 from scipy.optimize import minimize_scalar
 from torch.distributions.multivariate_normal import MultivariateNormal
 from .utils import bounded_bivariate_normal_integral, nearestPD, isPD, EI, log_EI, normalize_distribution
@@ -18,6 +18,8 @@ from botorch import fit_gpytorch_mll
 from botorch.utils.transforms import standardize, normalize
 from .objective import Objective
 import geoopt
+import matplotlib.pyplot as plt
+
 from botorch.utils.probability.utils import (
     ndtr as Phi
 )
@@ -39,11 +41,16 @@ def load_optimizer(label, n_init, objective, dict_parameter, plot_path):
         optimizer = PiBayesianOptimization(n_init=n_init, objective=objective, batch_size=dict_parameter["batch_size"], optimizer_config=dict_parameter["piqEI"], plot_path=plot_path)
     elif label == "quad":
         optimizer = ProbES(n_init=n_init, objective=objective, batch_size=dict_parameter["batch_size"], optimizer_config=dict_parameter["quad"], plot_path=plot_path)
-
+    elif label == "SNES":
+        optimizer = CMAES(n_init=n_init, objective=objective, batch_size=dict_parameter["batch_size"], optimizer_config=dict_parameter["quad"], plot_path=plot_path)
+    elif label == "random":
+        optimizer = RandomSearch(n_init=n_init, objective=objective, batch_size=dict_parameter["batch_size"])
     return optimizer
 
 
 ## Function to generate initial data, either random in bounds or from domain informed distribution
+## Make sure seed common for different algorithm (or maybe)
+
 def generate_data(
         label: str,
         objective: Objective,
@@ -62,26 +69,6 @@ def generate_data(
         best_observed_value = train_obj.max().item()
         
     return train_x, train_obj, best_observed_value
-
-# Add option for matern kernel
-def initialize_model(train_x, train_obj, state_dict=None):
-        # define models for objective and constraint
-        covar_module = ScaleKernel(
-            RBFKernel(
-                ard_num_dims=train_x.shape[-1],
-                batch_shape=None,
-                lengthscale_prior=GammaPrior(3.0, 6.0),
-            ),
-            batch_shape=None,
-            outputscale_prior=GammaPrior(2.0, 0.15),
-        )
-        model_obj = SingleTaskGP(train_x, train_obj, covar_module=covar_module).to(train_x)
-    
-        mll = ExactMarginalLogLikelihood(model_obj.likelihood, model_obj)
-        # load state dict if it is passed
-        if state_dict is not None:
-            model_obj.load_state_dict(state_dict)
-        return mll, model_obj
 
 ## For now, initial data generation depends on optimizer to take domain information into account
 class AbstractOptimizer(ABC):
@@ -107,8 +94,8 @@ class AbstractOptimizer(ABC):
         """Inits the abstract optimizer."""
         # Optionally add batchsize to parameters.
         self.n_init = n_init
-        self.D = objective.dim
-        self.params = torch.empty((self.D, 0))
+        self.dim = objective.dim
+        self.params = torch.empty((self.dim, 0))
         self.param_args_ignore = param_args_ignore
         self.objective = objective
         self.iteration = 0
@@ -125,7 +112,6 @@ class AbstractOptimizer(ABC):
     def plot_synthesis(self) -> None:
         """One parameter update step."""
         pass
-
 
 class RandomSearch(AbstractOptimizer):
     """Implementation of (augmented) random search.
@@ -261,26 +247,29 @@ class CMAES(AbstractOptimizer):
 
     def __init__(
         self,
-        params_init: torch.Tensor,
+        n_init: torch.Tensor,
         objective: Union[Callable[[torch.Tensor], torch.Tensor], EnvironmentObjective],
-        sigma: float = 0.5,
-        maximization: bool = True,
-        verbose: bool = True,
+        batch_size: int=1,
+        optimizer_config: Dict = None,
+        plot_path=None
     ):
         """Inits CMA-ES optimizer."""
-        super(CMAES, self).__init__(params_init, objective)
+        super(CMAES, self).__init__(n_init, objective)
+        self.batch_size = batch_size
+        self.plot_path = plot_path
+        self.params_history_list = []
+        self.values_history = []
 
-        self.params_history_list = [self.params.clone()]
-        self.dim = self.params.shape[-1]
-
-        self.xmean = self.params.clone().view(-1).mean(dim = 1)
-        self.maximization = maximization
-        self.sigma = sigma
+        ## here xmean is initial mu
+        self.xmean = torch.zeros(self.dim)
+        self.maximization = True
+        self.sigma = np.sqrt(optimizer_config["var_prior"])
 
         # Strategy parameter setting: Selection.
         self.lambda_ = 4 + int(
             np.floor(3 * np.log(self.dim))
         )  # Population size, offspring number.
+        self.lambda_ = self.batch_size
         self.mu = self.lambda_ // 2  # Number of parents/points for recombination.
         weights = np.log(self.mu + 0.5) - np.log(range(1, self.mu + 1))
         self.weights = torch.tensor(
@@ -328,9 +317,8 @@ class CMAES(AbstractOptimizer):
         self.arfitness = torch.empty((self.lambda_))
         self.counteval = 0
         self.hs = 0
-
-        self.verbose = verbose
         self.list_mu, self.list_covar = [self.xmean.detach().clone()], [self.C.detach().clone()]
+        self.step()
 
     def step(self):
 
@@ -397,8 +385,8 @@ class CMAES(AbstractOptimizer):
             self.C = torch.triu(self.C) + torch.triu(self.C, diagonal=1).transpose(
                 0, 1
             )  # Enforce symmetry.
-            D, self.B = torch.symeig(
-                self.C, eigenvectors=True
+            D, self.B = torch.linalg.eigh(
+                self.C
             )  # Eigendecomposition, B == normalized eigenvectors.
             self.D = torch.diag(
                 torch.sqrt(D.clamp_min(1e-20))
@@ -412,14 +400,266 @@ class CMAES(AbstractOptimizer):
             1, -1
         )  # Return the best point of the last generation. Notice that xmean is expected to be even better.
 
-        self.params_history_list.append(self.params.clone())
+        self.params_history_list.append(self.arx.clone().reshape(-1, self.dim))
+        self.values_history.append(self.arfitness.clone().reshape(-1, 1))
         self.list_mu.append(self.xmean.detach().clone())
-        self.list_covar.append(self.C.detach().clone())
-        if self.verbose:
-            print(f"Parameter: {self.params.numpy()}.")
-            print(f"Function value: {self.arfitness[args[0]]}.")
-            print(f"Sigma: {self.sigma}.")
+        self.list_covar.append((self.sigma**2) * self.C.detach().clone())
+        self.iteration += 1
 
+    def plot_synthesis(self) -> None:
+        ## Check whether 1D or 2D
+        if self.dim == 1:
+            fig, ax = plt.subplots()
+            bounds = self.objective.bounds
+            lb, up = float(bounds[0][0]), float(bounds[1][0])
+            ax.set_xlim(lb, up)
+            
+            #Plot datapoints and objective
+            x_history, value_history = torch.vstack(self.params_history_list).cpu().numpy(),torch.vstack(self.values_history).cpu().numpy()
+            ax.scatter(x_history, value_history, color='black', label='Training data')
+            ax.scatter(x_history[(-self.batch_size):], value_history[(-self.batch_size):], color='red', label='Last selected points')
+            test_x = torch.linspace(lb, up, 200, device=self.objective.device, dtype=self.objective.dtype)
+            value_ = (self.objective(test_x.unsqueeze(-1))).flatten()
+            ax.plot(test_x.cpu().numpy(), value_.cpu().numpy(), color='green', label='True Function')
+
+            ## Plot distribution
+            distribution = MultivariateNormal(loc=self.list_mu[-1], covariance_matrix=self.list_covar[-1])
+            plot_distribution_1D(ax, distribution)
+            
+            ax.set_xlabel('x')
+            ax.set_ylabel('y')
+            ax.set_title('Evolutionary search distribution')
+            ax.legend()
+            fig.savefig(os.path.join(self.plot_path, f"synthesis_{self.iteration}.png"))
+        
+        elif self.dim == 2:
+            raise NotImplementedError
+            fig, ax = plt.subplots()
+            ax.scatter(params_history_list.cpu().numpy(), targets.cpu().numpy(), color='black', label='Training data')
+            ax.scatter(train_X.cpu().numpy()[(-batch):], targets.cpu().numpy()[(-batch):], color='red', label='Last selected points')
+            ax.plot(test_x_unormalized.cpu().numpy(), predictions.mean.cpu().numpy()*float(std_Y) + float(mean_Y), color='blue', label='Predictive mean')
+            ax.plot(test_x_unormalized.cpu().numpy(), value_.cpu().numpy(), color='green', label='True Function')
+            ax.fill_between(test_x_unormalized.cpu().numpy(), lower.cpu().numpy(), upper.cpu().numpy(), color='lightblue', alpha=0.5, label='Confidence region')
+            ax.set_xlabel('x')
+            ax.set_ylabel('y')
+            ax.set_title('Gaussian Process Regression')
+            ax.legend()
+
+class CMAES_Quad(AbstractOptimizer):
+    """CMA-ES: Evolutionary Strategy with Covariance Matrix Adaptation for
+    nonlinear function optimization.
+
+    Inspired by the matlab code of https://arxiv.org/abs/1604.00772.
+    Hence this function does not implement negative weights, that is, w_i = 0 for i > mu.
+
+    Attributes:
+        params_init: Objective parameters initial value.
+        objective: Objective function.
+        sigma: Coordinate wise standard deviation (step-size).
+        maximization: True if objective function is maximized, False if minimized.
+        verbose: If True an output is logged.
+    """
+
+    def __init__(
+        self,
+        n_init: torch.Tensor,
+        objective: Union[Callable[[torch.Tensor], torch.Tensor], EnvironmentObjective],
+        batch_size: int=1,
+        optimizer_config: Dict = None,
+        plot_path=None
+    ):
+        """Inits CMA-ES optimizer."""
+        super(CMAES, self).__init__(n_init, objective)
+        self.batch_size = batch_size
+        self.plot_path = plot_path
+        self.params_history_list = []
+        self.values_history = []
+
+        ## here xmean is initial mu
+        self.xmean = torch.zeros(self.dim)
+        self.maximization = True
+        self.sigma = np.sqrt(optimizer_config["var_prior"])
+
+        # Strategy parameter setting: Selection.
+        self.lambda_ = 4 + int(
+            np.floor(3 * np.log(self.dim))
+        )  # Population size, offspring number.
+        self.lambda_ = self.batch_size
+
+        self.mu = self.lambda_ // 2  # Number of parents/points for recombination.
+        weights = np.log(self.mu + 0.5) - np.log(range(1, self.mu + 1))
+        self.weights = torch.tensor(
+            weights / sum(weights), dtype=torch.float32
+        )  # Normalize recombination weights array.
+        self.mueff = sum(self.weights) ** 2 / sum(
+            self.weights ** 2
+        )  # Variance-effective size of mu.
+
+        # Strategy parameter setting: Adaption.
+        self.cc = (4 + self.mueff / self.dim) / (
+            self.dim + 4 + 2 * self.mueff / self.dim
+        )  # Time constant for cumulation for C.
+        self.cs = (self.mueff + 2) / (
+            self.dim + self.mueff + 5
+        )  # Time constant for cumulation for sigma-/step size control.
+        self.c1 = 2 / (
+            (self.dim + 1.3) ** 2 + self.mueff
+        )  # Learning rate for rank-one update of C.
+        self.cmu = (
+            2
+            * (self.mueff - 2 + 1 / self.mueff)
+            / ((self.dim + 2) ** 2 + 2 * self.mueff / 2)
+        )  # Learning rate for rank-mu update.
+        self.damps = (
+            1 + 2 * max(0, np.sqrt((self.mueff - 1) / (self.dim + 1)) - 1) + self.cs
+        )  # Damping for sigma.
+
+        # Initialize dynamic (internal) strategy parameters and constant.
+        self.ps = torch.zeros(self.dim)  # Evolution path for sigma.
+        self.pc = torch.zeros(self.dim)  # Evolution path for C.
+        self.B = torch.eye(self.dim)
+        self.D = torch.eye(
+            self.dim
+        )  # Eigendecomposition of C (pos. def.): B defines the coordinate system, diagonal matrix D the scaling.
+        self.C = self.B @ self.D ** 2 @ self.D.transpose(0, 1)  # Covariance matrix.
+        self.eigeneval = 0  # B and D updated at counteval == 0
+        self.chiN = self.dim ** 0.5 * (
+            1 - 1 / (4 * self.dim) + 1 / (21 * self.dim ** 2)
+        )  # Expectation of ||N(0,I)|| == norm(randn(N,1))
+
+        # Generation Loop.
+        self.arz = torch.empty((self.dim, self.lambda_))
+        self.arx = torch.empty((self.dim, self.lambda_))
+        self.arfitness = torch.empty((self.lambda_))
+        self.counteval = 0
+        self.hs = 0
+        self.list_mu, self.list_covar = [self.xmean.detach().clone()], [self.C.detach().clone()]
+        self.step()
+
+    def step(self):
+
+        # 1. Sampling and evaluating. Change for SOBER
+        for k in range(self.lambda_):
+            # Reparameterization trick for samples.
+            self.arz[:, k] = torch.randn(
+                (self.dim)
+            )  # Standard normally distributed vector.
+            self.arx[:, k] = (
+                self.xmean + self.sigma * self.B @ self.D @ self.arz[:, k]
+            )  # Add mutation.
+            self.arfitness[k] = self.objective(self.arx[:, k].unsqueeze(0))
+            self.counteval += 1
+
+        # 2. Sort solutions.
+        args = torch.argsort(self.arfitness, descending=self.maximization)
+
+        # 3. Update mean.
+        self.xmean = self.arx[:, args[: self.mu]] @ self.weights  # Recombination.
+        zmean = (
+            self.arz[:, args[: self.mu]] @ self.weights
+        )  # == D.inverse() @ B.transpose(0,1) * (xmean-xold)/sigma
+
+        # 4. Update evolution paths.
+        self.ps = (1 - self.cs) * self.ps + (
+            np.sqrt(self.cs * (2 - self.cs) * self.mueff)
+        ) * (self.B @ zmean)
+
+        if np.linalg.norm(self.ps) / (
+            np.sqrt(1 - (1 - self.cs) ** (2 * self.counteval / self.lambda_))
+        ) < (1.4 + 2 / (self.dim + 1)):
+            self.hs = 1
+
+        self.pc = (1 - self.cc) * self.pc + self.hs * np.sqrt(
+            self.cc * (2 - self.cc) * self.mueff
+        ) * self.B @ self.D @ zmean
+
+        # 5. Update covariance matrix.
+        self.C = (
+            (1 - self.c1 - self.cmu) * self.C
+            + self.c1
+            * (
+                self.pc.view(-1, 1) @ self.pc.view(-1, 1).transpose(0, 1)
+                + (1 - self.hs) * self.cc * (2 - self.cc) * self.C
+            )
+            + self.cmu
+            * (self.B @ self.D @ self.arz[:, args[: self.mu]])
+            @ torch.diag(self.weights)
+            @ (self.B @ self.D @ self.arz[:, args[: self.mu]]).transpose(0, 1)
+        )
+
+        # 6. Update step-size sigma.
+        self.sigma *= np.exp(
+            (self.cs / self.damps) * (np.linalg.norm(self.ps) / self.chiN - 1)
+        )
+
+        # 7. Update B and D from C.
+        if (
+            self.counteval - self.eigeneval
+            > self.lambda_ / (self.c1 + self.cmu) / self.dim / 10
+        ):
+            self.eigeneval = self.counteval
+            self.C = torch.triu(self.C) + torch.triu(self.C, diagonal=1).transpose(
+                0, 1
+            )  # Enforce symmetry.
+            D, self.B = torch.linalg.eigh(
+                self.C
+            )  # Eigendecomposition, B == normalized eigenvectors.
+            self.D = torch.diag(
+                torch.sqrt(D.clamp_min(1e-20))
+            )  # D contains standard deviations now.
+
+        # Escape flat fitness, or better terminate?
+        if self.arfitness[0] == self.arfitness[int(np.ceil(0.7 * self.lambda_)) - 1]:
+            self.sigma *= np.exp(0.2 + self.cs / self.damps)
+
+        self.params = self.arx[:, args[0]].view(
+            1, -1
+        )  # Return the best point of the last generation. Notice that xmean is expected to be even better.
+
+        self.params_history_list.append(self.arx.clone().reshape(-1, self.dim))
+        self.values_history.append(self.arfitness.clone().reshape(-1, 1))
+        self.list_mu.append(self.xmean.detach().clone())
+        self.list_covar.append((self.sigma**2) * self.C.detach().clone())
+        self.iteration += 1
+
+    def plot_synthesis(self) -> None:
+        ## Check whether 1D or 2D
+        if self.dim == 1:
+            fig, ax = plt.subplots()
+            bounds = self.objective.bounds
+            lb, up = float(bounds[0][0]), float(bounds[1][0])
+            ax.set_xlim(lb, up)
+            
+            #Plot datapoints and objective
+            x_history, value_history = torch.vstack(self.params_history_list).cpu().numpy(),torch.vstack(self.values_history).cpu().numpy()
+            ax.scatter(x_history, value_history, color='black', label='Training data')
+            ax.scatter(x_history[(-self.batch_size):], value_history[(-self.batch_size):], color='red', label='Last selected points')
+            test_x = torch.linspace(lb, up, 200, device=self.objective.device, dtype=self.objective.dtype)
+            value_ = (self.objective(test_x.unsqueeze(-1))).flatten()
+            ax.plot(test_x.cpu().numpy(), value_.cpu().numpy(), color='green', label='True Function')
+
+            ## Plot distribution
+            distribution = MultivariateNormal(loc=self.list_mu[-1], covariance_matrix=self.list_covar[-1])
+            plot_distribution_1D(ax, distribution)
+            
+            ax.set_xlabel('x')
+            ax.set_ylabel('y')
+            ax.set_title('Evolutionary search distribution')
+            ax.legend()
+            fig.savefig(os.path.join(self.plot_path, f"synthesis_{self.iteration}.png"))
+        
+        elif self.dim == 2:
+            raise NotImplementedError
+            fig, ax = plt.subplots()
+            ax.scatter(params_history_list.cpu().numpy(), targets.cpu().numpy(), color='black', label='Training data')
+            ax.scatter(train_X.cpu().numpy()[(-batch):], targets.cpu().numpy()[(-batch):], color='red', label='Last selected points')
+            ax.plot(test_x_unormalized.cpu().numpy(), predictions.mean.cpu().numpy()*float(std_Y) + float(mean_Y), color='blue', label='Predictive mean')
+            ax.plot(test_x_unormalized.cpu().numpy(), value_.cpu().numpy(), color='green', label='True Function')
+            ax.fill_between(test_x_unormalized.cpu().numpy(), lower.cpu().numpy(), upper.cpu().numpy(), color='lightblue', alpha=0.5, label='Confidence region')
+            ax.set_xlabel('x')
+            ax.set_ylabel('y')
+            ax.set_title('Gaussian Process Regression')
+            ax.legend()
 
 class VanillaBayesianOptimization(AbstractOptimizer):
     """Optimizer class for vanilla Bayesian optimization.
@@ -468,7 +708,7 @@ class VanillaBayesianOptimization(AbstractOptimizer):
         # Acquistion function and its optimization properties.
         self.qmc_sampler = SobolQMCNormalSampler(sample_shape=torch.Size([optimizer_config["mc_samples"]]))
         
-        self.optimize_acqf = initialize_acqf_optimizer(random=False,
+        self.optimize_acqf = initialize_acqf_optimizer(
                                                        bounds=self.unit_cube,
                                                        batch_size=self.batch_size,
                                                        num_restarts=optimizer_config["num_restarts"],
@@ -517,10 +757,13 @@ class VanillaBayesianOptimization(AbstractOptimizer):
 
     def plot_synthesis(self):
         if self.objective.dim == 1:
-            plot_GP_fit(self.model, self.model.likelihood, self.train_x, targets=self.train_y, bounds=self.objective.bounds, obj=self.objective, save_path=self.plot_path, iteration=self.iteration)
+            fig, ax = plt.subplots()
+            bounds = self.objective.bounds
+            lb, up = float(bounds[0][0]), float(bounds[1][0])
+            ax.set_xlim(lb, up)
+            plot_gp_fit(ax, self.model, self.train_x, targets=self.train_y, obj=self.objective, batch=self.batch_size, normalize_flag=True)
+            fig.savefig(os.path.join(self.plot_path, f"synthesis_{self.iteration}.png"))
         
- 
-
 class PiBayesianOptimization(AbstractOptimizer):
     """Optimizer class for vanilla Bayesian optimization.
 
@@ -576,7 +819,7 @@ class PiBayesianOptimization(AbstractOptimizer):
         
         # Acquistion function and its optimization properties.
         self.qmc_sampler = SobolQMCNormalSampler(sample_shape=torch.Size([optimizer_config["mc_samples"]]))
-        self.optimize_acqf = initialize_acqf_optimizer(random=False,
+        self.optimize_acqf = initialize_acqf_optimizer(
                                                 bounds=self.unit_cube,
                                                 batch_size=self.batch_size,
                                                 num_restarts=optimizer_config["num_restarts"],
@@ -627,7 +870,13 @@ class PiBayesianOptimization(AbstractOptimizer):
     
     def plot_synthesis(self):
         if self.objective.dim == 1:
-            plot_GP_fit(self.model, self.model.likelihood, self.train_x, targets=self.train_y, bounds=self.objective.bounds, obj=self.objective, save_path=self.plot_path, iteration=self.iteration)
+            fig, ax = plt.subplots()
+            bounds = self.objective.bounds
+            lb, up = float(bounds[0][0]), float(bounds[1][0])
+            ax.set_xlim(lb, up)
+            plot_gp_fit(ax, self.model, self.train_x, targets=self.train_y, obj=self.objective, batch=self.batch_size, normalize_flag=True)
+            fig.savefig(os.path.join(self.plot_path, f"synthesis_{self.iteration}.png"))
+
 class BayesianGradientAscent(AbstractOptimizer):
     """Optimizer for Bayesian gradient ascent.
 
@@ -1636,10 +1885,6 @@ class FiniteDiffGradientAscentOptimizerv2(FiniteDiffGradientAscentOptimizer):
         else:
             self.params_history_list.append(self.params.clone())
 
-#### Three choices:
-## - Direction (expected gradient, max probability descent)
-## - Line search (Euclidean, Riemannian)
-## - Step (Constant, Wolfe Condition)
 ## TODO Be careful computational graphs when using .copy() as not deleted and can result in using too much memory
 class ProbES(AbstractOptimizer):
     def __init__(
@@ -1668,6 +1913,7 @@ class ProbES(AbstractOptimizer):
         self.values_history = [self.train_y.clone()]
         self.d = self.objective.dim
         
+        self.lr = optimizer_config["lr"]
         self.policy=optimizer_config["line_search"]
         self.c1=optimizer_config["c1"]
         self.c2=optimizer_config["c2"]
@@ -1699,11 +1945,10 @@ class ProbES(AbstractOptimizer):
                 self.criterion = self.armijo_criterion
             
         ## TODO Make option to make it an optimization pb instead of samples
-        self.optimize_acqf = initialize_acqf_optimizer(random=True, candidate_vr=optimizer_config["candidates_vr"], batch_size=batch_size)
+        self.optimize_acqf = initialize_acqf_optimizer(type="random", candidate_vr=optimizer_config["candidates_vr"], batch_size=batch_size)
 
         ## Register mu and covariance history
         self.list_mu, self.list_covar = [self.distribution.loc.detach().clone()], [self.distribution.covariance_matrix.detach().clone()]
-
 
         ## Create grads points for autodiff
         mu, covar = self.distribution.loc, self.distribution.covariance_matrix
@@ -1738,6 +1983,7 @@ class ProbES(AbstractOptimizer):
         
     def wolfe_criterion(self, t):
         target_point = self.manifold.expmap(self.manifold_point, t*self.d_manifold)
+        target_point[1] = max(target_point[1], 1e-14)
         mean_joint, covar_joint = self.compute_joint_distribution(self.manifold.take_submanifold_value(target_point, 0), self.manifold.take_submanifold_value(target_point, 1))
         mean_joint = -mean_joint
         return -float(self.compute_wolfe(mean_joint, covar_joint, t))
@@ -1792,7 +2038,7 @@ class ProbES(AbstractOptimizer):
         
         ## Line search mehod;
         if self.policy == "constant":
-            self.t_update = self.constant
+            self.t_update = self.lr
         elif self.policy in ["wolfe", "armijo"]:
             ## Precompute quantities for method of lines
             Pi_1_1 = self.gp_covariance + 2*self.distribution.covariance_matrix
@@ -1822,6 +2068,7 @@ class ProbES(AbstractOptimizer):
         ## TODO if manifold is euclidean need to project back to semi definite matrices
         self.manifold_point = self.manifold.expmap(self.manifold_point, self.t_update*self.manifold_point.grad)
         mu_target, covar_target = self.manifold.take_submanifold_value(self.manifold_point, 0), self.manifold.take_submanifold_value(self.manifold_point, 1)
+        covar_target = torch.max(covar_target, torch.tensor([[1e-14]], device = self.objective.device, dtype = self.objective.dtype))
         self.distribution = MultivariateNormal(mu_target, covar_target)
 
         """
@@ -1833,7 +2080,7 @@ class ProbES(AbstractOptimizer):
                     model=self.model,
                     distribution=self.distribution)
         
-        new_x = self.optimize_acqf(self.acquisition_function, self.distribution)
+        new_x = self.optimize_acqf(acq_func= self.acquisition_function, dist=self.distribution)
         new_y = self.objective(new_x).unsqueeze(-1)
 
         # Update training points.
@@ -2193,15 +2440,25 @@ class ProbES(AbstractOptimizer):
         return mean_joint.detach(), covar_joint.detach()
 
     def plot_synthesis(self, save_path=".", iteration=0):
-        plot_synthesis_quad(self, iteration=iteration, save_path=save_path, standardize=True)
+        plot_synthesis_quad(self, iteration=iteration, save_path=self.plot_path, standardize=True)
+    
+#### Add scipy zero order optimiser and multi restart
+class multistart_scipy(AbstractOptimizer):
+    def __init__(
+        self,
+        n_init: int = 5,
+        objective: Callable[[torch.Tensor], torch.Tensor] = None,
+        batch_size: int = 1,
+        optimizer_config: Dict = None,
+        plot_path=None
+    ):
         
-""" ## Add normalization as algorithm parameter
-if label in ["qEI", "piqEI", "quad"]:
-    if NORMALIZE and STANDARDIZE_LABEL:
-        mll, model = initialize_model(normalize(train_x, bounds=objective.bounds), standardize(train_obj))
-    elif STANDARDIZE_LABEL:
-        mll, model = initialize_model(train_x, standardize(train_obj))
-    elif NORMALIZE:
-        mll, model = initialize_model(normalize(train_x, bounds=objective.bounds), train_obj)
-    else:
-        mll, model = initialize_model(train_x, train_obj) """
+        super(ProbES, self).__init__(n_init, objective)
+        self.batch_size=batch_size
+        self.plot_path=plot_path
+
+
+    def step(self):
+
+        return super().step()
+

@@ -418,7 +418,7 @@ def initialize_model(train_x, train_obj, label, state_dict=None):
         model_obj.load_state_dict(state_dict)
     return mll, model_obj
 
-def initialize_acqf_optimizer(random = False, **kwargs):
+def initialize_acqf_optimizer(type=None, **kwargs):
     """Acquisition function initializer"""
 
     def optimize_acqfunction(acq_func):
@@ -443,10 +443,25 @@ def initialize_acqf_optimizer(random = False, **kwargs):
         new_x = candidates[torch.argmax(res)]
         return new_x
     
-    if random:
-        CANDIDATES_VR = kwargs.get("candidates_vr", 5000)
+    def optimize_acqfunction_sequential(acq_func, dist):
+        """Optimizes the acquisition function via random sampling, and returns a new candidate."""
+        # optimize
+        for i in range(BATCH_SIZE):
+            
+            candidates = dist.sample(torch.tensor([CANDIDATES_VR, BATCH_SIZE])).to(device = dist.loc.device, dtype = dist.loc.dtype)
+        res = acq_func(candidates)
+        new_x = candidates[torch.argmax(res)]
+        return new_x
+    
+    if type == "random":
+        CANDIDATES_VR = kwargs.get("candidate_vr", 5000)
         BATCH_SIZE = kwargs.get("batch_size", 1)
         return optimize_acqfunction_random
+    
+    elif type == "sequential":
+        BATCH_SIZE = kwargs.get("batch_size", 1)
+        return optimize_acqfunction_sequential
+    
     else:
         bounds = kwargs.get("bounds", None)
         BATCH_SIZE = kwargs.get("batch_size", 1)

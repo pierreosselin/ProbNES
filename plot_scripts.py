@@ -15,7 +15,7 @@ if __name__ == "__main__":
     with open(f'config/{args.config}.yaml', 'r') as file:
         config = yaml.safe_load(file)
     log_plot = args.log
-    #plot_figure(config, log_transform=log_plot)
+    plot_figure(config["save_dir"], log_transform=log_plot)
     plot_distribution_gif(config, n_seeds=1)
     
     """

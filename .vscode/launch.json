@@ -26,9 +26,10 @@
             "name": "Semisupervised",
             "type": "python",
             "request": "launch",
-            "program": "${workspaceFolder}/test/test_geoopt.py",
+            "program": "${workspaceFolder}/plot_scripts.py",
+            "args": ["--config", "test_function_new"],
             "console": "integratedTerminal",
             "justMyCode": true
         }
     ]
-}    */
+}  */  
