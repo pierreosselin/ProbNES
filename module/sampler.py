@@ -89,7 +89,7 @@ class Probnum_Sampler(Sampler):
     def sample_batch(self, xmean, C, **kwargs):
         measure = GaussianMeasure(mean = xmean.clone().cpu().numpy(), cov = C.clone().cpu().numpy())
         _, bqstate, _ = bayesquad_from_initial_data(fun=self.fun, nodes=self.nodes, fun_evals=self.fun_evals, kernel = self.kernel, measure=measure, policy=self.policy, rng=np.random.default_rng(0), options={"max_evals":self.neval + self.batch_size, "batch_size": self.batch_size})
-        new_x = torch.tensor(bqstate.nodes[-self.batch_size:], device=self.objective.device, dtype=self.objective.dtype)
+        new_x = torch.tensor(bqstate.nodes[-self.batch_size:])
         return new_x.T
          
     
