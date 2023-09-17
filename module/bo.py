@@ -36,8 +36,9 @@ def run(save_path: str,
     #Set seed and device
     torch.manual_seed(seed)
     np.random.seed(seed)
+
+    plot_path = os.path.join(save_path, "plots")
     if verbose_synthesis:
-        plot_path = os.path.join(save_path, "plots")
         if not os.path.exists(plot_path):
             os.makedirs(plot_path)
     

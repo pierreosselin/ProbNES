@@ -212,9 +212,9 @@ class BayesianQuadrature:
 
         # Select policy
         acquisition_dict = dict(
-            mi=MutualInformation,
-            ivr=IntegralVarianceReduction,
-            us=WeightedPredictiveVariance,
+            mi=MutualInformation(),
+            ivr=IntegralVarianceReduction(),
+            us=WeightedPredictiveVariance(),
         )
         if policy is None:
             # If policy is None, this implies that the integration problem is defined

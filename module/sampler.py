@@ -21,7 +21,7 @@ def get_sampler(strategy, **kwargs):
         return Random_Sampler(batch_size = kwargs["batch_size"], dim = kwargs["dim"])
     elif strategy == "basq":
         return Basq_Sampler(batch_size = kwargs["batch_size"], dim = kwargs["dim"], objective = kwargs["objective"])
-    elif strategy in ["bmc", "vdc", "us_rand", "us", "mi_rand", "mi", "ivr_rand", "ivr"]:
+    elif strategy in ["bmc", "us_rand", "us", "mi_rand", "mi", "ivr_rand", "ivr"]:
         return Probnum_Sampler(batch_size = kwargs["batch_size"], dim = kwargs["dim"], objective = kwargs["objective"], policy = strategy)
 
 class Sampler:
