@@ -18,7 +18,7 @@ def create_path_alg(save_path, algorithm_name, alg_kwargs):
     if algorithm_name == "quad":  #["quad", "SNES", "random", "qEI", "piqEI"]
         s = "_".join([f'line_search-{alg_kwargs[algorithm_name]["line_search"]}', f'gradient-{alg_kwargs[algorithm_name]["gradient_direction"]}', f'manifold-{alg_kwargs[algorithm_name]["manifold"]}', f'var_prior-{alg_kwargs[algorithm_name]["var_prior"]}', f'batch_size-{alg_kwargs["batch_size"]}'])
     elif algorithm_name == "SNES":
-        s = "_".join([f'var_prior-{alg_kwargs[algorithm_name]["var_prior"]}', f'batch_size-{alg_kwargs["batch_size"]}'])
+        s = "_".join([f'var_prior-{alg_kwargs[algorithm_name]["var_prior"]}', f'batch_size-{alg_kwargs["batch_size"]}', f'sampling_strategy-{alg_kwargs[algorithm_name]["sampling_strategy"]}'])
     elif algorithm_name == "qEI":
         s = "_".join([f'batch_size-{alg_kwargs["batch_size"]}'])
     elif algorithm_name == "piqEI":

@@ -241,7 +241,7 @@ def plot_figure(save_path, log_transform=False):
         alg_name = [name for name in os.listdir(exp_dir) if os.path.isdir(os.path.join(exp_dir, name))]
         for algo in alg_name:
             alg_dir = os.path.join(exp_dir, algo)
-            alg_dir_param_name = [name for name in os.listdir(alg_dir) if os.path.isdir(os.path.join(alg_dir, name))]
+            alg_dir_param_name = [name for name in os.listdir(alg_dir) if os.path.isdir(os.path.join(alg_dir, name)) and name != "path_distribution"]
             for algo_param in alg_dir_param_name:
                 algo_param_dir = os.path.join(alg_dir, algo_param)
                 data_path_seeds = [f for f in os.listdir(algo_param_dir) if ".pt" in f]

@@ -204,6 +204,94 @@ def bayesquad(
 
     return integral_belief, info
 
+def bayesquad_from_initial_data(
+    fun: Callable,
+    nodes: np.ndarray,
+    fun_evals: np.ndarray,
+    kernel: Optional[Kernel] = None,
+    measure: Optional[IntegrationMeasure] = None,
+    domain: Optional[DomainLike] = None,
+    policy: Optional[str] = "bmc",
+    rng: Optional[np.random.Generator] = None,
+    options: Optional[dict] = None
+) -> Tuple[Normal, BQIterInfo]:
+    r"""Perform Bayesian Quadraturefrom a given set of nodes and function
+    evaluations.
+    Parameters
+    ----------
+    nodes
+        *shape=(n_eval, input_dim)* -- Locations at which the function evaluations are
+        available as ``fun_evals``.
+    fun_evals
+        *shape=(n_eval,)* -- Function evaluations at ``nodes``.
+    kernel
+        The kernel used for the GP model. Defaults to the ``ExpQuad`` kernel.
+    measure
+        The integration measure. Defaults to the Lebesgue measure.
+    domain
+        The integration domain. Contains lower and upper bound as scalar or
+        ``np.ndarray``. Obsolete if ``measure`` is given.
+    options
+        A dictionary with the following optional solver settings
+            scale_estimation : Optional[str]
+                Estimation method to use to compute the scale parameter. Defaults
+                to 'mle'. Options are
+                ==============================  =======
+                 Maximum likelihood estimation  ``mle``
+                ==============================  =======
+            jitter : Optional[FloatLike]
+                Non-negative jitter to numerically stabilise kernel matrix
+                inversion. Defaults to 1e-8.
+    Returns
+    -------
+    integral :
+        The integral belief subject to the provided measure or domain.
+    info :
+        Information on the performance of the method.
+    Raises
+    ------
+    ValueError
+        If neither a domain nor a measure are given.
+    Warns
+    -----
+    UserWarning
+        When ``domain`` is given but not used.
+    See Also
+    --------
+    bayesquad : Computes the integral using an acquisition policy.
+    Warnings
+    --------
+    Currently the method does not support tuning of the kernel parameters
+    other than the global kernel scale. Hence, the method may perform poorly unless the
+    kernel parameters are set to appropriate values by the user.
+    """
+
+    if nodes.ndim != 2:
+        raise ValueError(
+            "The nodes must be given a in an array with shape=(n_eval, input_dim)"
+        )
+
+    input_dim, domain, measure = _check_domain_measure_compatibility(
+        input_dim=nodes.shape[1], domain=domain, measure=measure
+    )
+
+    bq_method = BayesianQuadrature.from_problem(
+        input_dim=input_dim,
+        kernel=kernel,
+        measure=measure,
+        domain=domain,
+        policy=policy,
+        initial_design=None,
+        options=options,
+    )
+
+    # Integrate
+    integral_belief, bqstate, info = bq_method.integrate(
+        fun=fun, nodes=nodes, fun_evals=fun_evals, rng=rng
+    )
+
+    return integral_belief, bqstate, info
+
 
 def bayesquad_from_data(
     nodes: np.ndarray,

@@ -34,7 +34,7 @@ class GMM:
         return torch.diag(3 * torch.rand(self.dim) + 1).to(self.device)
 
     def component_generator(self):
-        return random_choice(torch.arange(10, 16, device=self.device), 1, self.device).item()
+        return random_choice(torch.arange(10, 16), 1, self.device).item()
 
     def weights_calc(self):
         Npdfs = MultivariateNormal(

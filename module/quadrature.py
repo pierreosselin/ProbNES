@@ -11,7 +11,6 @@ from torch.distributions.multivariate_normal import MultivariateNormal
 from botorch.acquisition.analytic import AnalyticAcquisitionFunction
 from botorch.models import SingleTaskGP
 from .utils import bounded_bivariate_normal_integral, nearestPD, isPD, EI, log_EI
-import autograd.numpy as anp
 import geoopt
 from botorch.utils.probability.utils import (
     ndtr as Phi

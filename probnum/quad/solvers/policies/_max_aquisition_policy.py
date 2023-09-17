@@ -56,7 +56,7 @@ class RandomMaxAcquisitionPolicy(Policy):
             )
 
         super().__init__(batch_size=batch_size)
-        self.acquisition_func = acquisition_func()
+        self.acquisition_func = acquisition_func
         self.n_candidates = int(n_candidates)
 
     @property
@@ -116,7 +116,7 @@ class MaxAcquisitionPolicy(Policy):
             )
 
         super().__init__(batch_size=batch_size)
-        self.acquisition_func = acquisition_func()
+        self.acquisition_func = acquisition_func
         self.n_restarts = int(n_restarts)
 
     @property

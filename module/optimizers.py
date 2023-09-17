@@ -11,6 +11,8 @@ from module.model import DerivativeExactGPSEModel
 from module.environment_api import EnvironmentObjective
 from module.acquisition_function import GradientInformation, DownhillQuadratic, initialize_acqf_optimizer, piqExpectedImprovement, QuadratureExploration
 from module.plot_script import plot_gp_fit, plot_synthesis_quad, plot_distribution_1D
+from module.sampler import get_sampler
+
 from scipy.optimize import minimize_scalar
 from torch.distributions.multivariate_normal import MultivariateNormal
 from .utils import bounded_bivariate_normal_integral, nearestPD, isPD, EI, log_EI, normalize_distribution
@@ -42,11 +44,10 @@ def load_optimizer(label, n_init, objective, dict_parameter, plot_path):
     elif label == "quad":
         optimizer = ProbES(n_init=n_init, objective=objective, batch_size=dict_parameter["batch_size"], optimizer_config=dict_parameter["quad"], plot_path=plot_path)
     elif label == "SNES":
-        optimizer = CMAES(n_init=n_init, objective=objective, batch_size=dict_parameter["batch_size"], optimizer_config=dict_parameter["quad"], plot_path=plot_path)
+        optimizer = CMAES(n_init=n_init, objective=objective, batch_size=dict_parameter["batch_size"], optimizer_config=dict_parameter["SNES"], plot_path=plot_path)
     elif label == "random":
         optimizer = RandomSearch(n_init=n_init, objective=objective, batch_size=dict_parameter["batch_size"])
     return optimizer
-
 
 ## Function to generate initial data, either random in bounds or from domain informed distribution
 ## Make sure seed common for different algorithm (or maybe)
@@ -261,19 +262,18 @@ class CMAES(AbstractOptimizer):
         self.values_history = []
 
         ## here xmean is initial mu
-        self.xmean = torch.zeros(self.dim)
+        self.xmean = torch.zeros(self.dim, dtype=self.objective.dtype)
         self.maximization = True
         self.sigma = np.sqrt(optimizer_config["var_prior"])
+        self.sampling_strategy = optimizer_config["sampling_strategy"]
+        self.sampler = get_sampler(self.sampling_strategy, batch_size = batch_size, dim = objective.dim, objective=objective)
 
         # Strategy parameter setting: Selection.
-        self.lambda_ = 4 + int(
-            np.floor(3 * np.log(self.dim))
-        )  # Population size, offspring number.
         self.lambda_ = self.batch_size
         self.mu = self.lambda_ // 2  # Number of parents/points for recombination.
         weights = np.log(self.mu + 0.5) - np.log(range(1, self.mu + 1))
         self.weights = torch.tensor(
-            weights / sum(weights), dtype=torch.float32
+            weights / sum(weights), dtype=torch.float64
         )  # Normalize recombination weights array.
         self.mueff = sum(self.weights) ** 2 / sum(
             self.weights ** 2
@@ -318,9 +318,8 @@ class CMAES(AbstractOptimizer):
         self.counteval = 0
         self.hs = 0
         self.list_mu, self.list_covar = [self.xmean.detach().clone()], [self.C.detach().clone()]
-        self.step()
-
-    def step(self):
+        
+        ## Do one vanilla loop
 
         # 1. Sampling and evaluating.
         for k in range(self.lambda_):
@@ -333,20 +332,17 @@ class CMAES(AbstractOptimizer):
             )  # Add mutation.
             self.arfitness[k] = self.objective(self.arx[:, k].unsqueeze(0))
             self.counteval += 1
-
-        # 2. Sort solutions.
+                # 2. Sort solutions.    
         args = torch.argsort(self.arfitness, descending=self.maximization)
 
         # 3. Update mean.
+        self.xold = self.xmean.clone()
         self.xmean = self.arx[:, args[: self.mu]] @ self.weights  # Recombination.
-        zmean = (
-            self.arz[:, args[: self.mu]] @ self.weights
-        )  # == D.inverse() @ B.transpose(0,1) * (xmean-xold)/sigma
 
         # 4. Update evolution paths.
         self.ps = (1 - self.cs) * self.ps + (
             np.sqrt(self.cs * (2 - self.cs) * self.mueff)
-        ) * (self.B @ zmean)
+        ) * self.B * (1/self.D) * self.B.transpose(0,1) * (self.xmean - self.xold) / self.sigma
 
         if np.linalg.norm(self.ps) / (
             np.sqrt(1 - (1 - self.cs) ** (2 * self.counteval / self.lambda_))
@@ -355,9 +351,10 @@ class CMAES(AbstractOptimizer):
 
         self.pc = (1 - self.cc) * self.pc + self.hs * np.sqrt(
             self.cc * (2 - self.cc) * self.mueff
-        ) * self.B @ self.D @ zmean
+        ) * (self.xmean - self.xold) / self.sigma
 
         # 5. Update covariance matrix.
+        artmp = (1/self.sigma) * (self.arx[:, args[: self.mu]]-self.xold.reshape(-1, 1).repeat(1,self.mu))
         self.C = (
             (1 - self.c1 - self.cmu) * self.C
             + self.c1
@@ -366,9 +363,9 @@ class CMAES(AbstractOptimizer):
                 + (1 - self.hs) * self.cc * (2 - self.cc) * self.C
             )
             + self.cmu
-            * (self.B @ self.D @ self.arz[:, args[: self.mu]])
+            * artmp
             @ torch.diag(self.weights)
-            @ (self.B @ self.D @ self.arz[:, args[: self.mu]]).transpose(0, 1)
+            @ artmp.transpose(0, 1)
         )
 
         # 6. Update step-size sigma.
@@ -404,165 +401,28 @@ class CMAES(AbstractOptimizer):
         self.values_history.append(self.arfitness.clone().reshape(-1, 1))
         self.list_mu.append(self.xmean.detach().clone())
         self.list_covar.append((self.sigma**2) * self.C.detach().clone())
-        self.iteration += 1
-
-    def plot_synthesis(self) -> None:
-        ## Check whether 1D or 2D
-        if self.dim == 1:
-            fig, ax = plt.subplots()
-            bounds = self.objective.bounds
-            lb, up = float(bounds[0][0]), float(bounds[1][0])
-            ax.set_xlim(lb, up)
-            
-            #Plot datapoints and objective
-            x_history, value_history = torch.vstack(self.params_history_list).cpu().numpy(),torch.vstack(self.values_history).cpu().numpy()
-            ax.scatter(x_history, value_history, color='black', label='Training data')
-            ax.scatter(x_history[(-self.batch_size):], value_history[(-self.batch_size):], color='red', label='Last selected points')
-            test_x = torch.linspace(lb, up, 200, device=self.objective.device, dtype=self.objective.dtype)
-            value_ = (self.objective(test_x.unsqueeze(-1))).flatten()
-            ax.plot(test_x.cpu().numpy(), value_.cpu().numpy(), color='green', label='True Function')
-
-            ## Plot distribution
-            distribution = MultivariateNormal(loc=self.list_mu[-1], covariance_matrix=self.list_covar[-1])
-            plot_distribution_1D(ax, distribution)
-            
-            ax.set_xlabel('x')
-            ax.set_ylabel('y')
-            ax.set_title('Evolutionary search distribution')
-            ax.legend()
-            fig.savefig(os.path.join(self.plot_path, f"synthesis_{self.iteration}.png"))
-        
-        elif self.dim == 2:
-            raise NotImplementedError
-            fig, ax = plt.subplots()
-            ax.scatter(params_history_list.cpu().numpy(), targets.cpu().numpy(), color='black', label='Training data')
-            ax.scatter(train_X.cpu().numpy()[(-batch):], targets.cpu().numpy()[(-batch):], color='red', label='Last selected points')
-            ax.plot(test_x_unormalized.cpu().numpy(), predictions.mean.cpu().numpy()*float(std_Y) + float(mean_Y), color='blue', label='Predictive mean')
-            ax.plot(test_x_unormalized.cpu().numpy(), value_.cpu().numpy(), color='green', label='True Function')
-            ax.fill_between(test_x_unormalized.cpu().numpy(), lower.cpu().numpy(), upper.cpu().numpy(), color='lightblue', alpha=0.5, label='Confidence region')
-            ax.set_xlabel('x')
-            ax.set_ylabel('y')
-            ax.set_title('Gaussian Process Regression')
-            ax.legend()
-
-class CMAES_Quad(AbstractOptimizer):
-    """CMA-ES: Evolutionary Strategy with Covariance Matrix Adaptation for
-    nonlinear function optimization.
-
-    Inspired by the matlab code of https://arxiv.org/abs/1604.00772.
-    Hence this function does not implement negative weights, that is, w_i = 0 for i > mu.
-
-    Attributes:
-        params_init: Objective parameters initial value.
-        objective: Objective function.
-        sigma: Coordinate wise standard deviation (step-size).
-        maximization: True if objective function is maximized, False if minimized.
-        verbose: If True an output is logged.
-    """
-
-    def __init__(
-        self,
-        n_init: torch.Tensor,
-        objective: Union[Callable[[torch.Tensor], torch.Tensor], EnvironmentObjective],
-        batch_size: int=1,
-        optimizer_config: Dict = None,
-        plot_path=None
-    ):
-        """Inits CMA-ES optimizer."""
-        super(CMAES, self).__init__(n_init, objective)
-        self.batch_size = batch_size
-        self.plot_path = plot_path
-        self.params_history_list = []
-        self.values_history = []
-
-        ## here xmean is initial mu
-        self.xmean = torch.zeros(self.dim)
-        self.maximization = True
-        self.sigma = np.sqrt(optimizer_config["var_prior"])
-
-        # Strategy parameter setting: Selection.
-        self.lambda_ = 4 + int(
-            np.floor(3 * np.log(self.dim))
-        )  # Population size, offspring number.
-        self.lambda_ = self.batch_size
-
-        self.mu = self.lambda_ // 2  # Number of parents/points for recombination.
-        weights = np.log(self.mu + 0.5) - np.log(range(1, self.mu + 1))
-        self.weights = torch.tensor(
-            weights / sum(weights), dtype=torch.float32
-        )  # Normalize recombination weights array.
-        self.mueff = sum(self.weights) ** 2 / sum(
-            self.weights ** 2
-        )  # Variance-effective size of mu.
-
-        # Strategy parameter setting: Adaption.
-        self.cc = (4 + self.mueff / self.dim) / (
-            self.dim + 4 + 2 * self.mueff / self.dim
-        )  # Time constant for cumulation for C.
-        self.cs = (self.mueff + 2) / (
-            self.dim + self.mueff + 5
-        )  # Time constant for cumulation for sigma-/step size control.
-        self.c1 = 2 / (
-            (self.dim + 1.3) ** 2 + self.mueff
-        )  # Learning rate for rank-one update of C.
-        self.cmu = (
-            2
-            * (self.mueff - 2 + 1 / self.mueff)
-            / ((self.dim + 2) ** 2 + 2 * self.mueff / 2)
-        )  # Learning rate for rank-mu update.
-        self.damps = (
-            1 + 2 * max(0, np.sqrt((self.mueff - 1) / (self.dim + 1)) - 1) + self.cs
-        )  # Damping for sigma.
-
-        # Initialize dynamic (internal) strategy parameters and constant.
-        self.ps = torch.zeros(self.dim)  # Evolution path for sigma.
-        self.pc = torch.zeros(self.dim)  # Evolution path for C.
-        self.B = torch.eye(self.dim)
-        self.D = torch.eye(
-            self.dim
-        )  # Eigendecomposition of C (pos. def.): B defines the coordinate system, diagonal matrix D the scaling.
-        self.C = self.B @ self.D ** 2 @ self.D.transpose(0, 1)  # Covariance matrix.
-        self.eigeneval = 0  # B and D updated at counteval == 0
-        self.chiN = self.dim ** 0.5 * (
-            1 - 1 / (4 * self.dim) + 1 / (21 * self.dim ** 2)
-        )  # Expectation of ||N(0,I)|| == norm(randn(N,1))
-
-        # Generation Loop.
-        self.arz = torch.empty((self.dim, self.lambda_))
-        self.arx = torch.empty((self.dim, self.lambda_))
-        self.arfitness = torch.empty((self.lambda_))
-        self.counteval = 0
-        self.hs = 0
-        self.list_mu, self.list_covar = [self.xmean.detach().clone()], [self.C.detach().clone()]
-        self.step()
 
     def step(self):
+        
+        train_x = torch.vstack(self.params_history_list)
+        train_y = torch.vstack(self.values_history)
+        
+        self.sampler.update_sampler(train_x=train_x, train_y=train_y, xmean = self.xmean, C=self.sigma**2 * self.C)
+        self.arx = self.sampler.sample_batch(self.xmean, self.sigma**2 * self.C)
+        self.arfitness = self.objective(self.arx.T)
+        self.counteval += self.lambda_
 
-        # 1. Sampling and evaluating. Change for SOBER
-        for k in range(self.lambda_):
-            # Reparameterization trick for samples.
-            self.arz[:, k] = torch.randn(
-                (self.dim)
-            )  # Standard normally distributed vector.
-            self.arx[:, k] = (
-                self.xmean + self.sigma * self.B @ self.D @ self.arz[:, k]
-            )  # Add mutation.
-            self.arfitness[k] = self.objective(self.arx[:, k].unsqueeze(0))
-            self.counteval += 1
-
-        # 2. Sort solutions.
+        # 2. Sort solutions.    
         args = torch.argsort(self.arfitness, descending=self.maximization)
 
         # 3. Update mean.
+        self.xold = self.xmean.clone()
         self.xmean = self.arx[:, args[: self.mu]] @ self.weights  # Recombination.
-        zmean = (
-            self.arz[:, args[: self.mu]] @ self.weights
-        )  # == D.inverse() @ B.transpose(0,1) * (xmean-xold)/sigma
 
         # 4. Update evolution paths.
         self.ps = (1 - self.cs) * self.ps + (
             np.sqrt(self.cs * (2 - self.cs) * self.mueff)
-        ) * (self.B @ zmean)
+        ) * self.B * (1/self.D) * self.B.transpose(0,1) * (self.xmean - self.xold) / self.sigma
 
         if np.linalg.norm(self.ps) / (
             np.sqrt(1 - (1 - self.cs) ** (2 * self.counteval / self.lambda_))
@@ -571,9 +431,10 @@ class CMAES_Quad(AbstractOptimizer):
 
         self.pc = (1 - self.cc) * self.pc + self.hs * np.sqrt(
             self.cc * (2 - self.cc) * self.mueff
-        ) * self.B @ self.D @ zmean
+        ) * (self.xmean - self.xold) / self.sigma
 
         # 5. Update covariance matrix.
+        artmp = (1/self.sigma) * (self.arx[:, args[: self.mu]]-self.xold.reshape(-1, 1).repeat(1,self.mu))
         self.C = (
             (1 - self.c1 - self.cmu) * self.C
             + self.c1
@@ -582,9 +443,9 @@ class CMAES_Quad(AbstractOptimizer):
                 + (1 - self.hs) * self.cc * (2 - self.cc) * self.C
             )
             + self.cmu
-            * (self.B @ self.D @ self.arz[:, args[: self.mu]])
+            * artmp
             @ torch.diag(self.weights)
-            @ (self.B @ self.D @ self.arz[:, args[: self.mu]]).transpose(0, 1)
+            @ artmp.transpose(0, 1)
         )
 
         # 6. Update step-size sigma.

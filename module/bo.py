@@ -27,6 +27,7 @@ def run(save_path: str,
     # Set device, dtype, seed
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     dtype = torch.double
+    torch.set_default_dtype(dtype)
     
     #Get experiment settings
     N_BATCH = exp_kwargs["n_iter"]
@@ -53,7 +54,7 @@ def run(save_path: str,
     # run N_BATCH rounds of BayesOpt after the initial random batch
     for iteration in tqdm(range(1, N_BATCH + 1), position=0, leave=True, desc = f"Processing algorithm {label} at seed {seed}"):
         optimizer.step()
-        if verbose_synthesis:
+        if verbose_synthesis and seed==0: ## Only plot one seed
             if iteration % verbose_synthesis == 0:
                 optimizer.plot_synthesis()
 
