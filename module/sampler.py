@@ -64,20 +64,22 @@ class Probnum_Sampler(Sampler):
                     batch_shape=None,
                     lengthscale_prior=GammaPrior(3.0, 6.0),
                 )
+        self.train_x = train_x
+        self.train_y = train_y
         train_y_init_standardized = standardize(train_y)
-        model = SingleTaskGP(train_x,
+        self.model = SingleTaskGP(train_x,
                              train_y_init_standardized,
                              covar_module=covar_module).to(train_x)
         
         # Optionally optimize hyperparameters.
         mll = ExactMarginalLogLikelihood(
-            model.likelihood, model
+            self.model.likelihood, self.model
         )
 
         fit_gpytorch_mll(mll) #Train gp surrogate
         
-        model.covar_module
-        self.kernel = ExpQuad(input_shape=(self.dim,), lengthscales=float(model.covar_module.lengthscale))
+        self.model.covar_module
+        self.kernel = ExpQuad(input_shape=(self.dim,), lengthscales=float(self.model.covar_module.lengthscale))
         self.neval = train_x.shape[0]
         self.nodes = train_x.cpu().detach().numpy()
         if self.nodes.ndim == 1:

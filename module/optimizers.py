@@ -502,7 +502,9 @@ class CMAES(AbstractOptimizer):
             ## Plot distribution
             distribution = MultivariateNormal(loc=self.list_mu[-1], covariance_matrix=self.list_covar[-1])
             plot_distribution_1D(ax, distribution)
-            
+            if self.sampling_strategy != "random":
+                plot_gp_fit(ax, self.sampler.model.to(self.objective.bounds), self.sampler.train_x.to(self.objective.bounds), targets=self.sampler.train_y.to(self.objective.bounds), obj=self.objective, batch=self.batch_size, normalize_flag=True)
+
             ax.set_xlabel('x')
             ax.set_ylabel('y')
             ax.set_title('Evolutionary search distribution')
