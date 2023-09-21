@@ -78,13 +78,12 @@ class Probnum_Sampler(Sampler):
 
         fit_gpytorch_mll(mll) #Train gp surrogate
         
-        self.model.covar_module
         self.kernel = ExpQuad(input_shape=(self.dim,), lengthscales=float(self.model.covar_module.lengthscale))
         self.neval = train_x.shape[0]
         self.nodes = train_x.cpu().detach().numpy()
         if self.nodes.ndim == 1:
             self.nodes = self.nodes.reshape(-1,1)
-        self.fun_evals = train_y.flatten().cpu().detach().numpy()
+        self.fun_evals = train_y_init_standardized.flatten().cpu().detach().numpy()
         
         self.measure = GaussianMeasure(mean = kwargs["xmean"].clone().cpu().numpy(), cov = kwargs["C"].clone().cpu().numpy())
 

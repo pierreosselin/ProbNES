@@ -490,20 +490,20 @@ class CMAES(AbstractOptimizer):
             bounds = self.objective.bounds
             lb, up = float(bounds[0][0]), float(bounds[1][0])
             ax.set_xlim(lb, up)
-            
-            #Plot datapoints and objective
-            x_history, value_history = torch.vstack(self.params_history_list).cpu().numpy(),torch.vstack(self.values_history).cpu().numpy()
-            ax.scatter(x_history, value_history, color='black', label='Training data')
-            ax.scatter(x_history[(-self.batch_size):], value_history[(-self.batch_size):], color='red', label='Last selected points')
-            test_x = torch.linspace(lb, up, 200, device=self.objective.device, dtype=self.objective.dtype)
-            value_ = (self.objective(test_x.unsqueeze(-1))).flatten()
-            ax.plot(test_x.cpu().numpy(), value_.cpu().numpy(), color='green', label='True Function')
 
             ## Plot distribution
             distribution = MultivariateNormal(loc=self.list_mu[-1], covariance_matrix=self.list_covar[-1])
             plot_distribution_1D(ax, distribution)
             if self.sampling_strategy != "random":
-                plot_gp_fit(ax, self.sampler.model.to(self.objective.bounds), self.sampler.train_x.to(self.objective.bounds), targets=self.sampler.train_y.to(self.objective.bounds), obj=self.objective, batch=self.batch_size, normalize_flag=True)
+                plot_gp_fit(ax, self.sampler.model.to(self.objective.bounds), self.sampler.train_x.to(self.objective.bounds), targets=self.sampler.train_y.to(self.objective.bounds), obj=self.objective, batch=self.batch_size, normalize_flag=False)
+            else:
+                #Plot datapoints and objective
+                x_history, value_history = torch.vstack(self.params_history_list).cpu().numpy(),torch.vstack(self.values_history).cpu().numpy()
+                ax.scatter(x_history, value_history, color='black', label='Training data')
+                ax.scatter(x_history[(-self.batch_size):], value_history[(-self.batch_size):], color='red', label='Last selected points')
+                test_x = torch.linspace(lb, up, 200, device=self.objective.device, dtype=self.objective.dtype)
+                value_ = (self.objective(test_x.unsqueeze(-1))).flatten()
+                ax.plot(test_x.cpu().numpy(), value_.cpu().numpy(), color='green', label='True Function')
 
             ax.set_xlabel('x')
             ax.set_ylabel('y')
