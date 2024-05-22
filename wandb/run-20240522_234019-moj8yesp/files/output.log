@@ -1,0 +1,11 @@
+[2024-05-22 23:40:37] INFO     <53593> evotorch.core: Instance of `Problem` (id:126545810787200) -- The `dtype` for the problem's decision variables is set as torch.float32
+[2024-05-22 23:40:37] INFO     <53593> evotorch.core: Instance of `Problem` (id:126545810787200) -- `eval_dtype` (the dtype of the fitnesses and evaluation data) is set as torch.float32
+[2024-05-22 23:40:37] INFO     <53593> evotorch.core: Instance of `Problem` (id:126545810787200) -- The `device` of the problem is set as cuda:0
+[2024-05-22 23:40:37] INFO     <53593> evotorch.core: Instance of `Problem` (id:126545810787200) -- The number of actors that will be allocated for parallelized evaluation is 0
+/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/evotorch/tools/misc.py:1107: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.clone().detach() or sourceTensor.clone().detach().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  result = torch.tensor(data, **kwargs)
+Processing algorithm SNES at seed 0:   0%|                                                                                      | 0/15 [00:00<?, ?it/s]/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/evotorch/core.py:3425: UserWarning: TypedStorage is deprecated. It will be removed in the future and UntypedStorage will be the only storage class. This should only matter to you if you are using storages directly.  To access UntypedStorage directly, use tensor.untyped_storage() instead of tensor.storage()
+  shares_storage = self._data.storage().data_ptr() == source._data.storage().data_ptr()
+
+
+Processing algorithm SNES at seed 0: 100%|█████████████████████████████████████████████████████████████████████████████| 15/15 [00:04<00:00,  3.26it/s]

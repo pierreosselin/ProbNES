@@ -16,9 +16,9 @@ def create_path_exp(save_path, problem_name, problem_kwargs):
 
 def create_path_alg(save_path, algorithm_name, alg_kwargs):
     if algorithm_name == "quad":  #["quad", "SNES", "random", "qEI", "piqEI"]
-        s = "_".join([f'line_search-{alg_kwargs[algorithm_name]["line_search"]}', f'gradient-{alg_kwargs[algorithm_name]["gradient_direction"]}', f'manifold-{alg_kwargs[algorithm_name]["manifold"]}', f'var_prior-{alg_kwargs[algorithm_name]["var_prior"]}', f'batch_size-{alg_kwargs["batch_size"]}'])
+        s = "_".join([f'gradient-{alg_kwargs[algorithm_name]["gradient_direction"]}', f'manifold-{alg_kwargs[algorithm_name]["manifold"]}', f'std_prior-{alg_kwargs[algorithm_name]["std_prior"]}', f'batch_size-{alg_kwargs["batch_size"]}'])
     elif algorithm_name == "SNES":
-        s = "_".join([f'var_prior-{alg_kwargs[algorithm_name]["var_prior"]}', f'batch_size-{alg_kwargs["batch_size"]}', f'sampling_strategy-{alg_kwargs[algorithm_name]["sampling_strategy"]}'])
+        s = "_".join([f'var_prior-{alg_kwargs[algorithm_name]["std_prior"]}', f'batch_size-{alg_kwargs["batch_size"]}'])
     elif algorithm_name == "qEI":
         s = "_".join([f'batch_size-{alg_kwargs["batch_size"]}'])
     elif algorithm_name == "piqEI":
@@ -145,13 +145,13 @@ if __name__ == "__main__":
                     problem_kwargs=problem_kwargs,
                     )
     
-    plot_figure(save_dir)
-    plot_figure(save_dir, log_transform=True)
+    # plot_figure(save_dir)
+    # plot_figure(save_dir, log_transform=True)
 
     ## config["test_function"]
-    plot_distribution_gif(config, n_seeds=1)
+    # plot_distribution_gif(config, n_seeds=1)
     
-    plot_distribution_path(config, n_seeds=1)
+    # plot_distribution_path(config, n_seeds=1)
 
     
     """

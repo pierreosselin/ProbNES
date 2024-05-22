@@ -18,6 +18,8 @@ from tqdm import tqdm
 from module.utils import nearestPD, EI, log_EI, EI_bivariate
 from botorch.utils.transforms import standardize, normalize, unnormalize
 import geoopt
+from PIL import Image
+from io import BytesIO
 
 
 """
@@ -135,6 +137,11 @@ def plot_synthesis_quad(optimizer, iteration, save_path=".", standardize=True):
     axs[0,0].set_xlim(lb, up)
     plot_gp_fit(axs[0,0], optimizer.model, optimizer.train_x, optimizer.train_y, optimizer.objective, optimizer.batch_size, normalize_flag=False)
     plot_distribution_1D(axs[0,0], optimizer.distribution)
+    mean_dis, std_dis = optimizer.distribution.loc.detach().cpu().numpy(), optimizer.distribution.covariance_matrix.sqrt().detach().cpu().numpy()[0,0]
+    ymin, ymax = axs[0,0].get_ylim()
+    axs[0,0].vlines(x = mean_dis, ymin = ymin, ymax = ymax, colors = 'red', label = 'Mean distribution')
+    axs[0,0].vlines(x = mean_dis - 2*std_dis, ymin = ymin, ymax = ymax, colors = 'red', linestyle='dashed')
+    axs[0,0].vlines(x = mean_dis + 2*std_dis, ymin = ymin, ymax = ymax, colors = 'red', linestyle='dashed')
 
     contour1 = axs[0,1].contourf(B, D, mean)
     # Gradient
@@ -163,15 +170,24 @@ def plot_synthesis_quad(optimizer, iteration, save_path=".", standardize=True):
     axs[1,1].scatter([float(optimizer.distribution.loc)], [float(optimizer.distribution.covariance_matrix)])
     
     ### Plot update rather than assuming wolfe
-    mu2, Epsilon2 = optimizer.list_mu[-2], optimizer.list_covar[-2]
-    axs[1,1].scatter([float(mu2)], [float(Epsilon2)])
-    axs[1,1].arrow(float(mu2), float(Epsilon2), float(optimizer.distribution.loc) - float(mu2), float(optimizer.distribution.covariance_matrix) - float(Epsilon2), width = 0.1)
+    # mu2, Epsilon2 = optimizer.list_mu[-2], optimizer.list_covar[-2]
+    # axs[1,1].scatter([float(mu2)], [float(Epsilon2)])
+    # axs[1,1].arrow(float(mu2), float(Epsilon2), float(optimizer.distribution.loc) - float(mu2), float(optimizer.distribution.covariance_matrix) - float(Epsilon2), width = 0.1)
     
     fig.colorbar(contour1, ax=axs[0,1])
     fig.colorbar(contour4, ax=axs[0,2])
     fig.colorbar(contour3, ax=axs[1,1])
     fig.colorbar(contour5, ax=axs[1,2])
-    fig.savefig(save_path_gp)
+
+    buf = BytesIO()
+    plt.savefig(buf, format='png')
+    buf.seek(0)
+    plt.close()
+
+    # Open image with Pillow
+    image_var = Image.open(buf)
+    return image_var
+    #fig.savefig(save_path_gp)
 
 def plot_cov_ellipse(cov, pos, nstd=2, ax=None, **kwargs):
     """

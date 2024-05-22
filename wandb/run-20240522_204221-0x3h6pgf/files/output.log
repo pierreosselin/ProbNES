@@ -1,0 +1,205 @@
+/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/models/utils/assorted.py:173: InputDataWarning: Input data is not contained to the unit cube. Please consider min-max scaling the input data.
+  warnings.warn(msg, InputDataWarning)
+Processing algorithm quad at seed 0:   0%|                                                                                               | 0/15 [00:00<?, ?it/s]/home/pierre/git/ProbNES/semisupervised/module/optimizers.py:1692: UserWarning: The use of `x.T` on tensors of dimension other than 2 to reverse their shape is deprecated and it will throw an error in a future release. Consider `x.mT` to transpose batches of matrices or `x.permute(*torch.arange(x.ndim - 1, -1, -1))` to reverse the dimensions of a tensor. (Triggered internally at ../aten/src/ATen/native/TensorShape.cpp:3571.)
+  self.mean_1 = self.mean_constant + (self.t_1X.T @ self.inverse_data_covar_y)
+/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/models/utils/assorted.py:173: InputDataWarning: Input data is not contained to the unit cube. Please consider min-max scaling the input data.
+  warnings.warn(msg, InputDataWarning)
+                                                                                                                                                                /home/pierre/git/ProbNES/semisupervised/module/utils.py:392: UserWarning: torch.cholesky is deprecated in favor of torch.linalg.cholesky and will be removed in a future PyTorch release.
+L = torch.cholesky(A)                                                                                                                  | 0/1900 [00:00<?, ?it/s]
+should be replaced with
+L = torch.linalg.cholesky(A)
+and
+U = torch.cholesky(A, upper=True)
+should be replaced with
+U = torch.linalg.cholesky(A).mH().
+This transform will produce equivalent results for all valid (symmetric positive definite) inputs. (Triggered internally at ../aten/src/ATen/native/BatchLinearAlgebra.cpp:1691.)
+  res = torch.cholesky(B)
+
+
+
+
+
+
+100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 100/100 [00:00<00:00, 287.02it/s]
+100it [00:00, 1590.35it/s]████████████████████████████████████████████████████████████████████████████████████▎               | 87/100 [00:00<00:00, 290.76it/s]
+Processing algorithm quad at seed 0:   0%|                                                                                               | 0/15 [00:32<?, ?it/s]
+Traceback (most recent call last):
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/runpy.py", line 196, in _run_module_as_main
+    return _run_code(code, main_globals, None,
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/runpy.py", line 86, in _run_code
+    exec(code, run_globals)
+  File "/home/pierre/.vscode/extensions/ms-python.debugpy-2024.6.0-linux-x64/bundled/libs/debugpy/adapter/../../debugpy/launcher/../../debugpy/__main__.py", line 39, in <module>
+    cli.main()
+  File "/home/pierre/.vscode/extensions/ms-python.debugpy-2024.6.0-linux-x64/bundled/libs/debugpy/adapter/../../debugpy/launcher/../../debugpy/../debugpy/server/cli.py", line 430, in main
+    run()
+  File "/home/pierre/.vscode/extensions/ms-python.debugpy-2024.6.0-linux-x64/bundled/libs/debugpy/adapter/../../debugpy/launcher/../../debugpy/../debugpy/server/cli.py", line 284, in run_file
+    runpy.run_path(target, run_name="__main__")
+  File "/home/pierre/.vscode/extensions/ms-python.debugpy-2024.6.0-linux-x64/bundled/libs/debugpy/_vendored/pydevd/_pydevd_bundle/pydevd_runpy.py", line 321, in run_path
+    return _run_module_code(code, init_globals, run_name,
+  File "/home/pierre/.vscode/extensions/ms-python.debugpy-2024.6.0-linux-x64/bundled/libs/debugpy/_vendored/pydevd/_pydevd_bundle/pydevd_runpy.py", line 135, in _run_module_code
+    _run_code(code, mod_globals, init_globals,
+  File "/home/pierre/.vscode/extensions/ms-python.debugpy-2024.6.0-linux-x64/bundled/libs/debugpy/_vendored/pydevd/_pydevd_bundle/pydevd_runpy.py", line 124, in _run_code
+    exec(code, run_globals)
+  File "/home/pierre/git/ProbNES/semisupervised/main.py", line 139, in <module>
+    run(save_path=alg_path,
+  File "/home/pierre/git/ProbNES/semisupervised/module/bo.py", line 80, in run
+    wandb.log({"Image synthesis info": img,
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/wandb/sdk/wandb_run.py", line 449, in wrapper
+    return func(self, *args, **kwargs)
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/wandb/sdk/wandb_run.py", line 400, in wrapper_fn
+    return func(self, *args, **kwargs)
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/wandb/sdk/wandb_run.py", line 390, in wrapper
+    return func(self, *args, **kwargs)
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/wandb/sdk/wandb_run.py", line 1871, in log
+    self._log(data=data, step=step, commit=commit)
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/wandb/sdk/wandb_run.py", line 1635, in _log
+    self._partial_history_callback(data, step, commit)
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/wandb/sdk/wandb_run.py", line 1507, in _partial_history_callback
+    self._backend.interface.publish_partial_history(
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/wandb/sdk/interface/interface.py", line 600, in publish_partial_history
+    data = history_dict_to_json(run, data, step=user_step, ignore_copy_err=True)
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/wandb/sdk/data_types/utils.py", line 52, in history_dict_to_json
+    payload[key] = val_to_json(
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/wandb/sdk/data_types/utils.py", line 164, in val_to_json
+    val.bind_to_run(run, key, namespace)
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/wandb/sdk/data_types/image.py", line 402, in bind_to_run
+    not _server_accepts_artifact_path()
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/wandb/sdk/data_types/image.py", line 57, in _server_accepts_artifact_path
+    max_cli_version = util._get_max_cli_version() if not util._is_offline() else None
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/wandb/util.py", line 1707, in _get_max_cli_version
+    max_cli_version = wandb.api.max_cli_version()
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/wandb/apis/internal.py", line 78, in max_cli_version
+    return self.api.max_cli_version()
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/wandb/apis/normalize.py", line 41, in wrapper
+    return func(*args, **kwargs)
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/wandb/sdk/internal/internal_api.py", line 836, in max_cli_version
+    query_types, server_info_types, _ = self.server_info_introspection()
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/wandb/apis/normalize.py", line 41, in wrapper
+    return func(*args, **kwargs)
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/wandb/sdk/internal/internal_api.py", line 523, in server_info_introspection
+    res = self.gql(query)
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/wandb/sdk/internal/internal_api.py", line 312, in gql
+    ret = self._retry_gql(
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/wandb/sdk/lib/retry.py", line 131, in __call__
+    result = self._call_fn(*args, **kwargs)
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/wandb/sdk/internal/internal_api.py", line 340, in execute
+    return self.client.execute(*args, **kwargs)  # type: ignore
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/wandb/vendor/gql-0.2.0/wandb_gql/client.py", line 52, in execute
+    result = self._get_result(document, *args, **kwargs)
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/wandb/vendor/gql-0.2.0/wandb_gql/client.py", line 60, in _get_result
+    return self.transport.execute(document, *args, **kwargs)
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/wandb/sdk/lib/gql_request.py", line 58, in execute
+    request = self.session.post(self.url, **post_args)
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/requests/sessions.py", line 637, in post
+    return self.request("POST", url, data=data, json=json, **kwargs)
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/requests/sessions.py", line 589, in request
+    resp = self.send(prep, **send_kwargs)
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/requests/sessions.py", line 703, in send
+    r = adapter.send(request, **kwargs)
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/requests/adapters.py", line 486, in send
+    resp = conn.urlopen(
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/urllib3/connectionpool.py", line 790, in urlopen
+    response = self._make_request(
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/urllib3/connectionpool.py", line 467, in _make_request
+    self._validate_conn(conn)
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/urllib3/connectionpool.py", line 1092, in _validate_conn
+    conn.connect()
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/urllib3/connection.py", line 611, in connect
+    self.sock = sock = self._new_conn()
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/urllib3/connection.py", line 203, in _new_conn
+    sock = connection.create_connection(
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/urllib3/util/connection.py", line 60, in create_connection
+    for res in socket.getaddrinfo(host, port, family, socket.SOCK_STREAM):
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/socket.py", line 955, in getaddrinfo
+    for res in _socket.getaddrinfo(host, port, family, type, proto, flags):
+KeyboardInterrupt
+Traceback (most recent call last):
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/runpy.py", line 196, in _run_module_as_main
+    return _run_code(code, main_globals, None,
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/runpy.py", line 86, in _run_code
+    exec(code, run_globals)
+  File "/home/pierre/.vscode/extensions/ms-python.debugpy-2024.6.0-linux-x64/bundled/libs/debugpy/adapter/../../debugpy/launcher/../../debugpy/__main__.py", line 39, in <module>
+    cli.main()
+  File "/home/pierre/.vscode/extensions/ms-python.debugpy-2024.6.0-linux-x64/bundled/libs/debugpy/adapter/../../debugpy/launcher/../../debugpy/../debugpy/server/cli.py", line 430, in main
+    run()
+  File "/home/pierre/.vscode/extensions/ms-python.debugpy-2024.6.0-linux-x64/bundled/libs/debugpy/adapter/../../debugpy/launcher/../../debugpy/../debugpy/server/cli.py", line 284, in run_file
+    runpy.run_path(target, run_name="__main__")
+  File "/home/pierre/.vscode/extensions/ms-python.debugpy-2024.6.0-linux-x64/bundled/libs/debugpy/_vendored/pydevd/_pydevd_bundle/pydevd_runpy.py", line 321, in run_path
+    return _run_module_code(code, init_globals, run_name,
+  File "/home/pierre/.vscode/extensions/ms-python.debugpy-2024.6.0-linux-x64/bundled/libs/debugpy/_vendored/pydevd/_pydevd_bundle/pydevd_runpy.py", line 135, in _run_module_code
+    _run_code(code, mod_globals, init_globals,
+  File "/home/pierre/.vscode/extensions/ms-python.debugpy-2024.6.0-linux-x64/bundled/libs/debugpy/_vendored/pydevd/_pydevd_bundle/pydevd_runpy.py", line 124, in _run_code
+    exec(code, run_globals)
+  File "/home/pierre/git/ProbNES/semisupervised/main.py", line 139, in <module>
+    run(save_path=alg_path,
+  File "/home/pierre/git/ProbNES/semisupervised/module/bo.py", line 80, in run
+    wandb.log({"Image synthesis info": img,
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/wandb/sdk/wandb_run.py", line 449, in wrapper
+    return func(self, *args, **kwargs)
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/wandb/sdk/wandb_run.py", line 400, in wrapper_fn
+    return func(self, *args, **kwargs)
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/wandb/sdk/wandb_run.py", line 390, in wrapper
+    return func(self, *args, **kwargs)
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/wandb/sdk/wandb_run.py", line 1871, in log
+    self._log(data=data, step=step, commit=commit)
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/wandb/sdk/wandb_run.py", line 1635, in _log
+    self._partial_history_callback(data, step, commit)
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/wandb/sdk/wandb_run.py", line 1507, in _partial_history_callback
+    self._backend.interface.publish_partial_history(
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/wandb/sdk/interface/interface.py", line 600, in publish_partial_history
+    data = history_dict_to_json(run, data, step=user_step, ignore_copy_err=True)
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/wandb/sdk/data_types/utils.py", line 52, in history_dict_to_json
+    payload[key] = val_to_json(
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/wandb/sdk/data_types/utils.py", line 164, in val_to_json
+    val.bind_to_run(run, key, namespace)
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/wandb/sdk/data_types/image.py", line 402, in bind_to_run
+    not _server_accepts_artifact_path()
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/wandb/sdk/data_types/image.py", line 57, in _server_accepts_artifact_path
+    max_cli_version = util._get_max_cli_version() if not util._is_offline() else None
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/wandb/util.py", line 1707, in _get_max_cli_version
+    max_cli_version = wandb.api.max_cli_version()
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/wandb/apis/internal.py", line 78, in max_cli_version
+    return self.api.max_cli_version()
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/wandb/apis/normalize.py", line 41, in wrapper
+    return func(*args, **kwargs)
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/wandb/sdk/internal/internal_api.py", line 836, in max_cli_version
+    query_types, server_info_types, _ = self.server_info_introspection()
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/wandb/apis/normalize.py", line 41, in wrapper
+    return func(*args, **kwargs)
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/wandb/sdk/internal/internal_api.py", line 523, in server_info_introspection
+    res = self.gql(query)
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/wandb/sdk/internal/internal_api.py", line 312, in gql
+    ret = self._retry_gql(
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/wandb/sdk/lib/retry.py", line 131, in __call__
+    result = self._call_fn(*args, **kwargs)
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/wandb/sdk/internal/internal_api.py", line 340, in execute
+    return self.client.execute(*args, **kwargs)  # type: ignore
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/wandb/vendor/gql-0.2.0/wandb_gql/client.py", line 52, in execute
+    result = self._get_result(document, *args, **kwargs)
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/wandb/vendor/gql-0.2.0/wandb_gql/client.py", line 60, in _get_result
+    return self.transport.execute(document, *args, **kwargs)
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/wandb/sdk/lib/gql_request.py", line 58, in execute
+    request = self.session.post(self.url, **post_args)
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/requests/sessions.py", line 637, in post
+    return self.request("POST", url, data=data, json=json, **kwargs)
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/requests/sessions.py", line 589, in request
+    resp = self.send(prep, **send_kwargs)
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/requests/sessions.py", line 703, in send
+    r = adapter.send(request, **kwargs)
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/requests/adapters.py", line 486, in send
+    resp = conn.urlopen(
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/urllib3/connectionpool.py", line 790, in urlopen
+    response = self._make_request(
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/urllib3/connectionpool.py", line 467, in _make_request
+    self._validate_conn(conn)
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/urllib3/connectionpool.py", line 1092, in _validate_conn
+    conn.connect()
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/urllib3/connection.py", line 611, in connect
+    self.sock = sock = self._new_conn()
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/urllib3/connection.py", line 203, in _new_conn
+    sock = connection.create_connection(
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/urllib3/util/connection.py", line 60, in create_connection
+    for res in socket.getaddrinfo(host, port, family, socket.SOCK_STREAM):
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/socket.py", line 955, in getaddrinfo
+    for res in _socket.getaddrinfo(host, port, family, type, proto, flags):
+KeyboardInterrupt

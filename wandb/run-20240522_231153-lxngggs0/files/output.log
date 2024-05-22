@@ -1,0 +1,171 @@
+/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/models/utils/assorted.py:173: InputDataWarning: Input data is not contained to the unit cube. Please consider min-max scaling the input data.
+  warnings.warn(msg, InputDataWarning)
+Processing algorithm quad at seed 0:   0%|                                                                                      | 0/15 [00:00<?, ?it/s]/home/pierre/git/ProbNES/semisupervised/module/optimizers.py:1694: UserWarning: The use of `x.T` on tensors of dimension other than 2 to reverse their shape is deprecated and it will throw an error in a future release. Consider `x.mT` to transpose batches of matrices or `x.permute(*torch.arange(x.ndim - 1, -1, -1))` to reverse the dimensions of a tensor. (Triggered internally at ../aten/src/ATen/native/TensorShape.cpp:3571.)
+  self.mean_1 = self.mean_constant + (self.t_1X.T @ self.inverse_data_covar_y)
+/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/models/utils/assorted.py:173: InputDataWarning: Input data is not contained to the unit cube. Please consider min-max scaling the input data.
+  warnings.warn(msg, InputDataWarning)
+                                                                                                                                                       /home/pierre/git/ProbNES/semisupervised/module/utils.py:392: UserWarning: torch.cholesky is deprecated in favor of torch.linalg.cholesky and will be removed in a future PyTorch release.
+L = torch.cholesky(A)                                                                                                         | 0/1900 [00:00<?, ?it/s]
+should be replaced with
+L = torch.linalg.cholesky(A)
+and
+U = torch.cholesky(A, upper=True)
+should be replaced with
+U = torch.linalg.cholesky(A).mH().
+This transform will produce equivalent results for all valid (symmetric positive definite) inputs. (Triggered internally at ../aten/src/ATen/native/BatchLinearAlgebra.cpp:1691.)
+  res = torch.cholesky(B)
+
+
+
+100%|███████████████████████████████████████████████████████████████████████████████████████████████████████████████| 100/100 [00:00<00:00, 269.48it/s]
+100it [00:00, 1612.68it/s]████████████████████████████████████████████████████████████████████████████▍              | 87/100 [00:00<00:00, 274.71it/s]
+Processing algorithm quad at seed 0:   7%|█████▏                                                                        | 1/15 [00:31<07:15, 31.10s/it]/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/models/utils/assorted.py:173: InputDataWarning: Input data is not contained to the unit cube. Please consider min-max scaling the input data.
+  warnings.warn(msg, InputDataWarning)
+
+
+
+
+
+
+100%|███████████████████████████████████████████████████████████████████████████████████████████████████████████████| 100/100 [00:00<00:00, 279.14it/s]
+100it [00:00, 1661.26it/s]███████████████████████████████████████████████████████████████████████████▎               | 86/100 [00:00<00:00, 281.88it/s]
+Processing algorithm quad at seed 0:  13%|██████████▍                                                                   | 2/15 [00:46<04:45, 21.99s/it]/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/models/utils/assorted.py:173: InputDataWarning: Input data is not contained to the unit cube. Please consider min-max scaling the input data.
+  warnings.warn(msg, InputDataWarning)
+
+
+
+
+
+
+100%|███████████████████████████████████████████████████████████████████████████████████████████████████████████████| 100/100 [00:00<00:00, 272.86it/s]
+100it [00:00, 1415.64it/s]████████████████████████████████████████████████████████████████████████████▍              | 87/100 [00:00<00:00, 286.90it/s]
+Processing algorithm quad at seed 0:  20%|███████████████▌                                                              | 3/15 [01:03<03:54, 19.54s/it]/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/models/utils/assorted.py:173: InputDataWarning: Input data is not contained to the unit cube. Please consider min-max scaling the input data.
+  warnings.warn(msg, InputDataWarning)
+
+
+
+
+
+
+100%|███████████████████████████████████████████████████████████████████████████████████████████████████████████████| 100/100 [00:00<00:00, 309.47it/s]
+100it [00:00, 1644.69it/s]██████████████████████████████████████████████████████████████████████████████████████▌    | 96/100 [00:00<00:00, 310.31it/s]
+Processing algorithm quad at seed 0:  27%|████████████████████▊                                                         | 4/15 [01:18<03:14, 17.69s/it]/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/models/utils/assorted.py:173: InputDataWarning: Input data is not contained to the unit cube. Please consider min-max scaling the input data.
+  warnings.warn(msg, InputDataWarning)
+
+
+
+
+
+
+100%|███████████████████████████████████████████████████████████████████████████████████████████████████████████████| 100/100 [00:00<00:00, 228.54it/s]
+100it [00:00, 1672.39it/s]█████████████████████████████████████████████████████████████████████████████████████▍     | 95/100 [00:00<00:00, 235.05it/s]
+Processing algorithm quad at seed 0:  33%|██████████████████████████                                                    | 5/15 [01:34<02:50, 17.02s/it]/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/models/utils/assorted.py:173: InputDataWarning: Input data is not contained to the unit cube. Please consider min-max scaling the input data.
+  warnings.warn(msg, InputDataWarning)
+
+
+
+
+
+100%|███████████████████████████████████████████████████████████████████████████████████████████████████████████████| 100/100 [00:00<00:00, 259.87it/s]
+100it [00:00, 1146.86it/s]██████████████████████████████████████████████████████████████████████████▏                | 85/100 [00:00<00:00, 254.61it/s]
+Processing algorithm quad at seed 0:  40%|███████████████████████████████▏                                              | 6/15 [01:49<02:28, 16.49s/it]/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/models/utils/assorted.py:173: InputDataWarning: Input data is not contained to the unit cube. Please consider min-max scaling the input data.
+  warnings.warn(msg, InputDataWarning)
+
+
+
+
+
+100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████▌| 1892/1900 [00:12<00:00, 144.82it/s]
+100it [00:00, 1543.68it/s]███████████████████████████████████████████████████████████████████████████▎               | 86/100 [00:00<00:00, 279.98it/s]
+Processing algorithm quad at seed 0:  47%|████████████████████████████████████▍                                         | 7/15 [02:04<02:07, 15.94s/it]/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/models/utils/assorted.py:173: InputDataWarning: Input data is not contained to the unit cube. Please consider min-max scaling the input data.
+  warnings.warn(msg, InputDataWarning)
+
+
+
+
+
+
+100%|███████████████████████████████████████████████████████████████████████████████████████████████████████████████| 100/100 [00:00<00:00, 209.99it/s]
+100it [00:00, 1584.10it/s]█████████████████████████████████████████████████████████████████████████████▌             | 88/100 [00:00<00:00, 211.42it/s]
+Processing algorithm quad at seed 0:  53%|█████████████████████████████████████████▌                                    | 8/15 [02:20<01:52, 16.03s/it]/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/models/utils/assorted.py:173: InputDataWarning: Input data is not contained to the unit cube. Please consider min-max scaling the input data.
+  warnings.warn(msg, InputDataWarning)
+
+
+
+
+
+
+100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████| 1900/1900 [00:14<00:00, 135.41it/s]
+100it [00:00, 1571.66it/s]████████████████████████████████████████████████████████████████████████████████████▎      | 94/100 [00:00<00:00, 229.40it/s]
+Processing algorithm quad at seed 0:  60%|██████████████████████████████████████████████▊                               | 9/15 [02:38<01:39, 16.60s/it]/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/models/utils/assorted.py:173: InputDataWarning: Input data is not contained to the unit cube. Please consider min-max scaling the input data.
+  warnings.warn(msg, InputDataWarning)
+
+
+
+
+
+
+100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████▊| 1896/1900 [00:14<00:00, 114.11it/s]
+100it [00:00, 1443.92it/s]██████████████████████████████████████████████████████████████████████████████████         | 92/100 [00:00<00:00, 226.86it/s]
+Processing algorithm quad at seed 0:  67%|███████████████████████████████████████████████████▎                         | 10/15 [02:56<01:24, 16.99s/it]/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/models/utils/assorted.py:173: InputDataWarning: Input data is not contained to the unit cube. Please consider min-max scaling the input data.
+  warnings.warn(msg, InputDataWarning)
+
+
+
+
+
+
+100%|███████████████████████████████████████████████████████████████████████████████████████████████████████████████| 100/100 [00:00<00:00, 270.36it/s]
+100it [00:00, 1638.64it/s]███████████████████████████████████████████████████████████████████████████▎               | 86/100 [00:00<00:00, 271.45it/s]
+Processing algorithm quad at seed 0:  73%|████████████████████████████████████████████████████████▍                    | 11/15 [03:13<01:08, 17.10s/it]/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/models/utils/assorted.py:173: InputDataWarning: Input data is not contained to the unit cube. Please consider min-max scaling the input data.
+  warnings.warn(msg, InputDataWarning)
+
+
+
+
+
+
+
+100%|███████████████████████████████████████████████████████████████████████████████████████████████████████████████| 100/100 [00:00<00:00, 256.24it/s]
+100it [00:00, 1649.81it/s]███████████████████████████████████████████████████████████████████▍                       | 79/100 [00:00<00:00, 257.44it/s]
+Processing algorithm quad at seed 0:  80%|█████████████████████████████████████████████████████████████▌               | 12/15 [03:30<00:51, 17.08s/it]/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/models/utils/assorted.py:173: InputDataWarning: Input data is not contained to the unit cube. Please consider min-max scaling the input data.
+  warnings.warn(msg, InputDataWarning)
+
+
+
+
+
+
+
+
+
+
+
+
+
+100%|███████████████████████████████████████████████████████████████████████████████████████████████████████████████| 100/100 [00:00<00:00, 160.37it/s]
+100it [00:00, 942.38it/s]███████████████████████████████████████████████████████████████████████████▏                | 85/100 [00:00<00:00, 158.91it/s]
+Processing algorithm quad at seed 0:  87%|██████████████████████████████████████████████████████████████████▋          | 13/15 [04:02<00:43, 21.71s/it]/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/models/utils/assorted.py:173: InputDataWarning: Input data is not contained to the unit cube. Please consider min-max scaling the input data.
+  warnings.warn(msg, InputDataWarning)
+
+
+
+
+
+
+
+
+
+
+100%|███████████████████████████████████████████████████████████████████████████████████████████████████████████████| 100/100 [00:00<00:00, 233.54it/s]
+100it [00:00, 1628.32it/s]████████████████████████████████████████████████████████████████████████████████████████▊  | 98/100 [00:00<00:00, 234.07it/s]
+Processing algorithm quad at seed 0:  93%|███████████████████████████████████████████████████████████████████████▊     | 14/15 [04:28<00:22, 22.80s/it]/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/models/utils/assorted.py:173: InputDataWarning: Input data is not contained to the unit cube. Please consider min-max scaling the input data.
+  warnings.warn(msg, InputDataWarning)
+
+
+
+
+
+100%|███████████████████████████████████████████████████████████████████████████████████████████████████████████████| 100/100 [00:00<00:00, 269.40it/s]
+100it [00:00, 1332.57it/s]█████████████████████████████████████████████████████████████████████████                  | 84/100 [00:00<00:00, 275.47it/s]
+Processing algorithm quad at seed 0: 100%|█████████████████████████████████████████████████████████████████████████████| 15/15 [04:44<00:00, 18.98s/it]

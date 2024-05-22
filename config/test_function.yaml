@@ -12,11 +12,13 @@ exp_settings:
 
 ## Change config for algorithm setting
 alg_settings:
-  algorithm: ["quad", "SNES"] #["quad", "SNES", "random", "qEI", "piqEI"]  #[random, qEI, SNES, piqEI, quad]
+  algorithm: ["SNES"] #["quad", "SNES", "random", "qEI", "piqEI"]  #[random, qEI, SNES, piqEI, quad]
   verbose: 10
+  batch_size: 5
   piqEI:
     beta: 1.
-    var_prior: [10.]
+    mean_prior: [1.]
+    std_prior: [10.]
     num_restarts: 10 #For qEI and piqEI
     mc_samples: 256 #For qEI and piqEI
     raw_samples: 512 #For qEI and piqEI
@@ -27,21 +29,23 @@ alg_settings:
     raw_samples: 512 #For qEI and piqEI
     batch_acq: 5 # Number of batches used to evaluate the acquisition function at the same time
   quad:
-    var_prior: [10.]
+    mean_prior: 1.
+    std_prior: 3.
     candidates_vr: 5000
-    policy: "ei" # ["wolfe", "ei", "armijo"]
+    lr: 1.
+    policy: "constant" # ["wolfe", "ei", "armijo", "constant"]
     c1: 0.0001
     c2: 0.9
     t_max: 100
     budget: 500
-    manifold: False
+    manifold: True
     gradient_direction: "expected" #["sample", "mpd"]
   SNES:
-    var_prior: [10.]
-   #For piqei
+    std_prior: 3.
+    mean_prior: 1.
 
 problem_settings:
-  function: "sin3" # Name of the function in [airfoil, rosenbrock, sphere, ackley]
+  function: "ackley" # Name of the function in [airfoil, rosenbrock, sphere, ackley]
   noise: 0.
   dim: 1
   initial_bounds: 10.

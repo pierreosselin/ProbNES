@@ -1,0 +1,46 @@
+
+Backend TkAgg is interactive backend. Turning interactive mode on.
+/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/models/utils/assorted.py:173: InputDataWarning: Input data is not contained to the unit cube. Please consider min-max scaling the input data.
+  warnings.warn(msg, InputDataWarning)
+Processing algorithm quad at seed 0:   0%|                                                                                      | 0/15 [00:00<?, ?it/s]/home/pierre/git/ProbNES/semisupervised/module/optimizers.py:1694: UserWarning: The use of `x.T` on tensors of dimension other than 2 to reverse their shape is deprecated and it will throw an error in a future release. Consider `x.mT` to transpose batches of matrices or `x.permute(*torch.arange(x.ndim - 1, -1, -1))` to reverse the dimensions of a tensor. (Triggered internally at ../aten/src/ATen/native/TensorShape.cpp:3571.)
+  self.mean_1 = self.mean_constant + (self.t_1X.T @ self.inverse_data_covar_y)
+/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/models/utils/assorted.py:173: InputDataWarning: Input data is not contained to the unit cube. Please consider min-max scaling the input data.
+  warnings.warn(msg, InputDataWarning)
+                                                                                                                                                       /home/pierre/git/ProbNES/semisupervised/module/utils.py:392: UserWarning: torch.cholesky is deprecated in favor of torch.linalg.cholesky and will be removed in a future PyTorch release.
+L = torch.cholesky(A)                                                                                                         | 0/1900 [00:00<?, ?it/s]
+should be replaced with
+L = torch.linalg.cholesky(A)
+and
+U = torch.cholesky(A, upper=True)
+should be replaced with
+U = torch.linalg.cholesky(A).mH().
+This transform will produce equivalent results for all valid (symmetric positive definite) inputs. (Triggered internally at ../aten/src/ATen/native/BatchLinearAlgebra.cpp:1691.)
+  res = torch.cholesky(B)
+
+
+
+
+100%|███████████████████████████████████████████████████████████████████████████████████████████████████████████████| 100/100 [00:00<00:00, 339.67it/s]
+100it [00:00, 1691.67it/s]█████████████████████████████████████████████████████████████▉                             | 74/100 [00:00<00:00, 346.87it/s]
+
+Processing algorithm quad at seed 0:   7%|█████▏                                                                        | 1/15 [01:23<19:24, 83.21s/it]/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/models/utils/assorted.py:173: InputDataWarning: Input data is not contained to the unit cube. Please consider min-max scaling the input data.
+  warnings.warn(msg, InputDataWarning)
+
+
+
+
+
+100%|███████████████████████████████████████████████████████████████████████████████████████████████████████████████| 100/100 [00:00<00:00, 355.25it/s]
+100it [00:00, 1922.60it/s]███████████████████████████████████████████████████████████▋                               | 72/100 [00:00<00:00, 356.57it/s]
+
+Processing algorithm quad at seed 0:  13%|██████████▍                                                                   | 2/15 [02:49<18:21, 84.76s/it]/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/models/utils/assorted.py:173: InputDataWarning: Input data is not contained to the unit cube. Please consider min-max scaling the input data.
+  warnings.warn(msg, InputDataWarning)
+
+
+
+
+
+100%|███████████████████████████████████████████████████████████████████████████████████████████████████████████████| 100/100 [00:00<00:00, 283.85it/s]
+100it [00:00, 1828.60it/s]██████████████████████████████████████████████████████████████████████████▏                | 85/100 [00:00<00:00, 286.80it/s]
+
+
