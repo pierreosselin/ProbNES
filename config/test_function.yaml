@@ -5,14 +5,14 @@ verbose_synthesis: 0
 gpu: 0
 
 exp_settings:
-  n_exp: 10
-  n_iter: 18
+  n_exp: 5
+  n_iter: 15
   batch_size: 5
   n_init: 5 # Has to be equal to batch size for evo algo
 
 ## Change config for algorithm setting
 alg_settings:
-  algorithm: ["quad", "SNES", "piqEI"] #["quad", "SNES", "random", "qEI", "piqEI"]  #[random, qEI, SNES, piqEI, quad]
+  algorithm: ["piqEI", "quad", "SNES"] #["quad", "SNES", "random", "qEI", "piqEI"]  #[random, qEI, SNES, piqEI, quad]
   verbose: 10
   batch_size: 5
   piqEI:
@@ -45,7 +45,7 @@ alg_settings:
     mean_prior: 1.
 
 problem_settings:
-  function: "ackley" # Name of the function in [airfoil, rosenbrock, sphere, ackley]
+  function: "ackley" # Name of the function in [airfoil, rosenbrock, sphere, ackley, rastrigin]
   noise: 0.
-  dim: 1
+  dim: 2
   initial_bounds: 10.

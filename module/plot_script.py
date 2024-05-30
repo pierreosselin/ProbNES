@@ -24,6 +24,9 @@ import yaml
 from itertools import product
 import pandas as pd
 
+algo_to_label = {"quad": "Proba SNES (ours)",
+                 "SNES": "SNES",
+                 "piqEI": "piBO"}
 
 """
 Scripts to produce plots from the files contained in path
@@ -254,9 +257,9 @@ def plot_figure_algo(alg_dir, ax, log_transform=False):
     y = pd.DataFrame(y).cummin(axis=1)
     y = y.iloc[:, iters_index]
     if log_transform:
-        ax.plot(iters, np.log(y.mean(axis=0).to_numpy()), ".-", label=label)
+        ax.plot(iters, np.log(y.mean(axis=0).to_numpy()), ".-", label=algo_to_label[label])
     else:
-        ax.plot(iters, y.mean(axis=0).to_numpy(), ".-", label=label)
+        ax.plot(iters, y.mean(axis=0).to_numpy(), ".-", label=algo_to_label[label])
     yerr=ci(y, N_TRIALS)
     if log_transform:
         ax.fill_between(iters, np.log(np.clip(y.mean(axis=0)-yerr, a_min=1e-5, a_max=None)), np.log(np.clip(y.mean(axis=0)+yerr, a_min=1e-5, a_max=None)), alpha=0.1)
@@ -346,16 +349,16 @@ def plot_config(config_name, log_transform=False):
     N_BATCH, BATCH_SIZE = exp_kwargs["n_iter"], exp_kwargs["batch_size"]
     if not log_transform:    
         ax.plot([0, N_BATCH * BATCH_SIZE], [0.] * 2, 'k', label="true best objective", linewidth=2)
-        ax.set_ylim(0,10.)
+        # ax.set_ylim(0, 5.)
     ax.set(xlabel='number of observations (beyond initial points)', ylabel='best objective value')
     #ax.set_ylim(0,10.)
     ax.legend(loc="lower right")
     if not log_transform:
-        fig.savefig(os.path.join(save_dir, f"plot_regret_{config_name}.pdf"))
-        fig.savefig(os.path.join(save_dir, f"plot_regret_{config_name}.png"))
+        fig.savefig(os.path.join(exp_path, f"plot_regret_{config_name}.pdf"))
+        fig.savefig(os.path.join(exp_path, f"plot_regret_{config_name}.png"))
     else:
-        fig.savefig(os.path.join(save_dir, f"plot_regret_log_{config_name}.pdf"))
-        fig.savefig(os.path.join(save_dir, f"plot_regret_log_{config_name}.png"))
+        fig.savefig(os.path.join(exp_path, f"plot_regret_log_{config_name}.pdf"))
+        fig.savefig(os.path.join(exp_path, f"plot_regret_log_{config_name}.png"))
     
 
 def plot_figure(save_path, log_transform=False):

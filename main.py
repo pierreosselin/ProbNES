@@ -133,7 +133,9 @@ if __name__ == "__main__":
     # plot_distribution_gif(config, n_seeds=1)
     
     # plot_distribution_path(config, n_seeds=1)
-
+    print("Plotting the figures of the results...")
+    plot_config(args.config)
+    plot_config(args.config, log_transform=True)
     
     """
     for seed, var_prior in product(seed_list, var_list):

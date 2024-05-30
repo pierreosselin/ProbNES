@@ -257,10 +257,9 @@ class SNES(AbstractOptimizer):
         problem = Problem("max", objective, solution_length=objective.dim, device = objective.device,initial_bounds=objective.bounds)
 
         ## Load parameter distribution TODO Transform distribution with respect to bounds
-        self.mean, self.var = optimizer_config["mean_prior"]*torch.ones(objective.dim, device=objective.device, dtype=objective.dtype), torch.tensor([optimizer_config["std_prior"]]*objective.dim, device=objective.device, dtype=objective.dtype)
+        self.mean, self.std = optimizer_config["mean_prior"]*torch.ones(objective.dim, device=objective.device, dtype=objective.dtype), torch.tensor([optimizer_config["std_prior"]]*objective.dim, device=objective.device, dtype=objective.dtype)
 
-        self.searcher = evoalgo.SNES(problem, popsize=self.batch_size, center_init = self.mean, stdev_init=self.var)
-        self.distribution = MultivariateNormal(self.mean, torch.diag(self.var))
+        self.searcher = evoalgo.SNES(problem, popsize=self.batch_size, center_init = self.mean, stdev_init=self.std)
         self.params_history_list = []
         self.values_history = []
         self.list_mu = []
@@ -272,7 +271,7 @@ class SNES(AbstractOptimizer):
         train_x, train_obj = self.searcher.population.values, self.searcher.population.evals
         self.params_history_list.append(train_x.clone())
         # self.values_history.append(train_obj.clone())
-        self.values_history.append(self.objective(self.searcher._get_mu().reshape(-1,1)).repeat(self.batch_size))
+        self.values_history.append(self.objective(self.searcher._get_mu()).repeat(self.batch_size))
         # self.values_history.append(train_obj.clone())
         self.list_mu.append(self.searcher._get_mu())
         self.list_covar.append(self.searcher._get_sigma())
@@ -284,7 +283,7 @@ class SNES(AbstractOptimizer):
         train_x, train_obj = self.searcher.population.values, self.searcher.population.evals
         self.params_history_list.append(train_x.clone())
         # self.values_history.append(train_obj.clone())
-        self.values_history.append(self.objective(self.searcher._get_mu().reshape(-1,1)).repeat(self.batch_size))
+        self.values_history.append(self.objective(self.searcher._get_mu()).repeat(self.batch_size))
         self.list_mu.append(self.searcher._get_mu())
         self.list_covar.append(self.searcher._get_sigma())
         
@@ -1816,7 +1815,8 @@ class ProbES(AbstractOptimizer):
             self.t_update = minimize_scalar(self.criterion).x
         
         ## TODO if manifold is euclidean need to project back to semi definite matrices
-        self.manifold_point = self.manifold.expmap(self.manifold_point, self.t_update*torch.tensor([self.d_mu[0], self.d_epsilon[0,0]], device = self.objective.device))
+        # self.manifold_point = self.manifold.expmap(self.manifold_point, self.t_update*torch.tensor([self.d_mu[0], self.d_epsilon[0,0]], device = self.objective.device))
+        self.manifold_point = self.manifold.expmap(self.manifold_point, self.t_update*torch.hstack([self.d_mu, self.d_epsilon.flatten()]))
         mu_target, covar_target = self.manifold.take_submanifold_value(self.manifold_point, 0), self.manifold.take_submanifold_value(self.manifold_point, 1)
         # mu_target, covar_target = self.distribution.loc + self.t_update*self.d_mu, self.distribution.covariance_matrix + self.t_update*self.d_epsilon
         # covar_target = torch.max(covar_target, torch.tensor([[1e-14]], device = self.objective.device, dtype = self.objective.dtype))
