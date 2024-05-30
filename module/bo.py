@@ -34,6 +34,7 @@ def run(save_path: str,
     #Get experiment settings
     N_BATCH = exp_kwargs["n_iter"]
     N_INIT = exp_kwargs["n_init"]
+    BATCH_SIZE = exp_kwargs["batch_size"]
 
     #Set seed and device
     torch.manual_seed(seed)

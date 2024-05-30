@@ -26,7 +26,8 @@ import pandas as pd
 
 algo_to_label = {"quad": "Proba SNES (ours)",
                  "SNES": "SNES",
-                 "piqEI": "piBO"}
+                 "piqEI": "piBO",
+                 "random": "random"}
 
 """
 Scripts to produce plots from the files contained in path

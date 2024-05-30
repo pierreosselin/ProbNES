@@ -446,8 +446,7 @@ def initialize_acqf_optimizer(type=None, **kwargs):
     def optimize_acqfunction_sequential(acq_func, dist):
         """Optimizes the acquisition function via random sampling, and returns a new candidate."""
         # optimize
-        for i in range(BATCH_SIZE):
-            
+        for _ in range(BATCH_SIZE):
             candidates = dist.sample(torch.tensor([CANDIDATES_VR, BATCH_SIZE])).to(device = dist.loc.device, dtype = dist.loc.dtype)
         res = acq_func(candidates)
         new_x = candidates[torch.argmax(res)]

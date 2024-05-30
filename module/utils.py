@@ -479,5 +479,7 @@ def create_path_alg(save_path, algorithm_name, alg_kwargs):
         s = "_".join([f'batch_size-{alg_kwargs["batch_size"]}'])
     elif algorithm_name == "piqEI":
         s = "_".join([f'beta-{alg_kwargs[algorithm_name]["beta"]}', f'std_prior-{alg_kwargs[algorithm_name]["std_prior"]}', f'batch_size-{alg_kwargs["batch_size"]}']) 
+    elif algorithm_name == "random":
+        s = "_".join([f'var_prior-{alg_kwargs[algorithm_name]["std_prior"]}', f'batch_size-{alg_kwargs["batch_size"]}'])
     save_path = os.path.join(save_path, s)
     return save_path

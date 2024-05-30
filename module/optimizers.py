@@ -53,7 +53,7 @@ def load_optimizer(label, n_init, objective, dict_parameter, plot_path):
     elif label == "SNES":
         optimizer = SNES(n_init=n_init, objective=objective, batch_size=dict_parameter["batch_size"], optimizer_config=dict_parameter["SNES"], plot_path=plot_path)
     elif label == "random":
-        optimizer = RandomSearch(n_init=n_init, objective=objective, batch_size=dict_parameter["batch_size"])
+        optimizer = Random(n_init=n_init, objective=objective, batch_size=dict_parameter["batch_size"], optimizer_config=dict_parameter["random"], plot_path=plot_path)
     return optimizer
 
 ## Function to generate initial data, either random in bounds or from domain informed distribution
@@ -66,12 +66,12 @@ def generate_data(
         distribution: torch.distributions.Distribution = None
         ):
 
-    if label in ["random", "qEI"]:
+    if label in ["qEI"]:
         train_x = unnormalize(torch.rand(n_init, objective.dim, device=objective.device, dtype=objective.dtype), objective.bounds) ### Change initializer normal or discrete
         train_obj = objective(train_x).unsqueeze(-1)  # add output dimension
         best_observed_value = train_obj.max().item()
         
-    elif label in ["piqEI", "quad", "SNES"]:
+    elif label in ["random", "piqEI", "quad", "SNES"]:
         train_x = distribution.sample((n_init,)).reshape(-1, objective.dim)
         train_obj = objective(train_x).unsqueeze(-1)  # add output dimension
         best_observed_value = train_obj.max().item()
@@ -120,6 +120,73 @@ class AbstractOptimizer(ABC):
     def plot_synthesis(self) -> None:
         """One parameter update step."""
         pass
+
+class Random(AbstractOptimizer):
+    """Optimizer class for vanilla Bayesian optimization.
+
+    Vanilla stands for the usage of a classic acquisition function like
+    expected improvement.
+
+    Atrributes:
+        params_init: Starting parameter configuration for the optimization.
+        objective: Objective to optimize, can be a function or a
+            EnvironmentObjective.
+        Model: Gaussian process model.
+        model_config: Configuration dictionary for model.
+        hyperparameter_config: Configuration dictionary for hyperparameters of
+            Gaussian process model.
+        acquisition_function: BoTorch acquisition function.
+        acqf_config: Configuration dictionary acquisition function.
+        optimize_acqf: Function that optimizes the acquisition function.
+        optimize_acqf_config: Configuration dictionary for optimization of
+            acquisition function.
+        generate_initial_data: Function to generate initial data for Gaussian
+            process model.
+        verbose: If True an output is logged.
+    """
+
+    def __init__(
+        self,
+        n_init: int = 5,
+        objective: Callable[[torch.Tensor], torch.Tensor] = None,
+        batch_size: int = 1,
+        optimizer_config: Dict = None,
+        plot_path=None
+    ):
+        """Inits the vanilla BO optimizer."""
+        super(Random, self).__init__(n_init, objective)
+
+        self.batch_size = batch_size
+        self.plot_path = plot_path
+        # Initialization of training data.
+        
+        ## Load parameter distribution TODO Transform distribution with respect to bounds
+        MEAN, VAR_PRIOR = optimizer_config["mean_prior"], optimizer_config["std_prior"]**2
+        mean, covar = MEAN*torch.ones(objective.dim, device=objective.device, dtype=objective.dtype), VAR_PRIOR*torch.eye(objective.dim, device=objective.device, dtype=objective.dtype)
+        self.distribution = MultivariateNormal(mean, covar)
+
+        # Initialization of training data.
+        # self.unit_cube = torch.tensor([[0.]*self.objective.dim, [1.]*self.objective.dim], dtype=self.objective.dtype, device=self.objective.device)
+        self.train_x, self.train_y, _ = generate_data("random", objective=objective, n_init=n_init, distribution=self.distribution)
+        
+        self.params_history_list = [self.train_x.clone()]
+        self.values_history = [self.train_y.clone()]
+
+    def step(self) -> None:
+
+        # Optimize acquistion function and get new observation.
+        new_x = self.distribution.rsample((self.batch_size,))
+        # new_x_normalized = self.optimize_acqf(self.acquisition_function)
+        # new_x = unnormalize(new_x_normalized, bounds=self.objective.bounds)
+        new_y = self.objective(new_x).unsqueeze(-1)
+
+        # Update training points.
+        self.params_history_list.append(new_x.clone())
+        self.values_history.append(new_y.clone())
+        self.iteration += 1
+    
+    def plot_synthesis(self):
+        raise NotImplementedError
 
 class RandomSearch(AbstractOptimizer):
     """Implementation of (augmented) random search.
@@ -1669,9 +1736,6 @@ class ProbES(AbstractOptimizer):
                 self.criterion = self.wolfe_criterion
             elif self.policy == "armijo":
                 self.criterion = self.armijo_criterion
-            
-        ## TODO Make option to make it an optimization pb instead of samples
-        self.optimize_acqf = initialize_acqf_optimizer(type="random", candidate_vr=optimizer_config["candidates_vr"], batch_size=batch_size)
 
         ## Register mu and covariance history
         self.list_mu, self.list_covar = [self.distribution.loc.detach().clone()], [self.distribution.covariance_matrix.detach().clone()]
@@ -1709,6 +1773,16 @@ class ProbES(AbstractOptimizer):
             model=self.model,
             distribution=self.distribution)
         
+        ## TODO Make option to make it an optimization pb instead of samples
+        # self.optimize_acqf = initialize_acqf_optimizer(type="random", candidate_vr=optimizer_config["candidates_vr"], batch_size=batch_size)
+        self.optimize_acqf = initialize_acqf_optimizer(
+                                                bounds=self.objective.bounds,
+                                                batch_size=self.batch_size,
+                                                num_restarts=optimizer_config["num_restarts"],
+                                                raw_samples=optimizer_config["raw_samples"],
+                                                batch_acq=optimizer_config["batch_acq"],
+                                                maxiter=200)
+
         # Extract model quantities
         self.train_X = self.model.train_inputs[0]
         self.noise_tensor = self.model.likelihood.noise.detach().clone() * torch.eye(self.train_X.shape[0], dtype=self.train_X.dtype, device=self.train_X.device)
@@ -1831,7 +1905,8 @@ class ProbES(AbstractOptimizer):
                     model=self.model,
                     distribution=self.distribution)
         
-        new_x = self.optimize_acqf(acq_func= self.acquisition_function, dist=self.distribution)
+        # new_x = self.optimize_acqf(acq_func= self.acquisition_function, dist=self.distribution)
+        new_x = self.optimize_acqf(acq_func= self.acquisition_function)
         new_y = self.objective(new_x).unsqueeze(-1)
 
         # Update training points.
