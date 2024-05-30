@@ -285,21 +285,22 @@ def plot_config(config_name, log_transform=False):
     #    torch.set_default_device('cuda:'+str(gpu_label))
 
     ### Make lists for multiple experiments
-    list_keys, list_values = [], []
+    list_keys_pb, list_values_pb = [], []
     for key, value in problem_kwargs.items():
         if type(value) == list:
-            list_keys.append(tuple(["pb", key]))
-            list_values.append(value)
+            list_keys_pb.append(tuple(["pb", key]))
+            list_values_pb.append(value)
     
+    list_keys_alg, list_values_alg = [], []
     for key, value in alg_kwargs.items():
         if type(value) == list:
-            list_keys.append(tuple(["alg", key]))
-            list_values.append(value)
-
+            list_keys_alg.append(tuple(["alg", key]))
+            list_values_alg.append(value)
+    list_keys_exp, list_values_exp = [], []
     for key, value in exp_kwargs.items():
         if type(value) == list:
-            list_keys.append(tuple(["exp", key]))
-            list_values.append(value)
+            list_keys_exp.append(tuple(["exp", key]))
+            list_values_exp.append(value)
     
     if type(alg_kwargs["algorithm"]) == list:
         list_algos = alg_kwargs["algorithm"]
@@ -315,50 +316,53 @@ def plot_config(config_name, log_transform=False):
                 list_values_algo.append(value)
         dict_keys_algo[algo] = tuple([list_keys_algo, list_values_algo])
 
-    fig, ax = plt.subplots(1, 1, figsize=(8, 6))
-    for t in product(*list_values): ## For loop on experiment problem parameters and algorithms
-        for i, el in enumerate(t):
-            type_param, key = list_keys[i]
-            if type_param == "pb":
-                problem_kwargs[key] = el
-            elif type_param == "alg":
-                alg_kwargs[key] = el
-            elif type_param == "exp":
-                exp_kwargs[key] = el
-        
-        ## Loop on algorithm configurations
-        list_keys_algo, list_values_algo = dict_keys_algo[alg_kwargs["algorithm"]]
-        for t_algo in product(*list_values_algo):
-            for i, el in enumerate(t_algo):
-                alg_kwargs[alg_kwargs["algorithm"]][list_keys_algo[i]] = el
+    for t_pb in product(*list_values_pb):
+        fig, ax = plt.subplots(1, 1, figsize=(8, 6))
+        for t_exp_alg in product(*(list_values_alg+list_values_exp)): ## For loop on experiment problem parameters and algorithms
+            t = t_pb + t_exp_alg
+            list_keys = list_keys = list_keys_pb + list_keys_alg + list_keys_exp
+            for i, el in enumerate(t):
+                type_param, key = list_keys[i]
+                if type_param == "pb":
+                    problem_kwargs[key] = el
+                elif type_param == "alg":
+                    alg_kwargs[key] = el
+                elif type_param == "exp":
+                    exp_kwargs[key] = el
+            
+            ## Loop on algorithm configurations
+            list_keys_algo, list_values_algo = dict_keys_algo[alg_kwargs["algorithm"]]
+            for t_algo in product(*list_values_algo):
+                for i, el in enumerate(t_algo):
+                    alg_kwargs[alg_kwargs["algorithm"]][list_keys_algo[i]] = el
 
-            exp_path = create_path_exp(save_dir, problem_name, problem_kwargs)
-            #### Build new save dir for problem
+                exp_path = create_path_exp(save_dir, problem_name, problem_kwargs)
+                #### Build new save dir for problem
 
-            if not os.path.exists(exp_path):
-                os.makedirs(exp_path)
+                if not os.path.exists(exp_path):
+                    os.makedirs(exp_path)
 
-            algo = alg_kwargs["algorithm"]
-            algo_path = os.path.join(exp_path, algo)
-            if not os.path.exists(algo_path):
-                os.makedirs(algo_path)
+                algo = alg_kwargs["algorithm"]
+                algo_path = os.path.join(exp_path, algo)
+                if not os.path.exists(algo_path):
+                    os.makedirs(algo_path)
 
-            alg_path = create_path_alg(algo_path, algo, alg_kwargs)
-            plot_figure_algo(alg_path, ax, log_transform)
+                alg_path = create_path_alg(algo_path, algo, alg_kwargs)
+                plot_figure_algo(alg_path, ax, log_transform)
     
-    N_BATCH, BATCH_SIZE = exp_kwargs["n_iter"], exp_kwargs["batch_size"]
-    if not log_transform:    
-        ax.plot([0, N_BATCH * BATCH_SIZE], [0.] * 2, 'k', label="true best objective", linewidth=2)
-        # ax.set_ylim(0, 5.)
-    ax.set(xlabel='number of observations (beyond initial points)', ylabel='best objective value')
-    #ax.set_ylim(0,10.)
-    ax.legend(loc="lower right")
-    if not log_transform:
-        fig.savefig(os.path.join(exp_path, f"plot_regret_{config_name}.pdf"))
-        fig.savefig(os.path.join(exp_path, f"plot_regret_{config_name}.png"))
-    else:
-        fig.savefig(os.path.join(exp_path, f"plot_regret_log_{config_name}.pdf"))
-        fig.savefig(os.path.join(exp_path, f"plot_regret_log_{config_name}.png"))
+        N_BATCH, BATCH_SIZE = exp_kwargs["n_iter"], exp_kwargs["batch_size"]
+        if not log_transform:    
+            ax.plot([0, N_BATCH * BATCH_SIZE], [0.] * 2, 'k', label="true best objective", linewidth=2)
+            # ax.set_ylim(0, 5.)
+        ax.set(xlabel='number of observations (beyond initial points)', ylabel='best objective value')
+        #ax.set_ylim(0,10.)
+        ax.legend(loc="lower right")
+        if not log_transform:
+            fig.savefig(os.path.join(exp_path, f"plot_regret_{config_name}.pdf"))
+            fig.savefig(os.path.join(exp_path, f"plot_regret_{config_name}.png"))
+        else:
+            fig.savefig(os.path.join(exp_path, f"plot_regret_log_{config_name}.pdf"))
+            fig.savefig(os.path.join(exp_path, f"plot_regret_log_{config_name}.png"))
     
 
 def plot_figure(save_path, log_transform=False):

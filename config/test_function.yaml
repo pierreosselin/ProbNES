@@ -45,7 +45,7 @@ alg_settings:
     mean_prior: 1.
 
 problem_settings:
-  function: "ackley" # Name of the function in [airfoil, rosenbrock, sphere, ackley, rastrigin]
+  function: ["ackley", "sphere", "rastrigin"] # Name of the function in [airfoil, rosenbrock, sphere, ackley, rastrigin]
   noise: 0.
   dim: 2
   initial_bounds: 10.
