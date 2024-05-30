@@ -40,16 +40,17 @@ def run(save_path: str,
     np.random.seed(seed)
 
     # Wandb
-    wandb.init(
-        # set the wandb project where this run will be logged
-        project="bo domain informed",
+    if verbose_synthesis:
+        wandb.init(
+            # set the wandb project where this run will be logged
+            project="bo domain informed",
 
-        # track hyperparameters and run metadata
-        config={
-        "function": "Ackley",
-        "Dim": "1D"
-        }
-    )
+            # track hyperparameters and run metadata
+            config={
+            "function": "Ackley",
+            "Dim": "1D"
+            }
+        )
 
     plot_path = os.path.join(save_path, "plots")
     if verbose_synthesis:
@@ -65,35 +66,47 @@ def run(save_path: str,
     
     #Get Optimizer
     optimizer = load_optimizer(label, N_INIT, objective, alg_kwargs, plot_path)
-    img = wandb.Image(optimizer.plot_synthesis())
-    if label == "SNES":
-            wandb.log({"Image synthesis info": img,
-                        "mean": optimizer.searcher._get_mu(),
-                        "std": optimizer.searcher._get_sigma(),
-                        "objective": np.max(torch.vstack(optimizer.values_history).cpu().numpy()),
-                        "objective_mean": np.max(optimizer.objective(torch.vstack(optimizer.list_mu)).cpu().numpy())})
-    if label == "quad":
-        wandb.log({"Image synthesis info": img,
-            "mean": optimizer.distribution.loc,
-            "std": torch.sqrt(optimizer.distribution.covariance_matrix),
-            "objective": np.max(torch.vstack(optimizer.values_history).cpu().numpy()),
-            "objective_mean": np.max(optimizer.objective(torch.vstack(optimizer.list_mu)).cpu().numpy())})
-    # run N_BATCH rounds of BayesOpt after the initial random batch
-    for _ in tqdm(range(1, N_BATCH + 1), position=0, leave=True, desc = f"Processing algorithm {label} at seed {seed}"):
-        optimizer.step()
+    if verbose_synthesis:
         img = wandb.Image(optimizer.plot_synthesis())
         if label == "SNES":
-            wandb.log({"Image synthesis info": img,
-                        "mean": optimizer.searcher._get_mu(),
-                        "std": optimizer.searcher._get_sigma(),
-                        "objective": np.max(torch.vstack(optimizer.values_history).cpu().numpy()),
-                        "objective_mean": np.max(optimizer.objective(torch.vstack(optimizer.list_mu)).cpu().numpy())})
+                wandb.log({"Image synthesis info": img,
+                            "mean": optimizer.searcher._get_mu(),
+                            "std": optimizer.searcher._get_sigma(),
+                            "objective": np.max(torch.vstack(optimizer.values_history).cpu().numpy()),
+                            "objective_mean": np.max(optimizer.objective(torch.vstack(optimizer.list_mu)).cpu().numpy())})
         if label == "quad":
             wandb.log({"Image synthesis info": img,
                 "mean": optimizer.distribution.loc,
                 "std": torch.sqrt(optimizer.distribution.covariance_matrix),
                 "objective": np.max(torch.vstack(optimizer.values_history).cpu().numpy()),
                 "objective_mean": np.max(optimizer.objective(torch.vstack(optimizer.list_mu)).cpu().numpy())})
+        if label == "piqEI":
+            wandb.log({"Image synthesis info": img,
+                "mean": optimizer.distribution.loc,
+                "std": torch.sqrt(optimizer.distribution.covariance_matrix),
+                "objective": np.max(torch.vstack(optimizer.values_history).cpu().numpy())})
+    # run N_BATCH rounds of BayesOpt after the initial random batch
+    for _ in tqdm(range(1, N_BATCH + 1), position=0, leave=True, desc = f"Processing algorithm {label} at seed {seed}"):
+        optimizer.step()
+        if verbose_synthesis:
+            img = wandb.Image(optimizer.plot_synthesis())
+            if label == "SNES":
+                wandb.log({"Image synthesis info": img,
+                            "mean": optimizer.searcher._get_mu(),
+                            "std": optimizer.searcher._get_sigma(),
+                            "objective": np.max(torch.vstack(optimizer.values_history).cpu().numpy()),
+                            "objective_mean": np.max(optimizer.objective(torch.vstack(optimizer.list_mu)).cpu().numpy())})
+            if label == "quad":
+                wandb.log({"Image synthesis info": img,
+                    "mean": optimizer.distribution.loc,
+                    "std": torch.sqrt(optimizer.distribution.covariance_matrix),
+                    "objective": np.max(torch.vstack(optimizer.values_history).cpu().numpy()),
+                    "objective_mean": np.max(optimizer.objective(torch.vstack(optimizer.list_mu)).cpu().numpy())})
+            if label == "piqEI":
+                wandb.log({"Image synthesis info": img,
+                    "mean": optimizer.distribution.loc,
+                    "std": torch.sqrt(optimizer.distribution.covariance_matrix),
+                    "objective": np.max(torch.vstack(optimizer.values_history).cpu().numpy())})
         # if verbose_synthesis and seed==0: ## Only plot one seed
         #     if iteration % verbose_synthesis == 0:
         #         optimizer.plot_synthesis()
@@ -110,6 +123,7 @@ def run(save_path: str,
         "best_value": objective.best_value,
         "N_BATCH": N_BATCH,
         "BATCH_SIZE": alg_kwargs["batch_size"],
+        "N_INIT": N_INIT,
         "bounds": problem_kwargs["initial_bounds"]
     }
 

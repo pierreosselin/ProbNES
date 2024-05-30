@@ -1,0 +1,85 @@
+
+
+
+
+
+
+
+
+
+Processing algorithm piqEI at seed 0: 100%|█████████████████████████████████████████████████████████████| 15/15 [00:25<00:00,  1.67s/it]
+
+
+
+
+
+
+
+
+Processing algorithm piqEI at seed 1: 100%|█████████████████████████████████████████████████████████████| 15/15 [00:19<00:00,  1.30s/it]
+
+
+
+
+
+
+
+
+Processing algorithm piqEI at seed 2: 100%|█████████████████████████████████████████████████████████████| 15/15 [00:22<00:00,  1.48s/it]
+
+
+
+
+
+
+
+
+Processing algorithm piqEI at seed 3: 100%|█████████████████████████████████████████████████████████████| 15/15 [00:19<00:00,  1.33s/it]
+
+
+
+
+Processing algorithm piqEI at seed 4: 100%|█████████████████████████████████████████████████████████████| 15/15 [00:10<00:00,  1.37it/s]
+/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/evotorch/tools/misc.py:1107: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.clone().detach() or sourceTensor.clone().detach().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  result = torch.tensor(data, **kwargs)
+Processing algorithm SNES at seed 0:   0%|                                                                       | 0/15 [00:00<?, ?it/s]/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/evotorch/core.py:3425: UserWarning: TypedStorage is deprecated. It will be removed in the future and UntypedStorage will be the only storage class. This should only matter to you if you are using storages directly.  To access UntypedStorage directly, use tensor.untyped_storage() instead of tensor.storage()
+  shares_storage = self._data.storage().data_ptr() == source._data.storage().data_ptr()
+Processing algorithm SNES at seed 0:   7%|████▏                                                          | 1/15 [00:00<00:02,  4.94it/s]
+Processing ./logs/test_function/ackley_noise-0.0_dim-1_initial_bounds-10.0/SNES/var_prior-3.0_batch_size-5 ...
+[2024-05-30 09:46:16] INFO     <33541> evotorch.core: Instance of `Problem` (id:134861241084912) -- The `dtype` for the problem's decision variables is set as torch.float32
+[2024-05-30 09:46:16] INFO     <33541> evotorch.core: Instance of `Problem` (id:134861241084912) -- `eval_dtype` (the dtype of the fitnesses and evaluation data) is set as torch.float32
+[2024-05-30 09:46:16] INFO     <33541> evotorch.core: Instance of `Problem` (id:134861241084912) -- The `device` of the problem is set as cuda:0
+
+Processing algorithm SNES at seed 0:  73%|█████████████████████████████████████████████▍                | 11/15 [00:02<00:00,  4.90it/s]
+[2024-05-30 09:46:19] INFO     <33541> evotorch.core: Instance of `Problem` (id:134861236544816) -- The `dtype` for the problem's decision variables is set as torch.float32
+[2024-05-30 09:46:19] INFO     <33541> evotorch.core: Instance of `Problem` (id:134861236544816) -- `eval_dtype` (the dtype of the fitnesses and evaluation data) is set as torch.float32
+[2024-05-30 09:46:19] INFO     <33541> evotorch.core: Instance of `Problem` (id:134861236544816) -- The `device` of the problem is set as cuda:0
+Processing algorithm SNES at seed 0: 100%|██████████████████████████████████████████████████████████████| 15/15 [00:03<00:00,  4.57it/s]
+/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/evotorch/tools/misc.py:1107: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.clone().detach() or sourceTensor.clone().detach().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  result = torch.tensor(data, **kwargs)
+
+Processing algorithm SNES at seed 1:  87%|█████████████████████████████████████████████████████▋        | 13/15 [00:02<00:00,  4.91it/s]
+[2024-05-30 09:46:22] INFO     <33541> evotorch.core: Instance of `Problem` (id:134861236542272) -- The `dtype` for the problem's decision variables is set as torch.float32
+[2024-05-30 09:46:22] INFO     <33541> evotorch.core: Instance of `Problem` (id:134861236542272) -- `eval_dtype` (the dtype of the fitnesses and evaluation data) is set as torch.float32
+[2024-05-30 09:46:22] INFO     <33541> evotorch.core: Instance of `Problem` (id:134861236542272) -- The `device` of the problem is set as cuda:0
+Processing algorithm SNES at seed 1: 100%|██████████████████████████████████████████████████████████████| 15/15 [00:03<00:00,  4.87it/s]
+/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/evotorch/tools/misc.py:1107: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.clone().detach() or sourceTensor.clone().detach().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  result = torch.tensor(data, **kwargs)
+Processing algorithm SNES at seed 2: 100%|██████████████████████████████████████████████████████████████| 15/15 [00:03<00:00,  4.55it/s]
+/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/evotorch/tools/misc.py:1107: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.clone().detach() or sourceTensor.clone().detach().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  result = torch.tensor(data, **kwargs)
+Processing algorithm SNES at seed 3:   0%|                                                                       | 0/15 [00:00<?, ?it/s]
+[2024-05-30 09:46:26] INFO     <33541> evotorch.core: Instance of `Problem` (id:134860578836240) -- The `dtype` for the problem's decision variables is set as torch.float32
+[2024-05-30 09:46:26] INFO     <33541> evotorch.core: Instance of `Problem` (id:134860578836240) -- `eval_dtype` (the dtype of the fitnesses and evaluation data) is set as torch.float32
+[2024-05-30 09:46:26] INFO     <33541> evotorch.core: Instance of `Problem` (id:134860578836240) -- The `device` of the problem is set as cuda:0
+
+Processing algorithm SNES at seed 3: 100%|██████████████████████████████████████████████████████████████| 15/15 [00:03<00:00,  4.69it/s]
+/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/evotorch/tools/misc.py:1107: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.clone().detach() or sourceTensor.clone().detach().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  result = torch.tensor(data, **kwargs)
+Processing algorithm SNES at seed 4:  20%|████████████▌                                                  | 3/15 [00:00<00:02,  4.89it/s]
+[2024-05-30 09:46:29] INFO     <33541> evotorch.core: Instance of `Problem` (id:134861371076816) -- The `dtype` for the problem's decision variables is set as torch.float32
+[2024-05-30 09:46:29] INFO     <33541> evotorch.core: Instance of `Problem` (id:134861371076816) -- `eval_dtype` (the dtype of the fitnesses and evaluation data) is set as torch.float32
+[2024-05-30 09:46:29] INFO     <33541> evotorch.core: Instance of `Problem` (id:134861371076816) -- The `device` of the problem is set as cuda:0
+
+
+Processing algorithm SNES at seed 4: 100%|██████████████████████████████████████████████████████████████| 15/15 [00:03<00:00,  4.93it/s]

@@ -1,0 +1,111 @@
+/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/models/utils/assorted.py:173: InputDataWarning: Input data is not contained to the unit cube. Please consider min-max scaling the input data.
+  warnings.warn(msg, InputDataWarning)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Processing algorithm piqEI at seed 0: 100%|█████████████████████████████████████████████████████████████| 15/15 [00:43<00:00,  2.89s/it]
+/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/models/utils/assorted.py:173: InputDataWarning: Input data is not contained to the unit cube. Please consider min-max scaling the input data.
+  warnings.warn(msg, InputDataWarning)
+
+
+
+
+
+
+
+
+
+
+
+
+
+Processing algorithm piqEI at seed 1: 100%|█████████████████████████████████████████████████████████████| 15/15 [00:43<00:00,  2.91s/it]
+/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/models/utils/assorted.py:173: InputDataWarning: Input data is not contained to the unit cube. Please consider min-max scaling the input data.
+  warnings.warn(msg, InputDataWarning)
+
+
+
+
+
+
+
+
+
+
+
+
+
+Processing algorithm piqEI at seed 2: 100%|█████████████████████████████████████████████████████████████| 15/15 [00:44<00:00,  2.96s/it]
+/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/models/utils/assorted.py:173: InputDataWarning: Input data is not contained to the unit cube. Please consider min-max scaling the input data.
+  warnings.warn(msg, InputDataWarning)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Processing algorithm piqEI at seed 3: 100%|█████████████████████████████████████████████████████████████| 15/15 [00:48<00:00,  3.26s/it]
+/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/models/utils/assorted.py:173: InputDataWarning: Input data is not contained to the unit cube. Please consider min-max scaling the input data.
+  warnings.warn(msg, InputDataWarning)
+
+
+
+
+
+
+
+
+
+
+
+
+
+Processing algorithm piqEI at seed 4: 100%|█████████████████████████████████████████████████████████████| 15/15 [00:48<00:00,  3.23s/it]
+/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/evotorch/tools/misc.py:1107: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.clone().detach() or sourceTensor.clone().detach().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  result = torch.tensor(data, **kwargs)
+/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/evotorch/core.py:3425: UserWarning: TypedStorage is deprecated. It will be removed in the future and UntypedStorage will be the only storage class. This should only matter to you if you are using storages directly.  To access UntypedStorage directly, use tensor.untyped_storage() instead of tensor.storage()
+  shares_storage = self._data.storage().data_ptr() == source._data.storage().data_ptr()
+Traceback (most recent call last):
+  File "/home/pierre/git/ProbNES/semisupervised/main.py", line 120, in <module>
+    run(save_path=alg_path,
+  File "/home/pierre/git/ProbNES/semisupervised/module/bo.py", line 67, in run
+    optimizer = load_optimizer(label, N_INIT, objective, alg_kwargs, plot_path)
+  File "/home/pierre/git/ProbNES/semisupervised/module/optimizers.py", line 54, in load_optimizer
+    optimizer = SNES(n_init=n_init, objective=objective, batch_size=dict_parameter["batch_size"], optimizer_config=dict_parameter["SNES"], plot_path=plot_path)
+  File "/home/pierre/git/ProbNES/semisupervised/module/optimizers.py", line 268, in __init__
+    self.params_history_list.append(train_x.clone())
+AttributeError: 'SNES' object has no attribute 'params_history_list'
+Traceback (most recent call last):
+  File "/home/pierre/git/ProbNES/semisupervised/main.py", line 120, in <module>
+    run(save_path=alg_path,
+  File "/home/pierre/git/ProbNES/semisupervised/module/bo.py", line 67, in run
+    optimizer = load_optimizer(label, N_INIT, objective, alg_kwargs, plot_path)
+  File "/home/pierre/git/ProbNES/semisupervised/module/optimizers.py", line 54, in load_optimizer
+    optimizer = SNES(n_init=n_init, objective=objective, batch_size=dict_parameter["batch_size"], optimizer_config=dict_parameter["SNES"], plot_path=plot_path)
+  File "/home/pierre/git/ProbNES/semisupervised/module/optimizers.py", line 268, in __init__
+    self.params_history_list.append(train_x.clone())
+AttributeError: 'SNES' object has no attribute 'params_history_list'
+Processing ./logs/test_function/ackley_noise-0.0_dim-1_initial_bounds-10.0/SNES/var_prior-3.0_batch_size-5 ...
+[2024-05-30 10:10:47] INFO     <38534> evotorch.core: Instance of `Problem` (id:135937383317360) -- The `dtype` for the problem's decision variables is set as torch.float32
+[2024-05-30 10:10:47] INFO     <38534> evotorch.core: Instance of `Problem` (id:135937383317360) -- `eval_dtype` (the dtype of the fitnesses and evaluation data) is set as torch.float32
+[2024-05-30 10:10:47] INFO     <38534> evotorch.core: Instance of `Problem` (id:135937383317360) -- The `device` of the problem is set as cuda:0
+[2024-05-30 10:10:47] INFO     <38534> evotorch.core: Instance of `Problem` (id:135937383317360) -- The number of actors that will be allocated for parallelized evaluation is 0

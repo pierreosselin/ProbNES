@@ -261,19 +261,30 @@ class SNES(AbstractOptimizer):
 
         self.searcher = evoalgo.SNES(problem, popsize=self.batch_size, center_init = self.mean, stdev_init=self.var)
         self.distribution = MultivariateNormal(self.mean, torch.diag(self.var))
+        self.params_history_list = []
+        self.values_history = []
+        self.list_mu = []
+        self.list_covar = []
+
 
         # Initialization of training data.
-        self.train_x, self.train_y, _ = generate_data("SNES", objective=objective, n_init=n_init, distribution=self.distribution)
-        self.params_history_list = [self.train_x.clone()]
-        self.values_history = [self.train_y.clone()]
-        self.list_mu = [self.searcher._get_mu()]
-        self.list_covar = [self.searcher._get_sigma()]
+        self.searcher.run(1)
+        train_x, train_obj = self.searcher.population.values, self.searcher.population.evals
+        self.params_history_list.append(train_x.clone())
+        # self.values_history.append(train_obj.clone())
+        self.values_history.append(self.objective(self.searcher._get_mu().reshape(-1,1)).repeat(self.batch_size))
+        # self.values_history.append(train_obj.clone())
+        self.list_mu.append(self.searcher._get_mu())
+        self.list_covar.append(self.searcher._get_sigma())
+
+        # np.max(optimizer.objective(torch.vstack(optimizer.list_mu)).cpu().numpy()
 
     def step(self) -> None:
         self.searcher.run(1)
         train_x, train_obj = self.searcher.population.values, self.searcher.population.evals
         self.params_history_list.append(train_x.clone())
-        self.values_history.append(train_obj.clone())
+        # self.values_history.append(train_obj.clone())
+        self.values_history.append(self.objective(self.searcher._get_mu().reshape(-1,1)).repeat(self.batch_size))
         self.list_mu.append(self.searcher._get_mu())
         self.list_covar.append(self.searcher._get_sigma())
         
@@ -479,14 +490,14 @@ class PiBayesianOptimization(AbstractOptimizer):
         # Initialization of training data.
         
         ## Load parameter distribution TODO Transform distribution with respect to bounds
-        BETA, VAR_PRIOR = optimizer_config["beta"], optimizer_config["var_prior"]
+        BETA, STD_PRIOR = optimizer_config["beta"], optimizer_config["std_prior"]**2
         self.beta = BETA
-        mean, loc = torch.zeros(objective.dim, device=objective.device, dtype=objective.dtype), VAR_PRIOR*torch.eye(objective.dim, device=objective.device, dtype=objective.dtype)
+        mean, loc = optimizer_config["mean_prior"]*torch.ones(objective.dim, device=objective.device, dtype=objective.dtype), STD_PRIOR*torch.eye(objective.dim, device=objective.device, dtype=objective.dtype)
         self.distribution = MultivariateNormal(mean, loc)
-        self.distribution_normalized = normalize_distribution(self.distribution, self.objective.bounds)
+        # self.distribution_normalized = normalize_distribution(self.distribution, self.objective.bounds)
 
         # Initialization of training data.
-        self.unit_cube = torch.tensor([[0.]*self.objective.dim, [1.]*self.objective.dim], dtype=self.objective.dtype, device=self.objective.device)
+        # self.unit_cube = torch.tensor([[0.]*self.objective.dim, [1.]*self.objective.dim], dtype=self.objective.dtype, device=self.objective.device)
         self.train_x, self.train_y, _ = generate_data("piqEI", objective=objective, n_init=n_init, distribution=self.distribution)
         
         self.params_history_list = [self.train_x.clone()]
@@ -495,12 +506,41 @@ class PiBayesianOptimization(AbstractOptimizer):
         # Acquistion function and its optimization properties.
         self.qmc_sampler = SobolQMCNormalSampler(sample_shape=torch.Size([optimizer_config["mc_samples"]]))
         self.optimize_acqf = initialize_acqf_optimizer(
-                                                bounds=self.unit_cube,
+                                                bounds=self.objective.bounds,
                                                 batch_size=self.batch_size,
                                                 num_restarts=optimizer_config["num_restarts"],
                                                 raw_samples=optimizer_config["raw_samples"],
                                                 batch_acq=optimizer_config["batch_acq"],
                                                 maxiter=200)
+        covar_module = ScaleKernel(
+            RBFKernel(
+                ard_num_dims=self.train_x.shape[-1],
+                batch_shape=None,
+                lengthscale_prior=GammaPrior(3.0, 6.0),
+            ),
+            batch_shape=None,
+            outputscale_prior=GammaPrior(2.0, 0.15),
+        )
+        train_y_init_standardized = standardize(self.train_y)
+        self.model = SingleTaskGP(self.train_x,
+                                    train_y_init_standardized,
+                                    covar_module=covar_module).to(self.train_x)
+        
+        self.acquisition_function = piqExpectedImprovement(
+                    model=self.model, 
+                    best_f=self.model.train_targets.max(),
+                    pi_distrib=self.distribution,
+                    n_iter=self.iteration+1, ## here iteration starts at 0
+                    beta=self.beta,
+                    sampler=self.qmc_sampler
+                )
+        
+        # Optionally optimize hyperparameters.
+        mll = ExactMarginalLogLikelihood(
+            self.model.likelihood, self.model
+        )
+        fit_gpytorch_mll(mll)
+
     def step(self) -> None:
         covar_module = ScaleKernel(
             RBFKernel(
@@ -519,7 +559,7 @@ class PiBayesianOptimization(AbstractOptimizer):
         self.acquisition_function = piqExpectedImprovement(
                     model=self.model, 
                     best_f=self.model.train_targets.max(),
-                    pi_distrib=self.distribution_normalized,
+                    pi_distrib=self.distribution,
                     n_iter=self.iteration+1, ## here iteration starts at 0
                     beta=self.beta,
                     sampler=self.qmc_sampler
@@ -532,8 +572,9 @@ class PiBayesianOptimization(AbstractOptimizer):
         fit_gpytorch_mll(mll)
 
         # Optimize acquistion function and get new observation.
-        new_x_normalized = self.optimize_acqf(self.acquisition_function)
-        new_x = unnormalize(new_x_normalized, bounds=self.objective.bounds)
+        new_x = self.optimize_acqf(self.acquisition_function)
+        # new_x_normalized = self.optimize_acqf(self.acquisition_function)
+        # new_x = unnormalize(new_x_normalized, bounds=self.objective.bounds)
         new_y = self.objective(new_x).unsqueeze(-1)
 
         # Update training points.
@@ -550,7 +591,15 @@ class PiBayesianOptimization(AbstractOptimizer):
             lb, up = float(bounds[0][0]), float(bounds[1][0])
             ax.set_xlim(lb, up)
             plot_gp_fit(ax, self.model, self.train_x, targets=self.train_y, obj=self.objective, batch=self.batch_size, normalize_flag=True)
-            fig.savefig(os.path.join(self.plot_path, f"synthesis_{self.iteration}.png"))
+            # fig.savefig(os.path.join(self.plot_path, f"synthesis_{self.iteration}.png"))
+            buf = BytesIO()
+            plt.savefig(buf, format='png')
+            buf.seek(0)
+            plt.close()
+
+            # Open image with Pillow
+            image = Image.open(buf)
+            return image
 
 class BayesianGradientAscent(AbstractOptimizer):
     """Optimizer for Bayesian gradient ascent.
@@ -1585,7 +1634,9 @@ class ProbES(AbstractOptimizer):
         self.train_x, self.train_y, _ = generate_data("quad", objective=objective, n_init = n_init, distribution=self.distribution)
         #self.params = self.train_x.clone()
         self.params_history_list = [self.train_x.clone()]
-        self.values_history = [self.train_y.clone()]
+        # self.values_history = [self.train_y.clone()]
+        self.values_history = [self.objective(self.distribution.loc).repeat(self.batch_size)]
+
         self.d = self.objective.dim
         
         self.lr = optimizer_config["lr"]
@@ -1819,7 +1870,8 @@ class ProbES(AbstractOptimizer):
         )
         fit_gpytorch_mll(mll)
         self.params_history_list.append(new_x.clone())
-        self.values_history.append(new_y.clone())
+        # self.values_history.append(new_y.clone())
+        self.values_history.append(self.objective(self.distribution.loc).repeat(self.batch_size))
         self.iteration += 1
 
     # The rbf kernel is not a Gaussian kernel (a multiplicative constant is missing)

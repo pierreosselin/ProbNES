@@ -19,6 +19,7 @@ from botorch.utils.probability.utils import (
 )
 from botorch.acquisition.analytic import _log_ei_helper, _ei_helper, _scaled_improvement
 from torch.distributions.multivariate_normal import MultivariateNormal
+import os
 
 from pymanopt.manifolds.manifold import Manifold
 
@@ -460,3 +461,23 @@ def normalize_distribution(distribution, bounds):
   A, b = torch.diag(diff), -bounds[0]*diff
   mean, covar = A @ mean + b, A @ covar @ A.T
   return MultivariateNormal(mean, covar)
+
+def create_path_exp(save_dir, problem_name, problem_kwargs):
+    if problem_name == "test_function":
+        s = "_".join([problem_kwargs["function"], f'noise-{problem_kwargs["noise"]}', f'dim-{problem_kwargs["dim"]}', f'initial_bounds-{problem_kwargs["initial_bounds"]}'])
+    else:
+        raise NotImplementedError
+    save_path = os.path.join(save_dir, s)
+    return save_path
+
+def create_path_alg(save_path, algorithm_name, alg_kwargs):
+    if algorithm_name == "quad":  #["quad", "SNES", "random", "qEI", "piqEI"]
+        s = "_".join([f'gradient-{alg_kwargs[algorithm_name]["gradient_direction"]}', f'manifold-{alg_kwargs[algorithm_name]["manifold"]}', f'std_prior-{alg_kwargs[algorithm_name]["std_prior"]}', f'batch_size-{alg_kwargs["batch_size"]}'])
+    elif algorithm_name == "SNES":
+        s = "_".join([f'var_prior-{alg_kwargs[algorithm_name]["std_prior"]}', f'batch_size-{alg_kwargs["batch_size"]}'])
+    elif algorithm_name == "qEI":
+        s = "_".join([f'batch_size-{alg_kwargs["batch_size"]}'])
+    elif algorithm_name == "piqEI":
+        s = "_".join([f'beta-{alg_kwargs[algorithm_name]["beta"]}', f'std_prior-{alg_kwargs[algorithm_name]["std_prior"]}', f'batch_size-{alg_kwargs["batch_size"]}']) 
+    save_path = os.path.join(save_path, s)
+    return save_path

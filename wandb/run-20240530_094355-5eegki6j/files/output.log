@@ -1,0 +1,134 @@
+Traceback (most recent call last):
+  File "/home/pierre/git/ProbNES/semisupervised/main.py", line 120, in <module>
+    run(save_path=alg_path,
+  File "/home/pierre/git/ProbNES/semisupervised/module/bo.py", line 67, in run
+    optimizer = load_optimizer(label, N_INIT, objective, alg_kwargs, plot_path)
+  File "/home/pierre/git/ProbNES/semisupervised/module/optimizers.py", line 50, in load_optimizer
+    optimizer = PiBayesianOptimization(n_init=n_init, objective=objective, batch_size=dict_parameter["batch_size"], optimizer_config=dict_parameter["piqEI"], plot_path=plot_path)
+  File "/home/pierre/git/ProbNES/semisupervised/module/optimizers.py", line 531, in __init__
+    fit_gpytorch_mll(mll)
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/fit.py", line 105, in fit_gpytorch_mll
+    return FitGPyTorchMLL(
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/utils/dispatcher.py", line 93, in __call__
+    return func(*args, **kwargs)
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/fit.py", line 252, in _fit_fallback
+    optimizer(mll, closure=closure, **optimizer_kwargs)
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/optim/fit.py", line 120, in fit_gpytorch_mll_scipy
+    result = scipy_minimize(
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/optim/core.py", line 109, in scipy_minimize
+    raw = minimize_with_timeout(
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/optim/utils/timeout.py", line 80, in minimize_with_timeout
+    return optimize.minimize(
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/scipy/optimize/_minimize.py", line 710, in minimize
+    res = _minimize_lbfgsb(fun, x0, args, jac, bounds,
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/scipy/optimize/_lbfgsb_py.py", line 365, in _minimize_lbfgsb
+    f, g = func_and_grad(x)
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/scipy/optimize/_differentiable_functions.py", line 285, in fun_and_grad
+    self._update_fun()
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/scipy/optimize/_differentiable_functions.py", line 251, in _update_fun
+    self._update_fun_impl()
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/scipy/optimize/_differentiable_functions.py", line 155, in update_fun
+    self.f = fun_wrapped(self.x)
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/scipy/optimize/_differentiable_functions.py", line 137, in fun_wrapped
+    fx = fun(np.copy(x), *args)
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/scipy/optimize/_optimize.py", line 77, in __call__
+    self._compute_if_needed(x, *args)
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/scipy/optimize/_optimize.py", line 71, in _compute_if_needed
+    fg = self.fun(x, *args)
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/optim/closures/core.py", line 150, in __call__
+    value_tensor, grad_tensors = self.closure(**kwargs)
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/optim/closures/core.py", line 64, in __call__
+    values = self.forward(**kwargs)
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/optim/closures/model_closures.py", line 176, in closure
+    log_likelihood = mll(
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/gpytorch/module.py", line 31, in __call__
+    outputs = self.forward(*inputs, **kwargs)
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/gpytorch/mlls/exact_marginal_log_likelihood.py", line 64, in forward
+    res = output.log_prob(target)
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/gpytorch/distributions/multivariate_normal.py", line 171, in log_prob
+    return super().log_prob(value)
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/torch/distributions/multivariate_normal.py", line 216, in log_prob
+    M = _batch_mahalanobis(self._unbroadcasted_scale_tril, diff)
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/gpytorch/distributions/multivariate_normal.py", line 88, in _unbroadcasted_scale_tril
+    ust = to_dense(self.lazy_covariance_matrix.cholesky())
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/linear_operator/operators/_linear_operator.py", line 1303, in cholesky
+    chol = self._cholesky(upper=False)
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/linear_operator/utils/memoize.py", line 59, in g
+    return _add_to_cache(self, cache_name, method(self, *args, **kwargs), *args, kwargs_pkl=kwargs_pkl)
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/linear_operator/operators/_linear_operator.py", line 510, in _cholesky
+    evaluated_kern_mat = self.evaluate_kernel()
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/linear_operator/operators/added_diag_linear_operator.py", line 210, in evaluate_kernel
+    return added_diag_linear_op._linear_op + added_diag_linear_op._diag_tensor
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/linear_operator/operators/dense_linear_operator.py", line 101, in __add__
+    return super().__add__(other)
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/linear_operator/operators/_linear_operator.py", line 2760, in __add__
+    from .sum_linear_operator import SumLinearOperator
+  File "<frozen importlib._bootstrap>", line 404, in parent
+KeyboardInterrupt
+Traceback (most recent call last):
+  File "/home/pierre/git/ProbNES/semisupervised/main.py", line 120, in <module>
+    run(save_path=alg_path,
+  File "/home/pierre/git/ProbNES/semisupervised/module/bo.py", line 67, in run
+    optimizer = load_optimizer(label, N_INIT, objective, alg_kwargs, plot_path)
+  File "/home/pierre/git/ProbNES/semisupervised/module/optimizers.py", line 50, in load_optimizer
+    optimizer = PiBayesianOptimization(n_init=n_init, objective=objective, batch_size=dict_parameter["batch_size"], optimizer_config=dict_parameter["piqEI"], plot_path=plot_path)
+  File "/home/pierre/git/ProbNES/semisupervised/module/optimizers.py", line 531, in __init__
+    fit_gpytorch_mll(mll)
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/fit.py", line 105, in fit_gpytorch_mll
+    return FitGPyTorchMLL(
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/utils/dispatcher.py", line 93, in __call__
+    return func(*args, **kwargs)
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/fit.py", line 252, in _fit_fallback
+    optimizer(mll, closure=closure, **optimizer_kwargs)
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/optim/fit.py", line 120, in fit_gpytorch_mll_scipy
+    result = scipy_minimize(
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/optim/core.py", line 109, in scipy_minimize
+    raw = minimize_with_timeout(
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/optim/utils/timeout.py", line 80, in minimize_with_timeout
+    return optimize.minimize(
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/scipy/optimize/_minimize.py", line 710, in minimize
+    res = _minimize_lbfgsb(fun, x0, args, jac, bounds,
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/scipy/optimize/_lbfgsb_py.py", line 365, in _minimize_lbfgsb
+    f, g = func_and_grad(x)
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/scipy/optimize/_differentiable_functions.py", line 285, in fun_and_grad
+    self._update_fun()
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/scipy/optimize/_differentiable_functions.py", line 251, in _update_fun
+    self._update_fun_impl()
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/scipy/optimize/_differentiable_functions.py", line 155, in update_fun
+    self.f = fun_wrapped(self.x)
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/scipy/optimize/_differentiable_functions.py", line 137, in fun_wrapped
+    fx = fun(np.copy(x), *args)
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/scipy/optimize/_optimize.py", line 77, in __call__
+    self._compute_if_needed(x, *args)
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/scipy/optimize/_optimize.py", line 71, in _compute_if_needed
+    fg = self.fun(x, *args)
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/optim/closures/core.py", line 150, in __call__
+    value_tensor, grad_tensors = self.closure(**kwargs)
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/optim/closures/core.py", line 64, in __call__
+    values = self.forward(**kwargs)
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/optim/closures/model_closures.py", line 176, in closure
+    log_likelihood = mll(
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/gpytorch/module.py", line 31, in __call__
+    outputs = self.forward(*inputs, **kwargs)
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/gpytorch/mlls/exact_marginal_log_likelihood.py", line 64, in forward
+    res = output.log_prob(target)
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/gpytorch/distributions/multivariate_normal.py", line 171, in log_prob
+    return super().log_prob(value)
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/torch/distributions/multivariate_normal.py", line 216, in log_prob
+    M = _batch_mahalanobis(self._unbroadcasted_scale_tril, diff)
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/gpytorch/distributions/multivariate_normal.py", line 88, in _unbroadcasted_scale_tril
+    ust = to_dense(self.lazy_covariance_matrix.cholesky())
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/linear_operator/operators/_linear_operator.py", line 1303, in cholesky
+    chol = self._cholesky(upper=False)
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/linear_operator/utils/memoize.py", line 59, in g
+    return _add_to_cache(self, cache_name, method(self, *args, **kwargs), *args, kwargs_pkl=kwargs_pkl)
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/linear_operator/operators/_linear_operator.py", line 510, in _cholesky
+    evaluated_kern_mat = self.evaluate_kernel()
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/linear_operator/operators/added_diag_linear_operator.py", line 210, in evaluate_kernel
+    return added_diag_linear_op._linear_op + added_diag_linear_op._diag_tensor
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/linear_operator/operators/dense_linear_operator.py", line 101, in __add__
+    return super().__add__(other)
+  File "/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/linear_operator/operators/_linear_operator.py", line 2760, in __add__
+    from .sum_linear_operator import SumLinearOperator
+  File "<frozen importlib._bootstrap>", line 404, in parent
+KeyboardInterrupt

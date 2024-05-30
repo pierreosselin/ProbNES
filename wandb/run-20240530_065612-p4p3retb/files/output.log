@@ -1,0 +1,6 @@
+[2024-05-30 06:56:14] INFO     <18858> evotorch.core: Instance of `Problem` (id:136640563067152) -- The `dtype` for the problem's decision variables is set as torch.float32
+[2024-05-30 06:56:14] INFO     <18858> evotorch.core: Instance of `Problem` (id:136640563067152) -- `eval_dtype` (the dtype of the fitnesses and evaluation data) is set as torch.float32
+[2024-05-30 06:56:14] INFO     <18858> evotorch.core: Instance of `Problem` (id:136640563067152) -- The `device` of the problem is set as cuda:0
+[2024-05-30 06:56:14] INFO     <18858> evotorch.core: Instance of `Problem` (id:136640563067152) -- The number of actors that will be allocated for parallelized evaluation is 0
+Backend TkAgg is interactive backend. Turning interactive mode on.
+/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/evotorch/tools/misc.py:1107: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.clone().detach() or sourceTensor.clone().detach().requires_grad_(True), rather than torch.tensor(sourceTensor).

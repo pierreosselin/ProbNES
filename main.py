@@ -1,30 +1,11 @@
 from module.bo import run
-from module.plot_script import plot_figure, plot_distribution_gif, plot_distribution_path
+from module.plot_script import plot_figure, plot_config, plot_distribution_gif, plot_distribution_path
+from module.utils import create_path_exp, create_path_alg
 import os
 import argparse
 import yaml
 from itertools import product
 import torch
-
-def create_path_exp(save_path, problem_name, problem_kwargs):
-    if problem_name == "test_function":
-        s = "_".join([problem_kwargs["function"], f'noise-{problem_kwargs["noise"]}', f'dim-{problem_kwargs["dim"]}', f'initial_bounds-{problem_kwargs["initial_bounds"]}'])
-    else:
-        raise NotImplementedError
-    save_path = os.path.join(save_dir, s)
-    return save_path
-
-def create_path_alg(save_path, algorithm_name, alg_kwargs):
-    if algorithm_name == "quad":  #["quad", "SNES", "random", "qEI", "piqEI"]
-        s = "_".join([f'gradient-{alg_kwargs[algorithm_name]["gradient_direction"]}', f'manifold-{alg_kwargs[algorithm_name]["manifold"]}', f'std_prior-{alg_kwargs[algorithm_name]["std_prior"]}', f'batch_size-{alg_kwargs["batch_size"]}'])
-    elif algorithm_name == "SNES":
-        s = "_".join([f'var_prior-{alg_kwargs[algorithm_name]["std_prior"]}', f'batch_size-{alg_kwargs["batch_size"]}'])
-    elif algorithm_name == "qEI":
-        s = "_".join([f'batch_size-{alg_kwargs["batch_size"]}'])
-    elif algorithm_name == "piqEI":
-        s = "_".join([f'beta-{alg_kwargs[algorithm_name]["beta"]}', f'var_prior-{alg_kwargs[algorithm_name]["var_prior"]}', f'batch_size-{alg_kwargs["batch_size"]}']) 
-    save_path = os.path.join(save_path, s)
-    return save_path
 
 if __name__ == "__main__":
     OVERWRITE = True

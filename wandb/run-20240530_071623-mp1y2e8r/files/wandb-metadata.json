@@ -1,0 +1,111 @@
+{
+    "os": "Linux-6.5.0-35-generic-x86_64-with-glibc2.35",
+    "python": "3.10.13",
+    "heartbeatAt": "2024-05-30T06:16:24.553684",
+    "startedAt": "2024-05-30T06:16:23.894859",
+    "docker": null,
+    "cuda": null,
+    "args": [
+        "--config",
+        "test_function"
+    ],
+    "state": "running",
+    "program": "/home/pierre/git/ProbNES/semisupervised/main.py",
+    "codePathLocal": "main.py",
+    "codePath": "main.py",
+    "git": {
+        "remote": "https://github.com/pierreosselin/semisupervised.git",
+        "commit": "784b2800349a93225d021b302d49b1ca1d6cfafa"
+    },
+    "email": "pierre.osselin@gmail.com",
+    "root": "/home/pierre/git/ProbNES/semisupervised",
+    "host": "pierre-XPS-15-9500",
+    "username": "pierre",
+    "executable": "/home/pierre/miniconda3/envs/semisupervised/bin/python",
+    "cpu_count": 6,
+    "cpu_count_logical": 12,
+    "cpu_freq": {
+        "current": 2783.5574999999994,
+        "min": 800.0,
+        "max": 5000.0
+    },
+    "cpu_freq_per_core": [
+        {
+            "current": 3229.342,
+            "min": 800.0,
+            "max": 5000.0
+        },
+        {
+            "current": 3218.43,
+            "min": 800.0,
+            "max": 5000.0
+        },
+        {
+            "current": 3261.642,
+            "min": 800.0,
+            "max": 5000.0
+        },
+        {
+            "current": 3298.647,
+            "min": 800.0,
+            "max": 5000.0
+        },
+        {
+            "current": 3280.417,
+            "min": 800.0,
+            "max": 5000.0
+        },
+        {
+            "current": 3299.75,
+            "min": 800.0,
+            "max": 5000.0
+        },
+        {
+            "current": 3298.572,
+            "min": 800.0,
+            "max": 5000.0
+        },
+        {
+            "current": 3297.879,
+            "min": 800.0,
+            "max": 5000.0
+        },
+        {
+            "current": 1700.158,
+            "min": 800.0,
+            "max": 5000.0
+        },
+        {
+            "current": 2295.693,
+            "min": 800.0,
+            "max": 5000.0
+        },
+        {
+            "current": 3221.505,
+            "min": 800.0,
+            "max": 5000.0
+        },
+        {
+            "current": 3229.522,
+            "min": 800.0,
+            "max": 5000.0
+        }
+    ],
+    "disk": {
+        "/": {
+            "total": 631.2246856689453,
+            "used": 61.62199783325195
+        }
+    },
+    "gpu": "NVIDIA GeForce GTX 1650 Ti",
+    "gpu_count": 1,
+    "gpu_devices": [
+        {
+            "name": "NVIDIA GeForce GTX 1650 Ti",
+            "memory_total": 4294967296
+        }
+    ],
+    "memory": {
+        "total": 31.08624267578125
+    }
+}

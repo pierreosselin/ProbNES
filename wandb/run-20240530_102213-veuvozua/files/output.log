@@ -1,0 +1,44 @@
+[2024-05-30 10:22:15] INFO     <43307> evotorch.core: Instance of `Problem` (id:129319576844416) -- The `dtype` for the problem's decision variables is set as torch.float32
+[2024-05-30 10:22:15] INFO     <43307> evotorch.core: Instance of `Problem` (id:129319576844416) -- `eval_dtype` (the dtype of the fitnesses and evaluation data) is set as torch.float32
+[2024-05-30 10:22:15] INFO     <43307> evotorch.core: Instance of `Problem` (id:129319576844416) -- The `device` of the problem is set as cuda:0
+[2024-05-30 10:22:15] INFO     <43307> evotorch.core: Instance of `Problem` (id:129319576844416) -- The number of actors that will be allocated for parallelized evaluation is 0
+/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/evotorch/tools/misc.py:1107: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.clone().detach() or sourceTensor.clone().detach().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  result = torch.tensor(data, **kwargs)
+/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/evotorch/core.py:3425: UserWarning: TypedStorage is deprecated. It will be removed in the future and UntypedStorage will be the only storage class. This should only matter to you if you are using storages directly.  To access UntypedStorage directly, use tensor.untyped_storage() instead of tensor.storage()
+  shares_storage = self._data.storage().data_ptr() == source._data.storage().data_ptr()
+
+
+Processing algorithm SNES at seed 0:  87%|█████████████████████████████████████████████████████▋        | 13/15 [00:03<00:00,  3.39it/s]
+[2024-05-30 10:22:21] INFO     <43307> evotorch.core: Instance of `Problem` (id:129316555173184) -- The `dtype` for the problem's decision variables is set as torch.float32
+[2024-05-30 10:22:21] INFO     <43307> evotorch.core: Instance of `Problem` (id:129316555173184) -- `eval_dtype` (the dtype of the fitnesses and evaluation data) is set as torch.float32
+[2024-05-30 10:22:21] INFO     <43307> evotorch.core: Instance of `Problem` (id:129316555173184) -- The `device` of the problem is set as cuda:0
+Processing algorithm SNES at seed 0: 100%|██████████████████████████████████████████████████████████████| 15/15 [00:04<00:00,  3.28it/s]
+/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/evotorch/tools/misc.py:1107: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.clone().detach() or sourceTensor.clone().detach().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  result = torch.tensor(data, **kwargs)
+
+Processing algorithm SNES at seed 1:  73%|█████████████████████████████████████████████▍                | 11/15 [00:03<00:01,  3.40it/s]
+[2024-05-30 10:22:26] INFO     <43307> evotorch.core: Instance of `Problem` (id:129316382114384) -- The `dtype` for the problem's decision variables is set as torch.float32
+[2024-05-30 10:22:26] INFO     <43307> evotorch.core: Instance of `Problem` (id:129316382114384) -- `eval_dtype` (the dtype of the fitnesses and evaluation data) is set as torch.float32
+[2024-05-30 10:22:26] INFO     <43307> evotorch.core: Instance of `Problem` (id:129316382114384) -- The `device` of the problem is set as cuda:0
+Processing algorithm SNES at seed 1: 100%|██████████████████████████████████████████████████████████████| 15/15 [00:04<00:00,  3.31it/s]
+/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/evotorch/tools/misc.py:1107: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.clone().detach() or sourceTensor.clone().detach().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  result = torch.tensor(data, **kwargs)
+
+Processing algorithm SNES at seed 2:  53%|█████████████████████████████████▌                             | 8/15 [00:02<00:02,  3.43it/s]
+[2024-05-30 10:22:30] INFO     <43307> evotorch.core: Instance of `Problem` (id:129316500329216) -- The `dtype` for the problem's decision variables is set as torch.float32
+[2024-05-30 10:22:30] INFO     <43307> evotorch.core: Instance of `Problem` (id:129316500329216) -- `eval_dtype` (the dtype of the fitnesses and evaluation data) is set as torch.float32
+[2024-05-30 10:22:30] INFO     <43307> evotorch.core: Instance of `Problem` (id:129316500329216) -- The `device` of the problem is set as cuda:0
+Processing algorithm SNES at seed 2: 100%|██████████████████████████████████████████████████████████████| 15/15 [00:04<00:00,  3.46it/s]
+/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/evotorch/tools/misc.py:1107: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.clone().detach() or sourceTensor.clone().detach().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  result = torch.tensor(data, **kwargs)
+
+Processing algorithm SNES at seed 3:  80%|█████████████████████████████████████████████████▌            | 12/15 [00:03<00:00,  3.41it/s]
+[2024-05-30 10:22:35] INFO     <43307> evotorch.core: Instance of `Problem` (id:129316502771152) -- The `dtype` for the problem's decision variables is set as torch.float32
+[2024-05-30 10:22:35] INFO     <43307> evotorch.core: Instance of `Problem` (id:129316502771152) -- `eval_dtype` (the dtype of the fitnesses and evaluation data) is set as torch.float32
+[2024-05-30 10:22:35] INFO     <43307> evotorch.core: Instance of `Problem` (id:129316502771152) -- The `device` of the problem is set as cuda:0
+Processing algorithm SNES at seed 3: 100%|██████████████████████████████████████████████████████████████| 15/15 [00:04<00:00,  3.31it/s]
+/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/evotorch/tools/misc.py:1107: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.clone().detach() or sourceTensor.clone().detach().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  result = torch.tensor(data, **kwargs)
+
+
+Processing algorithm SNES at seed 4: 100%|██████████████████████████████████████████████████████████████| 15/15 [00:04<00:00,  3.36it/s]

@@ -15,11 +15,14 @@ from torch.distributions.multivariate_normal import MultivariateNormal
 import matplotlib.pyplot as plt
 import scipy.stats as stats
 from tqdm import tqdm
-from module.utils import nearestPD, EI, log_EI, EI_bivariate
+from module.utils import nearestPD, EI, log_EI, EI_bivariate, create_path_alg, create_path_exp
 from botorch.utils.transforms import standardize, normalize, unnormalize
 import geoopt
 from PIL import Image
 from io import BytesIO
+import yaml
+from itertools import product
+import pandas as pd
 
 
 """
@@ -231,23 +234,129 @@ def plot_cov_ellipse(cov, pos, nstd=2, ax=None, **kwargs):
 def ci(y, N_TRIALS):
     return 1.96 * y.std(axis=0) / np.sqrt(N_TRIALS)
 
-def plot_figure_algo(alg_dir, ax):
+def plot_figure_algo(alg_dir, ax, log_transform=False):
     data_path_seeds = [f for f in os.listdir(alg_dir) if ".pt" in f]
     data_over_seeds = []
     for _, df in enumerate(data_path_seeds):
         data_path = os.path.join(alg_dir, df)
         data = torch.load(data_path, map_location="cpu")
-        data_over_seeds.append(data["regret"])
+        data_over_seeds.append(data["best_value"] - data["Y"])
+    N_INIT = data["N_INIT"]
     N_TRIALS = len(data_over_seeds)
     N_BATCH = data["N_BATCH"]
     BATCH_SIZE = data["BATCH_SIZE"]
-    iters = np.arange(N_BATCH + 1) * BATCH_SIZE
+    iters = np.arange(N_BATCH + 1)*BATCH_SIZE
+    iters_index = N_INIT - 1 + np.arange(N_BATCH + 1)*BATCH_SIZE
     label = data["label"]
     data_over_seeds = [t.detach().cpu().numpy() for t in data_over_seeds]
     y = np.asarray(data_over_seeds)
-    ax.plot(iters, y.mean(axis=0), ".-", label=label )
+    # y = y[:, iters_index]
+    y = pd.DataFrame(y).cummin(axis=1)
+    y = y.iloc[:, iters_index]
+    if log_transform:
+        ax.plot(iters, np.log(y.mean(axis=0).to_numpy()), ".-", label=label)
+    else:
+        ax.plot(iters, y.mean(axis=0).to_numpy(), ".-", label=label)
     yerr=ci(y, N_TRIALS)
-    ax.fill_between(iters, y.mean(axis=0)-yerr, y.mean(axis=0)+yerr, alpha=0.1)
+    if log_transform:
+        ax.fill_between(iters, np.log(np.clip(y.mean(axis=0)-yerr, a_min=1e-5, a_max=None)), np.log(np.clip(y.mean(axis=0)+yerr, a_min=1e-5, a_max=None)), alpha=0.1)
+    else:
+        ax.fill_between(iters, y.mean(axis=0)-yerr, y.mean(axis=0)+yerr, alpha=0.1)
+
+def plot_config(config_name, log_transform=False):
+    with open(f'config/{config_name}.yaml', 'r') as file:
+        config = yaml.safe_load(file)
+    
+    ### Place where design save_path from config parameters
+    save_dir = config["save_dir"]
+    if not os.path.exists(save_dir):
+        os.makedirs(save_dir)
+
+    ### Get different  configs
+    problem_name=config["problem_name"]
+    exp_kwargs = config["exp_settings"]
+    problem_kwargs = config["problem_settings"]
+    alg_kwargs = config["alg_settings"]
+
+    #if gpu_label != 'cpu':
+    #    torch.set_default_device('cuda:'+str(gpu_label))
+
+    ### Make lists for multiple experiments
+    list_keys, list_values = [], []
+    for key, value in problem_kwargs.items():
+        if type(value) == list:
+            list_keys.append(tuple(["pb", key]))
+            list_values.append(value)
+    
+    for key, value in alg_kwargs.items():
+        if type(value) == list:
+            list_keys.append(tuple(["alg", key]))
+            list_values.append(value)
+
+    for key, value in exp_kwargs.items():
+        if type(value) == list:
+            list_keys.append(tuple(["exp", key]))
+            list_values.append(value)
+    
+    if type(alg_kwargs["algorithm"]) == list:
+        list_algos = alg_kwargs["algorithm"]
+    else:
+        list_algos = [alg_kwargs["algorithm"]]
+    
+    dict_keys_algo = {}
+    for algo in list_algos:
+        list_keys_algo, list_values_algo = [], []
+        for key, value in alg_kwargs[algo].items():
+            if type(value) == list:
+                list_keys_algo.append(key)
+                list_values_algo.append(value)
+        dict_keys_algo[algo] = tuple([list_keys_algo, list_values_algo])
+
+    fig, ax = plt.subplots(1, 1, figsize=(8, 6))
+    for t in product(*list_values): ## For loop on experiment problem parameters and algorithms
+        for i, el in enumerate(t):
+            type_param, key = list_keys[i]
+            if type_param == "pb":
+                problem_kwargs[key] = el
+            elif type_param == "alg":
+                alg_kwargs[key] = el
+            elif type_param == "exp":
+                exp_kwargs[key] = el
+        
+        ## Loop on algorithm configurations
+        list_keys_algo, list_values_algo = dict_keys_algo[alg_kwargs["algorithm"]]
+        for t_algo in product(*list_values_algo):
+            for i, el in enumerate(t_algo):
+                alg_kwargs[alg_kwargs["algorithm"]][list_keys_algo[i]] = el
+
+            exp_path = create_path_exp(save_dir, problem_name, problem_kwargs)
+            #### Build new save dir for problem
+
+            if not os.path.exists(exp_path):
+                os.makedirs(exp_path)
+
+            algo = alg_kwargs["algorithm"]
+            algo_path = os.path.join(exp_path, algo)
+            if not os.path.exists(algo_path):
+                os.makedirs(algo_path)
+
+            alg_path = create_path_alg(algo_path, algo, alg_kwargs)
+            plot_figure_algo(alg_path, ax, log_transform)
+    
+    N_BATCH, BATCH_SIZE = exp_kwargs["n_iter"], exp_kwargs["batch_size"]
+    if not log_transform:    
+        ax.plot([0, N_BATCH * BATCH_SIZE], [0.] * 2, 'k', label="true best objective", linewidth=2)
+        ax.set_ylim(0,10.)
+    ax.set(xlabel='number of observations (beyond initial points)', ylabel='best objective value')
+    #ax.set_ylim(0,10.)
+    ax.legend(loc="lower right")
+    if not log_transform:
+        fig.savefig(os.path.join(save_dir, f"plot_regret_{config_name}.pdf"))
+        fig.savefig(os.path.join(save_dir, f"plot_regret_{config_name}.png"))
+    else:
+        fig.savefig(os.path.join(save_dir, f"plot_regret_log_{config_name}.pdf"))
+        fig.savefig(os.path.join(save_dir, f"plot_regret_log_{config_name}.png"))
+    
 
 def plot_figure(save_path, log_transform=False):
     exp_name = [name for name in os.listdir(save_path) if os.path.isdir(os.path.join(save_path, name))]

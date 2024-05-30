@@ -1,0 +1,20 @@
+Traceback (most recent call last):
+  File "/home/pierre/git/ProbNES/semisupervised/main.py", line 120, in <module>
+    run(save_path=alg_path,
+  File "/home/pierre/git/ProbNES/semisupervised/module/bo.py", line 67, in run
+    optimizer = load_optimizer(label, N_INIT, objective, alg_kwargs, plot_path)
+  File "/home/pierre/git/ProbNES/semisupervised/module/optimizers.py", line 50, in load_optimizer
+    optimizer = PiBayesianOptimization(n_init=n_init, objective=objective, batch_size=dict_parameter["batch_size"], optimizer_config=dict_parameter["piqEI"], plot_path=plot_path)
+  File "/home/pierre/git/ProbNES/semisupervised/module/optimizers.py", line 521, in __init__
+    pi_distrib=self.distribution_normalized,
+AttributeError: 'PiBayesianOptimization' object has no attribute 'distribution_normalized'
+Traceback (most recent call last):
+  File "/home/pierre/git/ProbNES/semisupervised/main.py", line 120, in <module>
+    run(save_path=alg_path,
+  File "/home/pierre/git/ProbNES/semisupervised/module/bo.py", line 67, in run
+    optimizer = load_optimizer(label, N_INIT, objective, alg_kwargs, plot_path)
+  File "/home/pierre/git/ProbNES/semisupervised/module/optimizers.py", line 50, in load_optimizer
+    optimizer = PiBayesianOptimization(n_init=n_init, objective=objective, batch_size=dict_parameter["batch_size"], optimizer_config=dict_parameter["piqEI"], plot_path=plot_path)
+  File "/home/pierre/git/ProbNES/semisupervised/module/optimizers.py", line 521, in __init__
+    pi_distrib=self.distribution_normalized,
+AttributeError: 'PiBayesianOptimization' object has no attribute 'distribution_normalized'

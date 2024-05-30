@@ -1,0 +1,181 @@
+/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/models/utils/assorted.py:173: InputDataWarning: Input data is not contained to the unit cube. Please consider min-max scaling the input data.
+  warnings.warn(msg, InputDataWarning)
+Processing algorithm piqEI at seed 0:   0%|                                                                      | 0/15 [00:00<?, ?it/s]/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/models/utils/assorted.py:173: InputDataWarning: Input data is not contained to the unit cube. Please consider min-max scaling the input data.
+  warnings.warn(msg, InputDataWarning)
+Processing algorithm piqEI at seed 0:   7%|████▏                                                         | 1/15 [00:00<00:13,  1.02it/s]/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/models/utils/assorted.py:173: InputDataWarning: Input data is not contained to the unit cube. Please consider min-max scaling the input data.
+  warnings.warn(msg, InputDataWarning)
+Processing algorithm piqEI at seed 0:  13%|████████▎                                                     | 2/15 [00:04<00:28,  2.20s/it]/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/models/utils/assorted.py:173: InputDataWarning: Input data is not contained to the unit cube. Please consider min-max scaling the input data.
+  warnings.warn(msg, InputDataWarning)
+Processing algorithm piqEI at seed 0:  20%|████████████▍                                                 | 3/15 [00:07<00:32,  2.73s/it]/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/models/utils/assorted.py:173: InputDataWarning: Input data is not contained to the unit cube. Please consider min-max scaling the input data.
+  warnings.warn(msg, InputDataWarning)
+Processing algorithm piqEI at seed 0:  27%|████████████████▌                                             | 4/15 [00:09<00:28,  2.62s/it]/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/models/utils/assorted.py:173: InputDataWarning: Input data is not contained to the unit cube. Please consider min-max scaling the input data.
+  warnings.warn(msg, InputDataWarning)
+Processing algorithm piqEI at seed 0:  33%|████████████████████▋                                         | 5/15 [00:11<00:21,  2.15s/it]/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/models/utils/assorted.py:173: InputDataWarning: Input data is not contained to the unit cube. Please consider min-max scaling the input data.
+  warnings.warn(msg, InputDataWarning)
+Processing algorithm piqEI at seed 0:  40%|████████████████████████▊                                     | 6/15 [00:12<00:16,  1.84s/it]/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/models/utils/assorted.py:173: InputDataWarning: Input data is not contained to the unit cube. Please consider min-max scaling the input data.
+  warnings.warn(msg, InputDataWarning)
+Processing algorithm piqEI at seed 0:  47%|████████████████████████████▉                                 | 7/15 [00:12<00:11,  1.43s/it]/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/models/utils/assorted.py:173: InputDataWarning: Input data is not contained to the unit cube. Please consider min-max scaling the input data.
+  warnings.warn(msg, InputDataWarning)
+Processing algorithm piqEI at seed 0:  53%|█████████████████████████████████                             | 8/15 [00:13<00:08,  1.16s/it]/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/models/utils/assorted.py:173: InputDataWarning: Input data is not contained to the unit cube. Please consider min-max scaling the input data.
+  warnings.warn(msg, InputDataWarning)
+Processing algorithm piqEI at seed 0:  60%|█████████████████████████████████████▏                        | 9/15 [00:14<00:06,  1.00s/it]/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/models/utils/assorted.py:173: InputDataWarning: Input data is not contained to the unit cube. Please consider min-max scaling the input data.
+  warnings.warn(msg, InputDataWarning)
+Processing algorithm piqEI at seed 0:  67%|████████████████████████████████████████▋                    | 10/15 [00:14<00:04,  1.13it/s]/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/models/utils/assorted.py:173: InputDataWarning: Input data is not contained to the unit cube. Please consider min-max scaling the input data.
+  warnings.warn(msg, InputDataWarning)
+Processing algorithm piqEI at seed 0:  73%|████████████████████████████████████████████▋                | 11/15 [00:15<00:03,  1.23it/s]/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/models/utils/assorted.py:173: InputDataWarning: Input data is not contained to the unit cube. Please consider min-max scaling the input data.
+  warnings.warn(msg, InputDataWarning)
+Processing algorithm piqEI at seed 0:  80%|████████████████████████████████████████████████▊            | 12/15 [00:16<00:02,  1.34it/s]/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/models/utils/assorted.py:173: InputDataWarning: Input data is not contained to the unit cube. Please consider min-max scaling the input data.
+  warnings.warn(msg, InputDataWarning)
+Processing algorithm piqEI at seed 0:  87%|████████████████████████████████████████████████████▊        | 13/15 [00:16<00:01,  1.43it/s]/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/models/utils/assorted.py:173: InputDataWarning: Input data is not contained to the unit cube. Please consider min-max scaling the input data.
+  warnings.warn(msg, InputDataWarning)
+Processing algorithm piqEI at seed 0:  93%|████████████████████████████████████████████████████████▉    | 14/15 [00:17<00:00,  1.49it/s]/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/models/utils/assorted.py:173: InputDataWarning: Input data is not contained to the unit cube. Please consider min-max scaling the input data.
+  warnings.warn(msg, InputDataWarning)
+Processing algorithm piqEI at seed 0: 100%|█████████████████████████████████████████████████████████████| 15/15 [00:17<00:00,  1.19s/it]
+/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/models/utils/assorted.py:173: InputDataWarning: Input data is not contained to the unit cube. Please consider min-max scaling the input data.
+  warnings.warn(msg, InputDataWarning)
+Processing algorithm piqEI at seed 1:   0%|                                                                      | 0/15 [00:00<?, ?it/s]/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/models/utils/assorted.py:173: InputDataWarning: Input data is not contained to the unit cube. Please consider min-max scaling the input data.
+  warnings.warn(msg, InputDataWarning)
+Processing algorithm piqEI at seed 1:   7%|████▏                                                         | 1/15 [00:00<00:13,  1.03it/s]/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/models/utils/assorted.py:173: InputDataWarning: Input data is not contained to the unit cube. Please consider min-max scaling the input data.
+  warnings.warn(msg, InputDataWarning)
+Processing algorithm piqEI at seed 1:  13%|████████▎                                                     | 2/15 [00:03<00:27,  2.08s/it]/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/models/utils/assorted.py:173: InputDataWarning: Input data is not contained to the unit cube. Please consider min-max scaling the input data.
+  warnings.warn(msg, InputDataWarning)
+Processing algorithm piqEI at seed 1:  20%|████████████▍                                                 | 3/15 [00:04<00:16,  1.38s/it]/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/models/utils/assorted.py:173: InputDataWarning: Input data is not contained to the unit cube. Please consider min-max scaling the input data.
+  warnings.warn(msg, InputDataWarning)
+Processing algorithm piqEI at seed 1:  27%|████████████████▌                                             | 4/15 [00:05<00:15,  1.42s/it]/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/models/utils/assorted.py:173: InputDataWarning: Input data is not contained to the unit cube. Please consider min-max scaling the input data.
+  warnings.warn(msg, InputDataWarning)
+Processing algorithm piqEI at seed 1:  33%|████████████████████▋                                         | 5/15 [00:06<00:11,  1.10s/it]/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/models/utils/assorted.py:173: InputDataWarning: Input data is not contained to the unit cube. Please consider min-max scaling the input data.
+  warnings.warn(msg, InputDataWarning)
+Processing algorithm piqEI at seed 1:  40%|████████████████████████▊                                     | 6/15 [00:06<00:08,  1.11it/s]/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/models/utils/assorted.py:173: InputDataWarning: Input data is not contained to the unit cube. Please consider min-max scaling the input data.
+  warnings.warn(msg, InputDataWarning)
+Processing algorithm piqEI at seed 1:  47%|████████████████████████████▉                                 | 7/15 [00:07<00:06,  1.27it/s]/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/models/utils/assorted.py:173: InputDataWarning: Input data is not contained to the unit cube. Please consider min-max scaling the input data.
+  warnings.warn(msg, InputDataWarning)
+Processing algorithm piqEI at seed 1:  53%|█████████████████████████████████                             | 8/15 [00:08<00:05,  1.38it/s]/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/models/utils/assorted.py:173: InputDataWarning: Input data is not contained to the unit cube. Please consider min-max scaling the input data.
+  warnings.warn(msg, InputDataWarning)
+Processing algorithm piqEI at seed 1:  60%|█████████████████████████████████████▏                        | 9/15 [00:08<00:04,  1.34it/s]/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/models/utils/assorted.py:173: InputDataWarning: Input data is not contained to the unit cube. Please consider min-max scaling the input data.
+  warnings.warn(msg, InputDataWarning)
+Processing algorithm piqEI at seed 1:  67%|████████████████████████████████████████▋                    | 10/15 [00:09<00:03,  1.47it/s]/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/models/utils/assorted.py:173: InputDataWarning: Input data is not contained to the unit cube. Please consider min-max scaling the input data.
+  warnings.warn(msg, InputDataWarning)
+Processing algorithm piqEI at seed 1:  73%|████████████████████████████████████████████▋                | 11/15 [00:09<00:02,  1.54it/s]/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/models/utils/assorted.py:173: InputDataWarning: Input data is not contained to the unit cube. Please consider min-max scaling the input data.
+  warnings.warn(msg, InputDataWarning)
+Processing algorithm piqEI at seed 1:  80%|████████████████████████████████████████████████▊            | 12/15 [00:10<00:01,  1.62it/s]/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/models/utils/assorted.py:173: InputDataWarning: Input data is not contained to the unit cube. Please consider min-max scaling the input data.
+  warnings.warn(msg, InputDataWarning)
+Processing algorithm piqEI at seed 1:  87%|████████████████████████████████████████████████████▊        | 13/15 [00:11<00:01,  1.67it/s]/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/models/utils/assorted.py:173: InputDataWarning: Input data is not contained to the unit cube. Please consider min-max scaling the input data.
+  warnings.warn(msg, InputDataWarning)
+Processing algorithm piqEI at seed 1:  93%|████████████████████████████████████████████████████████▉    | 14/15 [00:11<00:00,  1.74it/s]/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/models/utils/assorted.py:173: InputDataWarning: Input data is not contained to the unit cube. Please consider min-max scaling the input data.
+  warnings.warn(msg, InputDataWarning)
+Processing algorithm piqEI at seed 1: 100%|█████████████████████████████████████████████████████████████| 15/15 [00:12<00:00,  1.23it/s]
+
+
+
+
+
+
+Processing algorithm piqEI at seed 2: 100%|█████████████████████████████████████████████████████████████| 15/15 [00:12<00:00,  1.17it/s]
+/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/models/utils/assorted.py:173: InputDataWarning: Input data is not contained to the unit cube. Please consider min-max scaling the input data.
+  warnings.warn(msg, InputDataWarning)
+Processing algorithm piqEI at seed 3:   0%|                                                                      | 0/15 [00:00<?, ?it/s]/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/models/utils/assorted.py:173: InputDataWarning: Input data is not contained to the unit cube. Please consider min-max scaling the input data.
+  warnings.warn(msg, InputDataWarning)
+Processing algorithm piqEI at seed 3:   7%|████▏                                                         | 1/15 [00:01<00:17,  1.23s/it]/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/models/utils/assorted.py:173: InputDataWarning: Input data is not contained to the unit cube. Please consider min-max scaling the input data.
+  warnings.warn(msg, InputDataWarning)
+Processing algorithm piqEI at seed 3:  13%|████████▎                                                     | 2/15 [00:03<00:25,  2.00s/it]/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/models/utils/assorted.py:173: InputDataWarning: Input data is not contained to the unit cube. Please consider min-max scaling the input data.
+  warnings.warn(msg, InputDataWarning)
+Processing algorithm piqEI at seed 3:  20%|████████████▍                                                 | 3/15 [00:06<00:26,  2.17s/it]/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/models/utils/assorted.py:173: InputDataWarning: Input data is not contained to the unit cube. Please consider min-max scaling the input data.
+  warnings.warn(msg, InputDataWarning)
+Processing algorithm piqEI at seed 3:  27%|████████████████▌                                             | 4/15 [00:06<00:17,  1.56s/it]/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/models/utils/assorted.py:173: InputDataWarning: Input data is not contained to the unit cube. Please consider min-max scaling the input data.
+  warnings.warn(msg, InputDataWarning)
+Processing algorithm piqEI at seed 3:  33%|████████████████████▋                                         | 5/15 [00:07<00:12,  1.21s/it]/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/models/utils/assorted.py:173: InputDataWarning: Input data is not contained to the unit cube. Please consider min-max scaling the input data.
+  warnings.warn(msg, InputDataWarning)
+Processing algorithm piqEI at seed 3:  40%|████████████████████████▊                                     | 6/15 [00:07<00:09,  1.00s/it]/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/models/utils/assorted.py:173: InputDataWarning: Input data is not contained to the unit cube. Please consider min-max scaling the input data.
+  warnings.warn(msg, InputDataWarning)
+Processing algorithm piqEI at seed 3:  47%|████████████████████████████▉                                 | 7/15 [00:08<00:06,  1.16it/s]/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/models/utils/assorted.py:173: InputDataWarning: Input data is not contained to the unit cube. Please consider min-max scaling the input data.
+  warnings.warn(msg, InputDataWarning)
+Processing algorithm piqEI at seed 3:  53%|█████████████████████████████████                             | 8/15 [00:09<00:05,  1.33it/s]/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/models/utils/assorted.py:173: InputDataWarning: Input data is not contained to the unit cube. Please consider min-max scaling the input data.
+  warnings.warn(msg, InputDataWarning)
+Processing algorithm piqEI at seed 3:  60%|█████████████████████████████████████▏                        | 9/15 [00:09<00:04,  1.48it/s]/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/models/utils/assorted.py:173: InputDataWarning: Input data is not contained to the unit cube. Please consider min-max scaling the input data.
+  warnings.warn(msg, InputDataWarning)
+Processing algorithm piqEI at seed 3:  67%|████████████████████████████████████████▋                    | 10/15 [00:10<00:03,  1.56it/s]/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/models/utils/assorted.py:173: InputDataWarning: Input data is not contained to the unit cube. Please consider min-max scaling the input data.
+  warnings.warn(msg, InputDataWarning)
+Processing algorithm piqEI at seed 3:  73%|████████████████████████████████████████████▋                | 11/15 [00:10<00:02,  1.63it/s]/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/models/utils/assorted.py:173: InputDataWarning: Input data is not contained to the unit cube. Please consider min-max scaling the input data.
+  warnings.warn(msg, InputDataWarning)
+Processing algorithm piqEI at seed 3:  80%|████████████████████████████████████████████████▊            | 12/15 [00:11<00:01,  1.67it/s]/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/models/utils/assorted.py:173: InputDataWarning: Input data is not contained to the unit cube. Please consider min-max scaling the input data.
+  warnings.warn(msg, InputDataWarning)
+Processing algorithm piqEI at seed 3:  87%|████████████████████████████████████████████████████▊        | 13/15 [00:11<00:01,  1.67it/s]/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/models/utils/assorted.py:173: InputDataWarning: Input data is not contained to the unit cube. Please consider min-max scaling the input data.
+  warnings.warn(msg, InputDataWarning)
+Processing algorithm piqEI at seed 3:  93%|████████████████████████████████████████████████████████▉    | 14/15 [00:12<00:00,  1.69it/s]/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/models/utils/assorted.py:173: InputDataWarning: Input data is not contained to the unit cube. Please consider min-max scaling the input data.
+  warnings.warn(msg, InputDataWarning)
+Processing algorithm piqEI at seed 3: 100%|█████████████████████████████████████████████████████████████| 15/15 [00:12<00:00,  1.16it/s]
+/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/models/utils/assorted.py:173: InputDataWarning: Input data is not contained to the unit cube. Please consider min-max scaling the input data.
+  warnings.warn(msg, InputDataWarning)
+Processing algorithm piqEI at seed 4:   0%|                                                                      | 0/15 [00:00<?, ?it/s]/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/models/utils/assorted.py:173: InputDataWarning: Input data is not contained to the unit cube. Please consider min-max scaling the input data.
+  warnings.warn(msg, InputDataWarning)
+Processing algorithm piqEI at seed 4:   7%|████▏                                                         | 1/15 [00:00<00:11,  1.19it/s]/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/models/utils/assorted.py:173: InputDataWarning: Input data is not contained to the unit cube. Please consider min-max scaling the input data.
+  warnings.warn(msg, InputDataWarning)
+Processing algorithm piqEI at seed 4:  13%|████████▎                                                     | 2/15 [00:03<00:21,  1.62s/it]/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/models/utils/assorted.py:173: InputDataWarning: Input data is not contained to the unit cube. Please consider min-max scaling the input data.
+  warnings.warn(msg, InputDataWarning)
+Processing algorithm piqEI at seed 4:  20%|████████████▍                                                 | 3/15 [00:03<00:14,  1.23s/it]/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/models/utils/assorted.py:173: InputDataWarning: Input data is not contained to the unit cube. Please consider min-max scaling the input data.
+  warnings.warn(msg, InputDataWarning)
+Processing algorithm piqEI at seed 4:  27%|████████████████▌                                             | 4/15 [00:04<00:10,  1.05it/s]/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/models/utils/assorted.py:173: InputDataWarning: Input data is not contained to the unit cube. Please consider min-max scaling the input data.
+  warnings.warn(msg, InputDataWarning)
+Processing algorithm piqEI at seed 4:  33%|████████████████████▋                                         | 5/15 [00:04<00:08,  1.24it/s]/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/models/utils/assorted.py:173: InputDataWarning: Input data is not contained to the unit cube. Please consider min-max scaling the input data.
+  warnings.warn(msg, InputDataWarning)
+Processing algorithm piqEI at seed 4:  40%|████████████████████████▊                                     | 6/15 [00:05<00:06,  1.42it/s]/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/models/utils/assorted.py:173: InputDataWarning: Input data is not contained to the unit cube. Please consider min-max scaling the input data.
+  warnings.warn(msg, InputDataWarning)
+Processing algorithm piqEI at seed 4:  47%|████████████████████████████▉                                 | 7/15 [00:05<00:05,  1.50it/s]/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/models/utils/assorted.py:173: InputDataWarning: Input data is not contained to the unit cube. Please consider min-max scaling the input data.
+  warnings.warn(msg, InputDataWarning)
+Processing algorithm piqEI at seed 4:  53%|█████████████████████████████████                             | 8/15 [00:06<00:04,  1.57it/s]/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/models/utils/assorted.py:173: InputDataWarning: Input data is not contained to the unit cube. Please consider min-max scaling the input data.
+  warnings.warn(msg, InputDataWarning)
+Processing algorithm piqEI at seed 4:  60%|█████████████████████████████████████▏                        | 9/15 [00:07<00:04,  1.49it/s]/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/models/utils/assorted.py:173: InputDataWarning: Input data is not contained to the unit cube. Please consider min-max scaling the input data.
+  warnings.warn(msg, InputDataWarning)
+Processing algorithm piqEI at seed 4:  67%|████████████████████████████████████████▋                    | 10/15 [00:07<00:03,  1.54it/s]/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/models/utils/assorted.py:173: InputDataWarning: Input data is not contained to the unit cube. Please consider min-max scaling the input data.
+  warnings.warn(msg, InputDataWarning)
+Processing algorithm piqEI at seed 4:  73%|████████████████████████████████████████████▋                | 11/15 [00:08<00:02,  1.59it/s]/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/models/utils/assorted.py:173: InputDataWarning: Input data is not contained to the unit cube. Please consider min-max scaling the input data.
+  warnings.warn(msg, InputDataWarning)
+Processing algorithm piqEI at seed 4:  80%|████████████████████████████████████████████████▊            | 12/15 [00:09<00:01,  1.66it/s]/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/models/utils/assorted.py:173: InputDataWarning: Input data is not contained to the unit cube. Please consider min-max scaling the input data.
+  warnings.warn(msg, InputDataWarning)
+Processing algorithm piqEI at seed 4:  87%|████████████████████████████████████████████████████▊        | 13/15 [00:09<00:01,  1.66it/s]/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/models/utils/assorted.py:173: InputDataWarning: Input data is not contained to the unit cube. Please consider min-max scaling the input data.
+  warnings.warn(msg, InputDataWarning)
+Processing algorithm piqEI at seed 4:  93%|████████████████████████████████████████████████████████▉    | 14/15 [00:10<00:00,  1.72it/s]/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/botorch/models/utils/assorted.py:173: InputDataWarning: Input data is not contained to the unit cube. Please consider min-max scaling the input data.
+  warnings.warn(msg, InputDataWarning)
+Processing algorithm piqEI at seed 4: 100%|█████████████████████████████████████████████████████████████| 15/15 [00:10<00:00,  1.40it/s]
+/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/evotorch/tools/misc.py:1107: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.clone().detach() or sourceTensor.clone().detach().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  result = torch.tensor(data, **kwargs)
+Processing algorithm SNES at seed 0:   0%|                                                                       | 0/15 [00:00<?, ?it/s]/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/evotorch/core.py:3425: UserWarning: TypedStorage is deprecated. It will be removed in the future and UntypedStorage will be the only storage class. This should only matter to you if you are using storages directly.  To access UntypedStorage directly, use tensor.untyped_storage() instead of tensor.storage()
+  shares_storage = self._data.storage().data_ptr() == source._data.storage().data_ptr()
+Processing algorithm SNES at seed 0:  27%|████████████████▊                                              | 4/15 [00:00<00:02,  4.86it/s]
+Processing ./logs/test_function/ackley_noise-0.0_dim-1_initial_bounds-10.0/SNES/var_prior-3.0_batch_size-5 ...
+[2024-05-30 09:34:41] INFO     <31647> evotorch.core: Instance of `Problem` (id:134850657266384) -- The `dtype` for the problem's decision variables is set as torch.float32
+[2024-05-30 09:34:41] INFO     <31647> evotorch.core: Instance of `Problem` (id:134850657266384) -- `eval_dtype` (the dtype of the fitnesses and evaluation data) is set as torch.float32
+[2024-05-30 09:34:41] INFO     <31647> evotorch.core: Instance of `Problem` (id:134850657266384) -- The `device` of the problem is set as cuda:0
+
+Processing algorithm SNES at seed 0:  93%|█████████████████████████████████████████████████████████▊    | 14/15 [00:02<00:00,  5.13it/s]
+[2024-05-30 09:34:45] INFO     <31647> evotorch.core: Instance of `Problem` (id:134850470442272) -- The `dtype` for the problem's decision variables is set as torch.float32
+[2024-05-30 09:34:45] INFO     <31647> evotorch.core: Instance of `Problem` (id:134850470442272) -- `eval_dtype` (the dtype of the fitnesses and evaluation data) is set as torch.float32
+[2024-05-30 09:34:45] INFO     <31647> evotorch.core: Instance of `Problem` (id:134850470442272) -- The `device` of the problem is set as cuda:0
+Processing algorithm SNES at seed 0: 100%|██████████████████████████████████████████████████████████████| 15/15 [00:02<00:00,  5.04it/s]
+/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/evotorch/tools/misc.py:1107: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.clone().detach() or sourceTensor.clone().detach().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  result = torch.tensor(data, **kwargs)
+Processing algorithm SNES at seed 1: 100%|██████████████████████████████████████████████████████████████| 15/15 [00:02<00:00,  5.04it/s]
+/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/evotorch/tools/misc.py:1107: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.clone().detach() or sourceTensor.clone().detach().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  result = torch.tensor(data, **kwargs)
+Processing algorithm SNES at seed 2:   7%|████▏                                                          | 1/15 [00:00<00:02,  5.08it/s]
+[2024-05-30 09:34:48] INFO     <31647> evotorch.core: Instance of `Problem` (id:134850468426608) -- The `dtype` for the problem's decision variables is set as torch.float32
+[2024-05-30 09:34:48] INFO     <31647> evotorch.core: Instance of `Problem` (id:134850468426608) -- `eval_dtype` (the dtype of the fitnesses and evaluation data) is set as torch.float32
+[2024-05-30 09:34:48] INFO     <31647> evotorch.core: Instance of `Problem` (id:134850468426608) -- The `device` of the problem is set as cuda:0
+
+Processing algorithm SNES at seed 2: 100%|██████████████████████████████████████████████████████████████| 15/15 [00:03<00:00,  4.75it/s]
+/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/evotorch/tools/misc.py:1107: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.clone().detach() or sourceTensor.clone().detach().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  result = torch.tensor(data, **kwargs)
+Processing algorithm SNES at seed 3:  33%|█████████████████████                                          | 5/15 [00:00<00:01,  5.11it/s]
+[2024-05-30 09:34:51] INFO     <31647> evotorch.core: Instance of `Problem` (id:134850432557472) -- The `dtype` for the problem's decision variables is set as torch.float32
+[2024-05-30 09:34:51] INFO     <31647> evotorch.core: Instance of `Problem` (id:134850432557472) -- `eval_dtype` (the dtype of the fitnesses and evaluation data) is set as torch.float32
+[2024-05-30 09:34:51] INFO     <31647> evotorch.core: Instance of `Problem` (id:134850432557472) -- The `device` of the problem is set as cuda:0
+
+Processing algorithm SNES at seed 3:  93%|█████████████████████████████████████████████████████████▊    | 14/15 [00:02<00:00,  4.05it/s]
+[2024-05-30 09:34:55] INFO     <31647> evotorch.core: Instance of `Problem` (id:134850469466640) -- The `dtype` for the problem's decision variables is set as torch.float32
+[2024-05-30 09:34:55] INFO     <31647> evotorch.core: Instance of `Problem` (id:134850469466640) -- `eval_dtype` (the dtype of the fitnesses and evaluation data) is set as torch.float32
+[2024-05-30 09:34:55] INFO     <31647> evotorch.core: Instance of `Problem` (id:134850469466640) -- The `device` of the problem is set as cuda:0
+Processing algorithm SNES at seed 3: 100%|██████████████████████████████████████████████████████████████| 15/15 [00:03<00:00,  4.83it/s]
+/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/evotorch/tools/misc.py:1107: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.clone().detach() or sourceTensor.clone().detach().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  result = torch.tensor(data, **kwargs)
+
+Processing algorithm SNES at seed 4: 100%|██████████████████████████████████████████████████████████████| 15/15 [00:02<00:00,  5.09it/s]

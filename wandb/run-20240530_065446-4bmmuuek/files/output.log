@@ -1,0 +1,26 @@
+/home/pierre/miniconda3/envs/semisupervised/lib/python3.10/site-packages/evotorch/tools/misc.py:1107: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.clone().detach() or sourceTensor.clone().detach().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  result = torch.tensor(data, **kwargs)
+Traceback (most recent call last):
+  File "/home/pierre/git/ProbNES/semisupervised/main.py", line 139, in <module>
+    run(save_path=alg_path,
+  File "/home/pierre/git/ProbNES/semisupervised/module/bo.py", line 67, in run
+    optimizer = load_optimizer(label, N_INIT, objective, alg_kwargs, plot_path)
+  File "/home/pierre/git/ProbNES/semisupervised/module/optimizers.py", line 54, in load_optimizer
+    optimizer = SNES(n_init=n_init, objective=objective, batch_size=dict_parameter["batch_size"], optimizer_config=dict_parameter["SNES"], plot_path=plot_path)
+  File "/home/pierre/git/ProbNES/semisupervised/module/optimizers.py", line 269, in __init__
+    self.list_mu = [self.searcher._get_mu()]
+AttributeError: 'CMAES' object has no attribute '_get_mu'
+Traceback (most recent call last):
+  File "/home/pierre/git/ProbNES/semisupervised/main.py", line 139, in <module>
+    run(save_path=alg_path,
+  File "/home/pierre/git/ProbNES/semisupervised/module/bo.py", line 67, in run
+    optimizer = load_optimizer(label, N_INIT, objective, alg_kwargs, plot_path)
+  File "/home/pierre/git/ProbNES/semisupervised/module/optimizers.py", line 54, in load_optimizer
+    optimizer = SNES(n_init=n_init, objective=objective, batch_size=dict_parameter["batch_size"], optimizer_config=dict_parameter["SNES"], plot_path=plot_path)
+  File "/home/pierre/git/ProbNES/semisupervised/module/optimizers.py", line 269, in __init__
+    self.list_mu = [self.searcher._get_mu()]
+AttributeError: 'CMAES' object has no attribute '_get_mu'
+[2024-05-30 06:54:52] INFO     <18201> evotorch.core: Instance of `Problem` (id:136590790664368) -- The `dtype` for the problem's decision variables is set as torch.float32
+[2024-05-30 06:54:52] INFO     <18201> evotorch.core: Instance of `Problem` (id:136590790664368) -- `eval_dtype` (the dtype of the fitnesses and evaluation data) is set as torch.float32
+[2024-05-30 06:54:52] INFO     <18201> evotorch.core: Instance of `Problem` (id:136590790664368) -- The `device` of the problem is set as cuda:0
+[2024-05-30 06:54:52] INFO     <18201> evotorch.core: Instance of `Problem` (id:136590790664368) -- The number of actors that will be allocated for parallelized evaluation is 0
