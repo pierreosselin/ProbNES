@@ -5,6 +5,60 @@ import torch
 from botorch.test_functions.synthetic import Ackley, Rosenbrock, Rastrigin
 from .utils import Sphere
 import gpytorch
+import os
+
+import torch.nn as nn
+import torch.nn.functional as F
+import torch.optim as optim
+from torchvision import datasets  # transforms
+
+class Net(nn.Module):
+    def __init__(self):
+        super(Net, self).__init__()
+        self.conv1 = nn.Conv2d(1, 20, 5, 1)
+        self.conv2 = nn.Conv2d(20, 50, 5, 1)
+        self.fc1 = nn.Linear(4 * 4 * 50, 500)
+        self.fc2 = nn.Linear(500, 10)
+
+    def forward(self, x):
+        x = F.relu(self.conv1(x))
+        x = F.max_pool2d(x, 2, 2)
+        x = F.relu(self.conv2(x))
+        x = F.max_pool2d(x, 2, 2)
+        x = x.view(-1, 4 * 4 * 50)
+        x = F.relu(self.fc1(x))
+        x = self.fc2(x)
+        return F.log_softmax(x, dim=1)
+    
+def get_pretrained_dir() -> str:
+    return os.path.join(os.getcwd(), "data/pretrained_models")
+
+class VAE(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.fc1 = nn.Linear(784, 400)
+        self.fc21 = nn.Linear(400, 20)
+        self.fc22 = nn.Linear(400, 20)
+        self.fc3 = nn.Linear(20, 400)
+        self.fc4 = nn.Linear(400, 784)
+
+    def encode(self, x):
+        h1 = F.relu(self.fc1(x))
+        return self.fc21(h1), self.fc22(h1)
+
+    def reparameterize(self, mu, logvar):
+        std = torch.exp(0.5 * logvar)
+        eps = torch.randn_like(std)
+        return mu + eps * std
+
+    def decode(self, z):
+        h3 = F.relu(self.fc3(z))
+        return torch.sigmoid(self.fc4(h3))
+
+    def forward(self, x):
+        mu, logvar = self.encode(x.view(-1, 784))
+        z = self.reparameterize(mu, logvar)
+        return self.decode(z), mu, logvar
 
 class Objective:
     def __init__(self,
@@ -118,6 +172,54 @@ def get_objective(
         obj = Objective(obj_func=objec, noise_std=0., best_value=target_value)
         return obj
 
+    elif label == "latent_space":
+        model = problem_kwargs.get("function", "mnist")
+        noise_std = problem_kwargs.get("noise_std", 0.)
+        initial_bounds = problem_kwargs.get("initial_bounds", 1.)
+        if model == "mnist":
+            dim = 20
+            bounds = torch.tensor([[-initial_bounds] * dim, [initial_bounds] * dim], device=device, dtype=dtype)
+
+            cnn_weights_path = os.path.join(get_pretrained_dir(), "mnist_cnn.pt")
+            cnn_model = Net().to(dtype=dtype, device=device)
+            cnn_state_dict = torch.load(cnn_weights_path, map_location=device, weights_only=True)
+            cnn_model.load_state_dict(cnn_state_dict)
+
+            vae_weights_path = os.path.join(get_pretrained_dir(), "mnist_vae.pt")
+            vae_model = VAE().to(dtype=dtype, device=device)
+            vae_state_dict = torch.load(vae_weights_path, map_location=device, weights_only=True)
+            vae_model.load_state_dict(vae_state_dict)
+
+            def score(y):
+                """Returns a 'score' for each digit from 0 to 9. It is modeled as a squared exponential
+                centered at the digit '3'.
+                """
+                return torch.exp(-2 * (y - 3) ** 2)
+            
+            def score_image(x):
+                """The input x is an image and an expected score 
+                based on the CNN classifier and the scoring 
+                function is returned.
+                """
+                with torch.no_grad():
+                    probs = torch.exp(cnn_model(x))  # b x 10
+                    scores = score(
+                        torch.arange(10, device=device, dtype=dtype)
+                    ).expand(probs.shape)
+                return (probs * scores).sum(dim=1)
+            
+            def decode(train_x):
+                if train_x.ndim == 1:
+                    train_x = train_x.reshape(1,-1)
+                with torch.no_grad():
+                    decoded = vae_model.decode(train_x)
+                return decoded.view(train_x.shape[0], 1, 28, 28)
+            
+            def objective(x):
+                return score_image(decode(x))
+            obj = Objective(obj_func=objective, dim=dim, device=device, dtype=dtype, bounds=bounds, noise_std=noise_std, best_value=1., negate=False)
+            return obj
+        
     else:
         raise NotImplementedError(f"Problem {label} is not implemented")
     return obj

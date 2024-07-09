@@ -14,7 +14,7 @@ from evotorch.distributions import (
 from datetime import datetime
 import torch
 from torch.distributions import MultivariateNormal
-from .BASQ._basq_search import BASQ
+# from .BASQ._basq_search import BASQ
 
 class NESWSABI(SNES):
 

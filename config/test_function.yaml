@@ -1,20 +1,20 @@
-problem_name: test_function #test_function, airfoil
+problem_name: test_function #test_function, airfoil, latent_space
 save_dir: ./logs/test_function
 seed: 0
 verbose_synthesis: 0
 gpu: 0
 
 exp_settings:
-  n_exp: 5
-  n_iter: 20
-  batch_size:  15
-  n_init: 15 # Has to be equal to batch size for evo algo
+  n_exp: 3
+  n_iter: 150
+  batch_size:  3
+  n_init: 3 # Has to be equal to batch size for evo algo
 
 ## Change config for algorithm setting
 alg_settings:
-  algorithm: ["quad", "SNES", "random", "piqEI"] #["quad", "SNES", "random", "qEI", "piqEI"]  #[random, qEI, SNES, piqEI, quad]
+  algorithm: ["SNES", "quad"] #["quad", "SNES", "random", "qEI", "piqEI"]  #[random, qEI, SNES, piqEI, quad]
   verbose: 10
-  batch_size: 15
+  batch_size: 5
   piqEI:
     beta: 1.
     mean_prior: 1.
@@ -29,7 +29,7 @@ alg_settings:
     raw_samples: 512 #For qEI and piqEI
     batch_acq: 5 # Number of batches used to evaluate the acquisition function at the same time
   quad:
-    mean_prior: 1.
+    mean_prior: -1.
     std_prior: 3.
     candidates_vr: 5000
     lr: 1.
@@ -38,7 +38,7 @@ alg_settings:
     c2: 0.9
     t_max: 100
     budget: 500
-    manifold: True
+    manifold: False
     gradient_direction: "expected" #["sample", "mpd"]
     num_restarts: 10 #For qEI and piqEI
     mc_samples: 256 #For qEI and piqEI
@@ -46,13 +46,13 @@ alg_settings:
     batch_acq: 5 # Number of batches used to evaluate the acquisition function at the same time
   SNES:
     std_prior: 3.
-    mean_prior: 1.
+    mean_prior: -1.
   random:
     std_prior: 3.
     mean_prior: 1.
 
 problem_settings:
-  function: "ackley" # Name of the function in [airfoil, rosenbrock, sphere, ackley, rastrigin]
+  function: "rosenbrock" # Name of the function in [airfoil, rosenbrock, sphere, ackley, rastrigin]
   noise: 0.
-  dim: 3
+  dim: 10 # Irrelevant for latent space problem
   initial_bounds: 10.

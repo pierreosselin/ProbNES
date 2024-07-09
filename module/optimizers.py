@@ -11,7 +11,6 @@ from module.model import DerivativeExactGPSEModel
 from module.environment_api import EnvironmentObjective
 from module.acquisition_function import GradientInformation, DownhillQuadratic, initialize_acqf_optimizer, piqExpectedImprovement, QuadratureExploration
 from module.plot_script import plot_gp_fit, plot_synthesis_quad, plot_distribution_1D
-from module.sampler import get_sampler
 
 from scipy.optimize import minimize_scalar
 from torch.distributions.multivariate_normal import MultivariateNormal
@@ -321,7 +320,7 @@ class SNES(AbstractOptimizer):
         self.plot_path = plot_path
 
         # Create problem
-        problem = Problem("max", objective, solution_length=objective.dim, device = objective.device,initial_bounds=objective.bounds)
+        problem = Problem("max", objective, solution_length=objective.dim, device = objective.device,initial_bounds=objective.bounds, dtype=objective.dtype)
 
         ## Load parameter distribution TODO Transform distribution with respect to bounds
         self.mean, self.std = optimizer_config["mean_prior"]*torch.ones(objective.dim, device=objective.device, dtype=objective.dtype), torch.tensor([optimizer_config["std_prior"]]*objective.dim, device=objective.device, dtype=objective.dtype)
@@ -385,24 +384,25 @@ class SNES(AbstractOptimizer):
             # Open image with Pillow
             image = Image.open(buf)
             return image
-        
-        elif self.objective.dim == 2:
-            raise NotImplementedError
-            fig, ax = plt.subplots()
-            bounds = self.objective.bounds
-            lb, up = float(bounds[0][0]), float(bounds[1][0])
-            ax.set_xlim(lb, up)
-            plot_gp_fit(ax, self.model, self.train_x, targets=self.train_y, obj=self.objective, batch=self.batch_size, normalize_flag=True)
-            #fig.savefig(os.path.join(self.plot_path, f"synthesis_{self.iteration}.png"))
+        else:
+            return torch.tensor([[[0]]], dtype=self.objective.dtype)
+        # elif self.objective.dim == 2:
+        #     raise NotImplementedError
+        #     fig, ax = plt.subplots()
+        #     bounds = self.objective.bounds
+        #     lb, up = float(bounds[0][0]), float(bounds[1][0])
+        #     ax.set_xlim(lb, up)
+        #     plot_gp_fit(ax, self.model, self.train_x, targets=self.train_y, obj=self.objective, batch=self.batch_size, normalize_flag=True)
+        #     #fig.savefig(os.path.join(self.plot_path, f"synthesis_{self.iteration}.png"))
             
-            buf = BytesIO()
-            plt.savefig(buf, format='png')
-            buf.seek(0)
-            plt.close()
+        #     buf = BytesIO()
+        #     plt.savefig(buf, format='png')
+        #     buf.seek(0)
+        #     plt.close()
 
-            # Open image with Pillow
-            image_var = Image.open(buf)
-            return image_var
+        #     # Open image with Pillow
+        #     image_var = Image.open(buf)
+        #     return image_var
 
 class VanillaBayesianOptimization(AbstractOptimizer):
     """Optimizer class for vanilla Bayesian optimization.
@@ -1747,20 +1747,7 @@ class ProbES(AbstractOptimizer):
         self.param = geoopt.ManifoldParameter(self.manifold_point)
 
         ### Make model
-        # Model initialization and optional hyperparameter settings.
-        covar_module = ScaleKernel(
-            RBFKernel(
-                ard_num_dims=self.train_x.shape[-1],
-                batch_shape=None,
-                lengthscale_prior=GammaPrior(3.0, 6.0),
-            ),
-            batch_shape=None,
-            outputscale_prior=GammaPrior(2.0, 0.15),
-        )
-        train_y_init_standardized = standardize(self.train_y)
-        self.train_y_standardized_mean = self.train_y.mean()
-        self.train_y_standardized_std = self.train_y.std()
-        self.model = SingleTaskGP(self.train_x, train_y_init_standardized, covar_module=covar_module).to(self.train_x)
+        self.create_model()
 
         # Optionally optimize hyperparameters.
         mll = ExactMarginalLogLikelihood(
@@ -1784,58 +1771,31 @@ class ProbES(AbstractOptimizer):
                                                 maxiter=200)
 
         # Extract model quantities
-        self.train_X = self.model.train_inputs[0]
-        self.noise_tensor = self.model.likelihood.noise.detach().clone() * torch.eye(self.train_X.shape[0], dtype=self.train_X.dtype, device=self.train_X.device)
-        self.gp_covariance = ((torch.diag(self.model.covar_module.base_kernel.lengthscale[0].detach().clone()))**2).detach().clone()
-        self.outputscale = self.model.covar_module.outputscale.detach().clone()
-        self.K_X_X = (self.model.covar_module(self.train_X) + self.noise_tensor).evaluate().detach().clone()
-        self.mean_constant = self.model.mean_module.constant.detach().clone()
-        self.inverse_data_covar_y = torch.linalg.solve(self.K_X_X, self.model.train_targets - self.mean_constant)
-        self.inverse_data = torch.linalg.inv(self.K_X_X)
+        self.extract_model_quantities()
 
         #### Compute Quadrature
-        self.covariance_gp_distr = self.gp_covariance + self.distribution.covariance_matrix
-        self.constant = (self.model.covar_module.outputscale * torch.sqrt(torch.linalg.det(2*torch.pi*self.gp_covariance))).detach().clone()
-        self.t_1X = self.constant * torch.exp(MultivariateNormal(loc = self.distribution.loc, covariance_matrix = self.covariance_gp_distr).log_prob(self.train_X))
-        self.R_11 = self.constant * torch.exp(MultivariateNormal(loc = self.distribution.loc, covariance_matrix = self.covariance_gp_distr + self.distribution.covariance_matrix).log_prob(self.distribution.loc))
-        self.inverse_data_covar_t1X = torch.linalg.solve(self.K_X_X, self.t_1X) #Independant of t!..
-        self.mean_1 = self.mean_constant + (self.t_1X.T @ self.inverse_data_covar_y)
-        self.var_1 = self.R_11 - self.t_1X.T @ self.inverse_data_covar_t1X
-        
-    def wolfe_criterion(self, t):
-        target_point = self.manifold.expmap(self.manifold_point, t*self.d_manifold)
-        target_point[1] = max(target_point[1], 1e-14)
-        mean_joint, covar_joint = self.compute_joint_distribution(self.manifold.take_submanifold_value(target_point, 0), self.manifold.take_submanifold_value(target_point, 1))
-        mean_joint = -mean_joint
-        return -float(self.compute_wolfe(mean_joint, covar_joint, t))
-    
-    def armijo_criterion(self, t):
-        target_point = self.manifold.expmap(self.manifold_point, t*self.d_manifold)
-        mean_joint, covar_joint = self.compute_joint_distribution_first_order(self.manifold.take_submanifold_value(target_point, 0), self.manifold.take_submanifold_value(target_point, 1))
-        mean_joint = -mean_joint
-        return -float(self.compute_armijo(mean_joint, covar_joint, t).detach().clone().cpu())
+        # self.covariance_gp_distr = self.gp_covariance + self.distribution.covariance_matrix
+        # self.constant = (self.model.covar_module.outputscale * torch.sqrt(torch.linalg.det(2*torch.pi*self.gp_covariance))).detach().clone()
+        # self.t_1X = self.constant * torch.exp(MultivariateNormal(loc = self.distribution.loc, covariance_matrix = self.covariance_gp_distr).log_prob(self.train_X))
+        # self.R_11 = self.constant * torch.exp(MultivariateNormal(loc = self.distribution.loc, covariance_matrix = self.covariance_gp_distr + self.distribution.covariance_matrix).log_prob(self.distribution.loc))
+        # self.inverse_data_covar_t1X = torch.linalg.solve(self.K_X_X, self.t_1X) #Independant of t!..
+        # self.mean_1 = self.mean_constant + (self.t_1X.T @ self.inverse_data_covar_y)
+        # self.var_1 = self.R_11 - self.t_1X.T @ self.inverse_data_covar_t1X
     
     def step(self):
         """Make a gradient step toward"""
 
         # Extract model quantities
-        self.train_X = self.model.train_inputs[0]
-        self.noise_tensor = self.model.likelihood.noise.detach().clone() * torch.eye(self.train_X.shape[0], dtype=self.train_X.dtype, device=self.train_X.device)
-        self.gp_covariance = ((torch.diag(self.model.covar_module.base_kernel.lengthscale[0].detach().clone()))**2).detach().clone()
-        self.outputscale = self.model.covar_module.outputscale.detach().clone()
-        self.K_X_X = (self.model.covar_module(self.train_X) + self.noise_tensor).evaluate().detach().clone()
-        self.mean_constant = self.model.mean_module.constant.detach().clone()
-        self.inverse_data_covar_y = torch.linalg.solve(self.K_X_X, self.model.train_targets - self.mean_constant)
-        self.inverse_data = torch.linalg.inv(self.K_X_X)
+        self.extract_model_quantities()
 
         #### Compute Quadrature
-        self.covariance_gp_distr = self.gp_covariance + self.distribution.covariance_matrix
-        self.constant = (self.model.covar_module.outputscale * torch.sqrt(torch.linalg.det(2*torch.pi*self.gp_covariance))).detach().clone()
-        self.t_1X = self.constant * torch.exp(MultivariateNormal(loc = self.distribution.loc, covariance_matrix = self.covariance_gp_distr).log_prob(self.train_X))
-        self.R_11 = self.constant * torch.exp(MultivariateNormal(loc = self.distribution.loc, covariance_matrix = self.covariance_gp_distr + self.distribution.covariance_matrix).log_prob(self.distribution.loc))
-        self.inverse_data_covar_t1X = torch.linalg.solve(self.K_X_X, self.t_1X) #Independant of t!..
-        self.mean_1 = self.mean_constant + (self.t_1X.T @ self.inverse_data_covar_y)
-        self.var_1 = self.R_11 - self.t_1X.T @ self.inverse_data_covar_t1X
+        # self.covariance_gp_distr = self.gp_covariance + self.distribution.covariance_matrix
+        # self.constant = (self.model.covar_module.outputscale * torch.sqrt(torch.linalg.det(2*torch.pi*self.gp_covariance))).detach().clone()
+        # self.t_1X = self.constant * torch.exp(MultivariateNormal(loc = self.distribution.loc, covariance_matrix = self.covariance_gp_distr).log_prob(self.train_X))
+        # self.R_11 = self.constant * torch.exp(MultivariateNormal(loc = self.distribution.loc, covariance_matrix = self.covariance_gp_distr + self.distribution.covariance_matrix).log_prob(self.distribution.loc))
+        # self.inverse_data_covar_t1X = torch.linalg.solve(self.K_X_X, self.t_1X) #Independant of t!..
+        # self.mean_1 = self.mean_constant + (self.t_1X.T @ self.inverse_data_covar_y)
+        # self.var_1 = self.R_11 - self.t_1X.T @ self.inverse_data_covar_t1X
 
         ## Compute direction (sampled, expected , mdp ect...).
         if self.gradient_direction == "expected":
@@ -1857,8 +1817,10 @@ class ProbES(AbstractOptimizer):
             raise NotImplementedError
         
         # Taking natural gradient:
+        ## TODO make it a function
         self.d_mu = torch.matmul(self.distribution.covariance_matrix, self.d_mu)
         self.d_epsilon = torch.matmul(torch.matmul(self.distribution.covariance_matrix, self.d_epsilon), self.distribution.covariance_matrix)
+        
         ## Line search mehod;
         if self.policy == "constant":
             self.t_update = self.lr
@@ -1923,7 +1885,31 @@ class ProbES(AbstractOptimizer):
         self.param = geoopt.ManifoldParameter(self.manifold_point)
 
         ### Make model
-        # Model initialization and optional hyperparameter settings.
+        self.create_model()
+
+        # Optionally optimize hyperparameters.
+        mll = ExactMarginalLogLikelihood(
+            self.model.likelihood, self.model
+        )
+        fit_gpytorch_mll(mll)
+
+        self.params_history_list.append(new_x.clone())
+        # self.values_history.append(new_y.clone())
+        self.values_history.append(self.objective(self.distribution.loc).repeat(self.batch_size))
+        self.iteration += 1
+
+    def extract_model_quantities(self):
+        # Extract model quantities
+        self.train_X = self.model.train_inputs[0]
+        self.noise_tensor = self.model.likelihood.noise.detach().clone() * torch.eye(self.train_X.shape[0], dtype=self.train_X.dtype, device=self.train_X.device)
+        self.gp_covariance = ((torch.diag(self.model.covar_module.base_kernel.lengthscale[0].detach().clone()))**2).detach().clone()
+        self.outputscale = self.model.covar_module.outputscale.detach().clone()
+        self.K_X_X = (self.model.covar_module(self.train_X) + self.noise_tensor).evaluate().detach().clone()
+        self.mean_constant = self.model.mean_module.constant.detach().clone()
+        self.inverse_data_covar_y = torch.linalg.solve(self.K_X_X, self.model.train_targets - self.mean_constant)
+        self.inverse_data = torch.linalg.inv(self.K_X_X)
+
+    def create_model(self):
         covar_module = ScaleKernel(
             RBFKernel(
                 ard_num_dims=self.train_x.shape[-1],
@@ -1938,16 +1924,6 @@ class ProbES(AbstractOptimizer):
         self.train_y_standardized_std = self.train_y.std()
 
         self.model = SingleTaskGP(self.train_x, train_y_init_standardized, covar_module=covar_module).to(self.train_x) ## Can input subset of the dataset
-
-        # Optionally optimize hyperparameters.
-        mll = ExactMarginalLogLikelihood(
-            self.model.likelihood, self.model
-        )
-        fit_gpytorch_mll(mll)
-        self.params_history_list.append(new_x.clone())
-        # self.values_history.append(new_y.clone())
-        self.values_history.append(self.objective(self.distribution.loc).repeat(self.batch_size))
-        self.iteration += 1
 
     # The rbf kernel is not a Gaussian kernel (a multiplicative constant is missing)
     def _quadrature(self, mean, covariance):
@@ -2003,6 +1979,19 @@ class ProbES(AbstractOptimizer):
         self.var_prime_1 = self.d_mu @ self.R1_prime_1_prime_mu_mu @ self.d_mu \
                     + 0.25*((torch.unsqueeze(torch.unsqueeze(self.d_epsilon, -1), -1)) * self.R1_prime_1_prime_epsilon_epsilon * (torch.unsqueeze(torch.unsqueeze(self.d_epsilon, 0), 0).repeat(self.d,self.d,1,1))).sum()
 
+    def wolfe_criterion(self, t):
+        target_point = self.manifold.expmap(self.manifold_point, t*self.d_manifold)
+        target_point[1] = max(target_point[1], 1e-14)
+        mean_joint, covar_joint = self.compute_joint_distribution(self.manifold.take_submanifold_value(target_point, 0), self.manifold.take_submanifold_value(target_point, 1))
+        mean_joint = -mean_joint
+        return -float(self.compute_wolfe(mean_joint, covar_joint, t))
+    
+    def armijo_criterion(self, t):
+        target_point = self.manifold.expmap(self.manifold_point, t*self.d_manifold)
+        mean_joint, covar_joint = self.compute_joint_distribution_first_order(self.manifold.take_submanifold_value(target_point, 0), self.manifold.take_submanifold_value(target_point, 1))
+        mean_joint = -mean_joint
+        return -float(self.compute_armijo(mean_joint, covar_joint, t).detach().clone().cpu())
+    
     def compute_armijo(self, mean_joint, covar_joint, t):
         A_transform = torch.tensor([[1, self.c1*t, -1]], dtype=self.train_X.dtype, device=self.train_X.device)
         if not isPD(covar_joint):
@@ -2274,7 +2263,10 @@ class ProbES(AbstractOptimizer):
         return mean_joint.detach(), covar_joint.detach()
 
     def plot_synthesis(self, save_path=".", iteration=0):
-        return plot_synthesis_quad(self, iteration=iteration, save_path=self.plot_path, standardize=True)
+        if self.objective.dim == 1:
+            return plot_synthesis_quad(self, iteration=iteration, save_path=self.plot_path, standardize=True)
+        else:
+            return torch.tensor([[[0]]], dtype=self.objective.dtype)
     
 #### Add scipy zero order optimiser and multi restart
 class multistart_scipy(AbstractOptimizer):
