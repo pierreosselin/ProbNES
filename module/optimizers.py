@@ -187,7 +187,7 @@ class Random(AbstractOptimizer):
         self.iteration += 1
     
     def plot_synthesis(self):
-        raise NotImplementedError
+        return {"objective": np.max(torch.vstack(self.values_history).cpu().numpy())}
 
 class RandomSearch(AbstractOptimizer):
     """Implementation of (augmented) random search.
@@ -351,7 +351,7 @@ class ES(AbstractOptimizer):
             self.values_history.append(self.objective(self.searcher._get_mu()).repeat(self.batch_size))
             # self.values_history.append(train_obj.clone())
             self.list_mu.append(self.searcher._get_mu())
-            self.list_covar.append(self.searcher._get_sigma())
+            self.list_covar.append(self.searcher._get_sigma()**2)
         self.searcher.run(1)
         train_x, train_obj = self.searcher.population.values, self.searcher.population.evals
         self.params_history_list.append(train_x.clone())
@@ -370,7 +370,7 @@ class ES(AbstractOptimizer):
             self.values_history.append(self.objective(self.searcher._get_mu()).repeat(self.batch_size))
             # self.values_history.append(train_obj.clone())
             self.list_mu.append(self.searcher._get_mu())
-            self.list_covar.append(self.searcher._get_sigma())
+            self.list_covar.append(self.searcher._get_sigma()**2)
         self.searcher.run(1)
         train_x, train_obj = self.searcher.population.values, self.searcher.population.evals
         self.params_history_list.append(train_x.clone())
@@ -378,6 +378,10 @@ class ES(AbstractOptimizer):
         
     def plot_synthesis(self):
         """Return the synthesis as a dictionary that can be fed to wandb"""
+        batch_samples = self.params_history_list[-1]
+        matrix_distances = torch.cdist(batch_samples, batch_samples)
+        avg_distance = matrix_distances[torch.triu(torch.ones(matrix_distances.shape), diagonal=1) == 1].mean()
+
         if self.objective.dim == 1:
             fig, ax = plt.subplots()
             bounds = self.objective.bounds
@@ -413,17 +417,32 @@ class ES(AbstractOptimizer):
                         "mean": self.list_mu[-1],
                         "var": self.list_covar[-1],
                         "objective": np.max(torch.vstack(self.values_history).cpu().numpy()),
-                        "objective_mean": np.max(self.objective(torch.vstack(self.list_mu)).cpu().numpy())}
+                        "objective_mean": np.max(self.objective(torch.vstack(self.list_mu)).cpu().numpy()),
+                        "Avg distance samples": avg_distance}
             else:
                 return {"Image synthesis info": image,
                         "mean": self.list_mu[-1],
-                        "std": self.list_covar[-1],
+                        "std": torch.sqrt(self.list_covar[-1]),
                         "objective": np.max(torch.vstack(self.values_history).cpu().numpy()),
-                        "objective_mean": np.max(self.objective(torch.vstack(self.list_mu)).cpu().numpy())}
+                        "objective_mean": np.max(self.objective(torch.vstack(self.list_mu)).cpu().numpy()),
+                        "Avg distance samples": avg_distance}
         else:
-            return {"mean": self.list_mu[-1],
-                    "objective": np.max(torch.vstack(self.values_history).cpu().numpy()),
-                    "objective_mean": np.max(self.objective(torch.vstack(self.list_mu)).cpu().numpy())}
+            if len(self.list_mu) > 1:
+                return {"mean": self.list_mu[-1],
+                        "difference mean": torch.linalg.norm(self.list_mu[-1] - self.list_mu[-2]),
+                        "difference covar": torch.linalg.norm(self.list_covar[-1] - self.list_covar[-2]),
+                        "objective": np.max(torch.vstack(self.values_history).cpu().numpy()),
+                        "objective_mean": np.max(self.objective(torch.vstack(self.list_mu)).cpu().numpy()),
+                        "current objective_mean": self.objective(self.list_mu[-1]).cpu().numpy(),
+                        "Avg distance samples": avg_distance}
+            else:
+                return {"mean": self.list_mu[-1],
+                        "difference mean": 0.,
+                        "difference covar": 0.,
+                        "objective": np.max(torch.vstack(self.values_history).cpu().numpy()),
+                        "objective_mean": np.max(self.objective(torch.vstack(self.list_mu)).cpu().numpy()),
+                        "current objective_mean": self.objective(self.list_mu[-1]).cpu().numpy(),
+                        "Avg distance samples": avg_distance}
         # elif self.objective.dim == 2:
         #     raise NotImplementedError
         #     fig, ax = plt.subplots()
@@ -537,22 +556,7 @@ class VanillaBayesianOptimization(AbstractOptimizer):
         self.iteration += 1
 
     def plot_synthesis(self):
-        if self.objective.dim == 1:
-            fig, ax = plt.subplots()
-            bounds = self.objective.bounds
-            lb, up = float(bounds[0][0]), float(bounds[1][0])
-            ax.set_xlim(lb, up)
-            plot_gp_fit(ax, self.model, self.train_x, targets=self.train_y, obj=self.objective, batch=self.batch_size, normalize_flag=True)
-            #fig.savefig(os.path.join(self.plot_path, f"synthesis_{self.iteration}.png"))
-            
-            buf = BytesIO()
-            plt.savefig(buf, format='png')
-            buf.seek(0)
-            plt.close()
-
-            # Open image with Pillow
-            image_var = Image.open(buf)
-            return image_var
+        return {"objective": np.max(torch.vstack(self.values_history).cpu().numpy())}
         
 class PiBayesianOptimization(AbstractOptimizer):
     """Optimizer class for vanilla Bayesian optimization.
@@ -689,21 +693,22 @@ class PiBayesianOptimization(AbstractOptimizer):
         self.iteration += 1
     
     def plot_synthesis(self):
-        if self.objective.dim == 1:
-            fig, ax = plt.subplots()
-            bounds = self.objective.bounds
-            lb, up = float(bounds[0][0]), float(bounds[1][0])
-            ax.set_xlim(lb, up)
-            plot_gp_fit(ax, self.model, self.train_x, targets=self.train_y, obj=self.objective, batch=self.batch_size, normalize_flag=True)
-            # fig.savefig(os.path.join(self.plot_path, f"synthesis_{self.iteration}.png"))
-            buf = BytesIO()
-            plt.savefig(buf, format='png')
-            buf.seek(0)
-            plt.close()
+        # if self.objective.dim == 1:
+        #     fig, ax = plt.subplots()
+        #     bounds = self.objective.bounds
+        #     lb, up = float(bounds[0][0]), float(bounds[1][0])
+        #     ax.set_xlim(lb, up)
+        #     plot_gp_fit(ax, self.model, self.train_x, targets=self.train_y, obj=self.objective, batch=self.batch_size, normalize_flag=True)
+        #     # fig.savefig(os.path.join(self.plot_path, f"synthesis_{self.iteration}.png"))
+        #     buf = BytesIO()
+        #     plt.savefig(buf, format='png')
+        #     buf.seek(0)
+        #     plt.close()
 
-            # Open image with Pillow
-            image = Image.open(buf)
-            return image
+        #     # Open image with Pillow
+        #     image = Image.open(buf)
+        #     return image
+        return {"objective": np.max(torch.vstack(self.values_history).cpu().numpy())}
 
 class BayesianGradientAscent(AbstractOptimizer):
     """Optimizer for Bayesian gradient ascent.
@@ -1961,10 +1966,10 @@ class ProbES(AbstractOptimizer):
             RBFKernel(
                 ard_num_dims=self.train_x.shape[-1],
                 batch_shape=None,
-                lengthscale_prior=GammaPrior(3.0, 6.0),
+                lengthscale_prior=GammaPrior(self.d, np.sqrt(self.d)),
             ),
             batch_shape=None,
-            outputscale_prior=GammaPrior(2.0, 0.15),
+            outputscale_prior=GammaPrior(6.0, 3.0),
         )
         if self.mahalanobis:
             mask = _is_in_ellipse(self.distribution.loc, self.distribution.covariance_matrix, self.train_x, self.chi_threshold)
@@ -2322,6 +2327,9 @@ class ProbES(AbstractOptimizer):
         return mean_joint.detach(), covar_joint.detach()
 
     def plot_synthesis(self, save_path=".", iteration=0):
+        batch_samples = self.train_x[(-self.batch_size):]
+        matrix_distances = torch.cdist(batch_samples, batch_samples)
+        avg_distance = matrix_distances[torch.triu(torch.ones(matrix_distances.shape), diagonal=1) == 1].mean()
         if self.objective.dim == 1:
             image = plot_synthesis_quad(self, iteration=iteration, save_path=self.plot_path, standardize=True)
             image = wandb.Image(image)
@@ -2330,12 +2338,26 @@ class ProbES(AbstractOptimizer):
                     "std": torch.sqrt(self.distribution.covariance_matrix),
                     "objective": np.max(torch.vstack(self.values_history).cpu().numpy()),
                     "objective_mean": np.max(self.objective(torch.vstack(self.list_mu)).cpu().numpy()),
-                    "GP kernel spectrum":torch.linalg.norm(self.model.covar_module.base_kernel.lengthscale[0])}
+                    "GP lengthscales norm":torch.linalg.norm(self.model.covar_module.base_kernel.lengthscale[0]),
+                    "Avg distance samples": avg_distance}
             
         else:
-            return {"mean": self.distribution.loc,
-                    "objective": np.max(torch.vstack(self.values_history).cpu().numpy()),
-                    "objective_mean": np.max(self.objective(torch.vstack(self.list_mu)).cpu().numpy())}
+            if len(self.list_mu) > 1:
+                return {"mean": self.distribution.loc,
+                        "difference mean": torch.linalg.norm(self.list_mu[-1] - self.list_mu[-2]),
+                        "difference covar": torch.linalg.norm(self.list_covar[-1] - self.list_covar[-2]),
+                        "objective": np.max(torch.vstack(self.values_history).cpu().numpy()),
+                        "objective_mean": np.max(self.objective(torch.vstack(self.list_mu)).cpu().numpy()),
+                        "GP lengthscales norm":torch.linalg.norm(self.model.covar_module.base_kernel.lengthscale[0]),
+                        "Avg distance samples": avg_distance}
+            else:
+                return {"mean": self.list_mu[-1],
+                        "difference mean": 0.,
+                        "difference covar": 0.,
+                        "objective": np.max(torch.vstack(self.values_history).cpu().numpy()),
+                        "objective_mean": np.max(self.objective(torch.vstack(self.list_mu)).cpu().numpy()),
+                        "GP lengthscales norm":torch.linalg.norm(self.model.covar_module.base_kernel.lengthscale[0]),
+                        "Avg distance samples": avg_distance}
     
 #### Add scipy zero order optimiser and multi restart
 class multistart_scipy(AbstractOptimizer):

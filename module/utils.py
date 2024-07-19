@@ -481,16 +481,20 @@ def create_path_exp(save_dir, problem_name, problem_kwargs):
     save_path = os.path.join(save_dir, s)
     return save_path
 
+def alg_name(algorithm_name, alg_kwargs):
+  if algorithm_name == "probES":  #["probES", "ES", "random", "qEI", "piqEI"]
+    s = "_".join([f'type-{alg_kwargs[algorithm_name]["type"]}', f'mahalanobis-{alg_kwargs[algorithm_name]["mahalanobis"]}', f'mean_prior-{alg_kwargs[algorithm_name]["mean_prior"]}', f'std_prior-{alg_kwargs[algorithm_name]["std_prior"]}', f'batch_size-{alg_kwargs["batch_size"]}'])
+  elif algorithm_name == "ES":
+    s = "_".join([f'type-{alg_kwargs[algorithm_name]["type"]}', f'std_prior-{alg_kwargs[algorithm_name]["std_prior"]}', f'batch_size-{alg_kwargs["batch_size"]}'])
+  elif algorithm_name == "qEI":
+    s = "_".join([f'batch_size-{alg_kwargs["batch_size"]}'])
+  elif algorithm_name == "piqEI":
+    s = "_".join([f'beta-{alg_kwargs[algorithm_name]["beta"]}', f'mean_prior-{alg_kwargs[algorithm_name]["mean_prior"]}', f'std_prior-{alg_kwargs[algorithm_name]["std_prior"]}', f'batch_size-{alg_kwargs["batch_size"]}']) 
+  elif algorithm_name == "random":
+    s = "_".join([f'mean_prior-{alg_kwargs[algorithm_name]["mean_prior"]}', f'std_prior-{alg_kwargs[algorithm_name]["std_prior"]}', f'batch_size-{alg_kwargs["batch_size"]}'])
+  return s
+
 def create_path_alg(save_path, algorithm_name, alg_kwargs):
-    if algorithm_name == "probES":  #["probES", "ES", "random", "qEI", "piqEI"]
-        s = "_".join([f'type-{alg_kwargs[algorithm_name]["type"]}', f'gradient-{alg_kwargs[algorithm_name]["gradient_direction"]}', f'manifold-{alg_kwargs[algorithm_name]["manifold"]}', f'std_prior-{alg_kwargs[algorithm_name]["std_prior"]}', f'batch_size-{alg_kwargs["batch_size"]}'])
-    elif algorithm_name == "ES":
-        s = "_".join([f'type-{alg_kwargs[algorithm_name]["type"]}', f'var_prior-{alg_kwargs[algorithm_name]["std_prior"]}', f'batch_size-{alg_kwargs["batch_size"]}'])
-    elif algorithm_name == "qEI":
-        s = "_".join([f'batch_size-{alg_kwargs["batch_size"]}'])
-    elif algorithm_name == "piqEI":
-        s = "_".join([f'beta-{alg_kwargs[algorithm_name]["beta"]}', f'std_prior-{alg_kwargs[algorithm_name]["std_prior"]}', f'batch_size-{alg_kwargs["batch_size"]}']) 
-    elif algorithm_name == "random":
-        s = "_".join([f'var_prior-{alg_kwargs[algorithm_name]["std_prior"]}', f'batch_size-{alg_kwargs["batch_size"]}'])
+    s = alg_name(algorithm_name, alg_kwargs)
     save_path = os.path.join(save_path, s)
     return save_path

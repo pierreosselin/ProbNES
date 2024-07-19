@@ -31,7 +31,6 @@ def run(save_path: str,
     #Get experiment settings
     N_BATCH = exp_kwargs["n_iter"]
     N_INIT = exp_kwargs["n_init"]
-    BATCH_SIZE = exp_kwargs["batch_size"]
 
     #Set seed and device
     torch.manual_seed(seed)
@@ -67,32 +66,12 @@ def run(save_path: str,
     if verbose_synthesis:
         d_plot = optimizer.plot_synthesis()
         wandb.log(d_plot)
-        # if label == "ES":
-        #         wandb.log({"Image synthesis info": img,
-        #                     "mean": optimizer.searcher._get_mu(),
-        #                     "std": optimizer.searcher._get_sigma(),
-        #                     "objective": np.max(torch.vstack(optimizer.values_history).cpu().numpy()),
-        #                     "objective_mean": np.max(optimizer.objective(torch.vstack(optimizer.list_mu)).cpu().numpy())})
-        # if label == "probES":
-        #     wandb.log({"Image synthesis info": img,
-        #         "mean": optimizer.distribution.loc,
-        #         "std": torch.sqrt(optimizer.distribution.covariance_matrix),
-        #         "objective": np.max(torch.vstack(optimizer.values_history).cpu().numpy()),
-        #         "objective_mean": np.max(optimizer.objective(torch.vstack(optimizer.list_mu)).cpu().numpy())})
-        # if label == "piqEI":
-        #     wandb.log({"Image synthesis info": img,
-        #         "mean": optimizer.distribution.loc,
-        #         "std": torch.sqrt(optimizer.distribution.covariance_matrix),
-        #         "objective": np.max(torch.vstack(optimizer.values_history).cpu().numpy())})
     # run N_BATCH rounds of BayesOpt after the initial random batch
     for _ in tqdm(range(1, N_BATCH + 1), position=0, leave=True, desc = f"Processing algorithm {label} at seed {seed}"):
         optimizer.step()
         if verbose_synthesis:
             d_plot = optimizer.plot_synthesis()
             wandb.log(d_plot)
-        # if verbose_synthesis and seed==0: ## Only plot one seed
-        #     if iteration % verbose_synthesis == 0:
-        #         optimizer.plot_synthesis()
 
     history_params = torch.vstack(optimizer.params_history_list).cpu()
     history_values = torch.vstack(optimizer.values_history).cpu()

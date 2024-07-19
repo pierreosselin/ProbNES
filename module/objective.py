@@ -194,7 +194,7 @@ def get_objective(
                 """Returns a 'score' for each digit from 0 to 9. It is modeled as a squared exponential
                 centered at the digit '3'.
                 """
-                return torch.exp(-2 * (y - 3) ** 2)
+                return -torch.abs(y - 1)
             
             def score_image(x):
                 """The input x is an image and an expected score 
@@ -217,7 +217,7 @@ def get_objective(
             
             def objective(x):
                 return score_image(decode(x))
-            obj = Objective(obj_func=objective, dim=dim, device=device, dtype=dtype, bounds=bounds, noise_std=noise_std, best_value=1., negate=False)
+            obj = Objective(obj_func=objective, dim=dim, device=device, dtype=dtype, bounds=bounds, noise_std=noise_std, best_value=0., negate=False)
             return obj
         
     else:

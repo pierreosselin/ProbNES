@@ -9,7 +9,7 @@
             "type": "python",
             "request": "launch",
             "program": "${workspaceFolder}/main.py",
-            "args": ["--config", "test_function"],
+            "args": ["--config", "latent_space"],
             "console": "integratedTerminal",
             "justMyCode": true
         }

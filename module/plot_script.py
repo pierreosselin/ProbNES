@@ -260,9 +260,9 @@ def plot_figure_algo(alg_dir, ax, log_transform=False):
     y = pd.DataFrame(y).cummin(axis=1)
     y = y.iloc[:, iters_index]
     if log_transform:
-        ax.plot(iters, np.log(y.mean(axis=0).to_numpy()), ".-", label=algo_to_label[label])
+        ax.plot(iters, np.log(y.mean(axis=0).to_numpy()), ".-", label=algo_to_label[label] + alg_dir.split("/")[-1])
     else:
-        ax.plot(iters, y.mean(axis=0).to_numpy(), ".-", label=algo_to_label[label])
+        ax.plot(iters, y.mean(axis=0).to_numpy(), ".-", label=algo_to_label[label] + alg_dir.split("/")[-1])
     yerr=ci(y, N_TRIALS)
     if log_transform:
         ax.fill_between(iters, np.log(np.clip(y.mean(axis=0)-yerr, a_min=1e-5, a_max=None)), np.log(np.clip(y.mean(axis=0)+yerr, a_min=1e-5, a_max=None)), alpha=0.1)
@@ -353,13 +353,15 @@ def plot_config(config_name, log_transform=False):
                 alg_path = create_path_alg(algo_path, algo, alg_kwargs)
                 plot_figure_algo(alg_path, ax, log_transform)
     
-        N_BATCH, BATCH_SIZE = exp_kwargs["n_iter"], exp_kwargs["batch_size"]
+        N_BATCH, BATCH_SIZE = exp_kwargs["n_iter"], alg_kwargs["batch_size"]
         if not log_transform:    
             ax.plot([0, N_BATCH * BATCH_SIZE], [0.] * 2, 'k', label="true best objective", linewidth=2)
             # ax.set_ylim(0, 5.)
         ax.set(xlabel='number of observations (beyond initial points)', ylabel='best objective value')
         #ax.set_ylim(0,10.)
-        ax.legend(loc="lower right")
+        ax.legend(bbox_to_anchor=(0, 1.02, 1, 0.2), loc="lower left", borderaxespad=0, ncol=3)
+        fig.tight_layout()
+        
         if not log_transform:
             fig.savefig(os.path.join(exp_path, f"plot_regret_{config_name}.pdf"))
             fig.savefig(os.path.join(exp_path, f"plot_regret_{config_name}.png"))
