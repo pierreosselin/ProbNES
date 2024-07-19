@@ -24,10 +24,11 @@ import yaml
 from itertools import product
 import pandas as pd
 
-algo_to_label = {"quad": "Proba SNES (ours)",
-                 "SNES": "SNES",
+algo_to_label = {"probES": "Proba ES (ours)",
+                 "ES": "ES",
                  "piqEI": "piBO",
-                 "random": "random"}
+                 "random": "random",
+                 "qEI": "BO"}
 
 """
 Scripts to produce plots from the files contained in path
@@ -88,56 +89,57 @@ def plot_synthesis_quad(optimizer, iteration, save_path=".", standardize=True):
     B, D = np.meshgrid(b, d)
     n, m = b.shape[0], d.shape[0]
     res = torch.stack((torch.tensor(B.flatten()), torch.tensor(D.flatten())), axis = 1).cpu().numpy()
-    result, result_ei, result_bivariate_ei = [], [], []
+    result = []
+    # result, result_ei, result_bivariate_ei = [], [], []
     
     for el in tqdm(res):
         post = optimizer._quadrature(torch.tensor([el[0]]).to(device=optimizer.objective.device, dtype=optimizer.objective.dtype), torch.tensor([[el[1]]]).to(device=optimizer.objective.device, dtype=optimizer.objective.dtype))
         result.append(post)
-        mean_joint, covar_joint = optimizer.compute_joint_distribution_zero_order(torch.tensor([el[0]]).to(device=optimizer.objective.device, dtype=optimizer.objective.dtype), torch.tensor([[el[1]]]).to(device=optimizer.objective.device, dtype=optimizer.objective.dtype))
-        result_ei.append(log_EI(mean_joint[1], covar_joint[1,1], optimizer.objective.best_value))
-        result_bivariate_ei.append(EI_bivariate(mean_joint, covar_joint))
+        # mean_joint, covar_joint = optimizer.compute_joint_distribution_zero_order(torch.tensor([el[0]]).to(device=optimizer.objective.device, dtype=optimizer.objective.dtype), torch.tensor([[el[1]]]).to(device=optimizer.objective.device, dtype=optimizer.objective.dtype))
+        # result_ei.append(log_EI(mean_joint[1], covar_joint[1,1], optimizer.objective.best_value))
+        # result_bivariate_ei.append(EI_bivariate(mean_joint, covar_joint))
 
     mean = torch.tensor(result).cpu().numpy()[:,0].reshape(m,n)
     std = torch.sqrt(torch.tensor(result)).cpu().numpy()[:,1].reshape(m,n)
-    ei = torch.tensor(result_ei).cpu().numpy().reshape(m,n)
-    ei_bivariate = torch.tensor(result_bivariate_ei).cpu().numpy().reshape(m,n)
-    fig, axs = plt.subplots(2, 3, figsize=(22, 12))
+    # ei = torch.tensor(result_ei).cpu().numpy().reshape(m,n)
+    # ei_bivariate = torch.tensor(result_bivariate_ei).cpu().numpy().reshape(m,n)
+    # fig, axs = plt.subplots(2, 3, figsize=(22, 12))
 
-    if optimizer.policy in ["wolfe", "armijo"]:
-        t_linspace = torch.linspace(0., optimizer.t_max, optimizer.budget + 1, dtype=optimizer.train_x.dtype)[1:]
-        result_wolfe, result_armijo = [], []
-        for t in t_linspace:
-            result_wolfe.append(optimizer.wolfe_criterion(t))
-            result_armijo.append(optimizer.armijo_criterion(t))
-        wolfe_tensor = torch.tensor(result_wolfe).cpu().numpy()
-        armijo_tensor = torch.tensor(result_armijo).cpu().numpy()
+    # if optimizer.policy in ["wolfe", "armijo"]:
+    #     t_linspace = torch.linspace(0., optimizer.t_max, optimizer.budget + 1, dtype=optimizer.train_x.dtype)[1:]
+    #     result_wolfe, result_armijo = [], []
+    #     for t in t_linspace:
+    #         result_wolfe.append(optimizer.wolfe_criterion(t))
+    #         result_armijo.append(optimizer.armijo_criterion(t))
+    #     wolfe_tensor = torch.tensor(result_wolfe).cpu().numpy()
+    #     armijo_tensor = torch.tensor(result_armijo).cpu().numpy()
 
-        axs[1,0].plot(t_linspace.cpu().numpy(), wolfe_tensor, color='blue', label = "Probability Wolfe condition")
-        axs[1,0].plot(t_linspace.cpu().numpy(), armijo_tensor, color='red', label = "Probability Armijo condition")
-        axs[1,0].set_title("Probabilistic conditions line search")
-        axs[1,0].legend()
+    #     axs[1,0].plot(t_linspace.cpu().numpy(), wolfe_tensor, color='blue', label = "Probability Wolfe condition")
+    #     axs[1,0].plot(t_linspace.cpu().numpy(), armijo_tensor, color='red', label = "Probability Armijo condition")
+    #     axs[1,0].set_title("Probabilistic conditions line search")
+    #     axs[1,0].legend()
 
     ## Compute gradients at multiple places
-    b_grad = np.arange(float(bounds[0][0]), float(bounds[1][0]), 1)
-    d_grad = np.arange(0, 3, 0.5)[1:]**2
-    B_grad, D_grad = np.meshgrid(b_grad, d_grad)
-    #n_grad, m_grad = b_grad.shape[0], d_grad.shape[0]
-    res_grad = torch.stack((torch.tensor(B_grad.flatten()), torch.tensor(D_grad.flatten())), axis = 1).cpu().numpy()
-    result_grad, max_length = [], 0
-    for el in tqdm(res_grad):
-        mean_distrib_grad, var_distrib_grad = torch.tensor([el[0]], dtype=optimizer.objective.dtype, device=optimizer.objective.device), torch.diag(torch.tensor([el[1]], dtype=optimizer.objective.dtype, device=optimizer.objective.device))
-        manifold_point_grad = geoopt.ManifoldTensor(torch.cat((mean_distrib_grad, var_distrib_grad.flatten())), manifold=optimizer.manifold)
-        manifold_point_grad.requires_grad = True
+    # b_grad = np.arange(float(bounds[0][0]), float(bounds[1][0]), 1)
+    # d_grad = np.arange(0, 3, 0.5)[1:]**2
+    # B_grad, D_grad = np.meshgrid(b_grad, d_grad)
+    # #n_grad, m_grad = b_grad.shape[0], d_grad.shape[0]
+    # res_grad = torch.stack((torch.tensor(B_grad.flatten()), torch.tensor(D_grad.flatten())), axis = 1).cpu().numpy()
+    # result_grad, max_length = [], 0
+    # for el in tqdm(res_grad):
+    #     mean_distrib_grad, var_distrib_grad = torch.tensor([el[0]], dtype=optimizer.objective.dtype, device=optimizer.objective.device), torch.diag(torch.tensor([el[1]], dtype=optimizer.objective.dtype, device=optimizer.objective.device))
+    #     manifold_point_grad = geoopt.ManifoldTensor(torch.cat((mean_distrib_grad, var_distrib_grad.flatten())), manifold=optimizer.manifold)
+    #     manifold_point_grad.requires_grad = True
         
-        m, _ = optimizer._quadrature(optimizer.manifold.take_submanifold_value(manifold_point_grad, 0), optimizer.manifold.take_submanifold_value(manifold_point_grad, 1))
-        m.backward()
+    #     m, _ = optimizer._quadrature(optimizer.manifold.take_submanifold_value(manifold_point_grad, 0), optimizer.manifold.take_submanifold_value(manifold_point_grad, 1))
+    #     m.backward()
         
-        d_manifold = manifold_point_grad.grad
-        d_mu, d_epsilon = optimizer.manifold.take_submanifold_value(d_manifold, 0), optimizer.manifold.take_submanifold_value(d_manifold, 1)
+    #     d_manifold = manifold_point_grad.grad
+    #     d_mu, d_epsilon = optimizer.manifold.take_submanifold_value(d_manifold, 0), optimizer.manifold.take_submanifold_value(d_manifold, 1)
 
-        mu_grad, epsilon_grad = float(d_mu.detach().clone()), float(d_epsilon.detach().clone())
-        max_length = max(max_length, np.sqrt(mu_grad**2 + epsilon_grad**2))
-        result_grad.append([mu_grad, epsilon_grad])
+    #     mu_grad, epsilon_grad = float(d_mu.detach().clone()), float(d_epsilon.detach().clone())
+    #     max_length = max(max_length, np.sqrt(mu_grad**2 + epsilon_grad**2))
+    #     result_grad.append([mu_grad, epsilon_grad])
         
     fig, axs = plt.subplots(2, 3, figsize=(22, 12))
     lb, up = float(bounds[0][0]), float(bounds[1][0])
@@ -152,27 +154,27 @@ def plot_synthesis_quad(optimizer, iteration, save_path=".", standardize=True):
 
     contour1 = axs[0,1].contourf(B, D, mean)
     # Gradient
-    arrow_factor = 5
-    for i, el in tqdm(enumerate(res_grad)):
-        axs[0, 1].arrow(el[0], el[1], arrow_factor*result_grad[i][0]/max_length, arrow_factor*result_grad[i][1]/max_length, width = 0.1)
+    # arrow_factor = 5
+    # for i, el in tqdm(enumerate(res_grad)):
+    #     axs[0, 1].arrow(el[0], el[1], arrow_factor*result_grad[i][0]/max_length, arrow_factor*result_grad[i][1]/max_length, width = 0.1)
     axs[0,1].set_xlabel(r'$\mu$')
     axs[0,1].set_ylabel(r'$\sigma^{2}$')
     axs[0,1].set_title(r"Predictive mean of $g(\theta)$")
 
-    contour3 = axs[1,1].contourf(B, D, ei)
-    axs[1,1].set_xlabel('$\mu$')
-    axs[1,1].set_ylabel('$\sigma^{2}$')
-    axs[1,1].set_title("Log Expected improvement")
+    # contour3 = axs[1,1].contourf(B, D, ei)
+    # axs[1,1].set_xlabel('$\mu$')
+    # axs[1,1].set_ylabel('$\sigma^{2}$')
+    # axs[1,1].set_title("Log Expected improvement")
 
     contour4 = axs[0,2].contourf(B, D, std)
     axs[0,2].set_xlabel('$\mu$')
     axs[0,2].set_ylabel('$\sigma^{2}$')
     axs[0,2].set_title("Predictive Std of $g(\theta)$")
 
-    contour5 = axs[1,2].contourf(B, D, ei_bivariate)
-    axs[1,2].set_xlabel('$\mu$')
-    axs[1,2].set_ylabel('$\sigma^{2}$')
-    axs[1,2].set_title("Bivariate Expected improvement")
+    # contour5 = axs[1,2].contourf(B, D, ei_bivariate)
+    # axs[1,2].set_xlabel('$\mu$')
+    # axs[1,2].set_ylabel('$\sigma^{2}$')
+    # axs[1,2].set_title("Bivariate Expected improvement")
 
     axs[1,1].scatter([float(optimizer.distribution.loc)], [float(optimizer.distribution.covariance_matrix)])
     
@@ -183,8 +185,8 @@ def plot_synthesis_quad(optimizer, iteration, save_path=".", standardize=True):
     
     fig.colorbar(contour1, ax=axs[0,1])
     fig.colorbar(contour4, ax=axs[0,2])
-    fig.colorbar(contour3, ax=axs[1,1])
-    fig.colorbar(contour5, ax=axs[1,2])
+    # fig.colorbar(contour3, ax=axs[1,1])
+    # fig.colorbar(contour5, ax=axs[1,2])
 
     buf = BytesIO()
     plt.savefig(buf, format='png')
@@ -418,7 +420,7 @@ def distribution_gif_2D(algo_path, objective, seed, data, ax):
     bounds = data["bounds"]
     BATCH_SIZE = data["BATCH_SIZE"]
     N_BATCH = data["N_BATCH"]
-    if label in ["SNES", "quad"]:
+    if label in ["ES", "probES"]:
         mu = data["mu"]
         sigma = data["sigma"]
     b = np.arange(-bounds, bounds, 0.05)
@@ -440,7 +442,7 @@ def distribution_gif_2D(algo_path, objective, seed, data, ax):
             ax.set_ylabel('y')
             plot_X = X[(i-1)*BATCH_SIZE:i*BATCH_SIZE].numpy()
             ax.scatter(plot_X[:,0], plot_X[:,1], s=16)
-            if label in ["SNES", "quad"]:
+            if label in ["ES", "probES"]:
                 plot_cov_ellipse(np.diag(sigma[i].numpy()), mu[i].numpy(), nstd=1, ax=ax, facecolor="none", edgecolor = 'firebrick')
                 plot_cov_ellipse(np.diag(sigma[i].numpy()), mu[i].numpy(), nstd=2, ax=ax, facecolor="none", edgecolor = 'fuchsia', linestyle='--')
                 plot_cov_ellipse(np.diag(sigma[i].numpy()), mu[i].numpy(), nstd=3, ax=ax, facecolor="none", edgecolor = 'blue', linestyle=':')
@@ -458,7 +460,7 @@ def distribution_gif_1D(algo_path, objective, seed, data, ax):
     bounds = data["bounds"]
     BATCH_SIZE = data["BATCH_SIZE"]
     N_BATCH = data["N_BATCH"]
-    if label in ["SNES", "quad"]:
+    if label in ["ES", "probES"]:
         mu = data["mu"]
         sigma = data["sigma"]
     b = np.arange(-bounds, bounds, 0.05)
@@ -476,7 +478,7 @@ def distribution_gif_1D(algo_path, objective, seed, data, ax):
             x_lim, y_lim = ax.get_xlim(), ax.get_ylim()
             plot_X = X[(i-1)*BATCH_SIZE:i*BATCH_SIZE].numpy()
             ax.scatter(plot_X[:,0], np.zeros_like(plot_X[:,0]), s=16)
-            if label in ["SNES", "quad"]:
+            if label in ["ES", "probES"]:
                 x = np.linspace(mu[i] - 3*torch.sqrt(sigma[i]), mu[i] + 3*torch.sqrt(sigma[i]), 100).flatten()
                 plt.plot(x, 0.5*(y_lim[1] - y_lim[0]) * stats.norm.pdf(x, mu[i], torch.sqrt(sigma[i])).flatten(), label = "N(" + "{:.1E}".format(float(mu[i])) + ", " + "{:.1E}".format(float(sigma[i]))+")"  )
             plt.legend()
@@ -533,7 +535,7 @@ def plot_distribution_path(config, n_seeds=1):
         alg_name = [name for name in os.listdir(exp_dir) if os.path.isdir(os.path.join(exp_dir, name))]        
         dim = int(experiment.split("_")[2][-1])
         for algo in tqdm(alg_name, desc="Processing Algorithms..."):
-            if (algo in ["quad", "SNES"]) and (dim == 1):
+            if (algo in ["probES", "ES"]) and (dim == 1):
                 algo_path = os.path.join(exp_dir, algo)
                 _, ax = plt.subplots(1, 1, figsize=(8, 6))
                 data_path_seeds = [f for f in os.listdir(algo_path) if ".pt" in f][:n_seeds]

@@ -21,8 +21,6 @@ from botorch.acquisition.analytic import _log_ei_helper, _ei_helper, _scaled_imp
 from torch.distributions.multivariate_normal import MultivariateNormal
 import os
 
-from pymanopt.manifolds.manifold import Manifold
-
 def bounded_bivariate_normal_integral(rho, xl, xu, yl, yu):
   """Computes the bounded bivariate normal integral.
   
@@ -462,6 +460,17 @@ def normalize_distribution(distribution, bounds):
   mean, covar = A @ mean + b, A @ covar @ A.T
   return MultivariateNormal(mean, covar)
 
+def _is_in_ellipse(mean, cov, u, threshold):
+    '''Check whether points are inside a confidence ellipsoid'''
+    def mahalanobis_v(d, mean, Sigma):
+        Sigma_inv = torch.inverse(Sigma)
+        xdiff = d - mean
+        return torch.sqrt(torch.einsum('ij,im,mj->i', xdiff, xdiff, Sigma_inv))
+    
+    d = mahalanobis_v(u, mean, cov)
+    mask = d < threshold
+    return mask
+
 def create_path_exp(save_dir, problem_name, problem_kwargs):
     if problem_name == "test_function":
        s = "_".join([problem_kwargs["function"], f'noise-{problem_kwargs["noise"]}', f'dim-{problem_kwargs["dim"]}', f'initial_bounds-{problem_kwargs["initial_bounds"]}'])
@@ -473,10 +482,10 @@ def create_path_exp(save_dir, problem_name, problem_kwargs):
     return save_path
 
 def create_path_alg(save_path, algorithm_name, alg_kwargs):
-    if algorithm_name == "quad":  #["quad", "SNES", "random", "qEI", "piqEI"]
-        s = "_".join([f'gradient-{alg_kwargs[algorithm_name]["gradient_direction"]}', f'manifold-{alg_kwargs[algorithm_name]["manifold"]}', f'std_prior-{alg_kwargs[algorithm_name]["std_prior"]}', f'batch_size-{alg_kwargs["batch_size"]}'])
-    elif algorithm_name == "SNES":
-        s = "_".join([f'var_prior-{alg_kwargs[algorithm_name]["std_prior"]}', f'batch_size-{alg_kwargs["batch_size"]}'])
+    if algorithm_name == "probES":  #["probES", "ES", "random", "qEI", "piqEI"]
+        s = "_".join([f'type-{alg_kwargs[algorithm_name]["type"]}', f'gradient-{alg_kwargs[algorithm_name]["gradient_direction"]}', f'manifold-{alg_kwargs[algorithm_name]["manifold"]}', f'std_prior-{alg_kwargs[algorithm_name]["std_prior"]}', f'batch_size-{alg_kwargs["batch_size"]}'])
+    elif algorithm_name == "ES":
+        s = "_".join([f'type-{alg_kwargs[algorithm_name]["type"]}', f'var_prior-{alg_kwargs[algorithm_name]["std_prior"]}', f'batch_size-{alg_kwargs["batch_size"]}'])
     elif algorithm_name == "qEI":
         s = "_".join([f'batch_size-{alg_kwargs["batch_size"]}'])
     elif algorithm_name == "piqEI":

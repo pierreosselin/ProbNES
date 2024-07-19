@@ -14,12 +14,14 @@ from module.plot_script import plot_gp_fit, plot_synthesis_quad, plot_distributi
 
 from scipy.optimize import minimize_scalar
 from torch.distributions.multivariate_normal import MultivariateNormal
-from .utils import bounded_bivariate_normal_integral, nearestPD, isPD, EI, log_EI, normalize_distribution
+from .utils import bounded_bivariate_normal_integral, nearestPD, isPD, EI, log_EI, _is_in_ellipse
 from botorch import fit_gpytorch_mll
 from botorch.utils.transforms import standardize, normalize
 from .objective import Objective
 import geoopt
 import matplotlib.pyplot as plt
+import scipy
+import wandb
 
 from botorch.utils.probability.utils import (
     ndtr as Phi
@@ -40,17 +42,17 @@ import torch
 from PIL import Image
 from io import BytesIO
 
-LIST_LABEL = ["random", "SNES", "piqEI", "quad", "qEI", "MPD", "BGA"]
+LIST_LABEL = ["random", "ES", "piqEI", "probES", "qEI", "MPD", "BGA"]
 
 def load_optimizer(label, n_init, objective, dict_parameter, plot_path):
     if label == "qEI":
         optimizer = VanillaBayesianOptimization(n_init=n_init, objective=objective, batch_size=dict_parameter["batch_size"], optimizer_config=dict_parameter["qEI"], plot_path=plot_path)
     elif label == "piqEI":
         optimizer = PiBayesianOptimization(n_init=n_init, objective=objective, batch_size=dict_parameter["batch_size"], optimizer_config=dict_parameter["piqEI"], plot_path=plot_path)
-    elif label == "quad":
-        optimizer = ProbES(n_init=n_init, objective=objective, batch_size=dict_parameter["batch_size"], optimizer_config=dict_parameter["quad"], plot_path=plot_path)
-    elif label == "SNES":
-        optimizer = SNES(n_init=n_init, objective=objective, batch_size=dict_parameter["batch_size"], optimizer_config=dict_parameter["SNES"], plot_path=plot_path)
+    elif label == "probES":
+        optimizer = ProbES(n_init=n_init, objective=objective, batch_size=dict_parameter["batch_size"], optimizer_config=dict_parameter["probES"], plot_path=plot_path)
+    elif label == "ES":
+        optimizer = ES(n_init=n_init, objective=objective, batch_size=dict_parameter["batch_size"], optimizer_config=dict_parameter["ES"], plot_path=plot_path)
     elif label == "random":
         optimizer = Random(n_init=n_init, objective=objective, batch_size=dict_parameter["batch_size"], optimizer_config=dict_parameter["random"], plot_path=plot_path)
     return optimizer
@@ -304,7 +306,7 @@ class RandomSearch(AbstractOptimizer):
             if self.standard_deviation_scaling:
                 print(f"Std of perturbation rewards {std_reward:.2f}.")
 
-class SNES(AbstractOptimizer):
+class ES(AbstractOptimizer):
     def __init__(
         self,
         n_init: int = 5,
@@ -314,18 +316,25 @@ class SNES(AbstractOptimizer):
         plot_path=None
     ):
         """Inits the vanilla BO optimizer."""
-        super(SNES, self).__init__(n_init, objective)
+        super(ES, self).__init__(n_init, objective)
 
         self.batch_size = batch_size
         self.plot_path = plot_path
-
+        self.type = optimizer_config["type"]
         # Create problem
         problem = Problem("max", objective, solution_length=objective.dim, device = objective.device,initial_bounds=objective.bounds, dtype=objective.dtype)
 
         ## Load parameter distribution TODO Transform distribution with respect to bounds
         self.mean, self.std = optimizer_config["mean_prior"]*torch.ones(objective.dim, device=objective.device, dtype=objective.dtype), torch.tensor([optimizer_config["std_prior"]]*objective.dim, device=objective.device, dtype=objective.dtype)
-
-        self.searcher = evoalgo.SNES(problem, popsize=self.batch_size, center_init = self.mean, stdev_init=self.std)
+        if self.type == "SNES":
+            self.searcher = evoalgo.SNES(problem, popsize=self.batch_size, center_init = self.mean, stdev_init=self.std)
+        elif self.type == "XNES":
+            self.searcher = evoalgo.XNES(problem, popsize=self.batch_size, center_init = self.mean, stdev_init=self.std)
+        elif self.type == "CMAES":
+            self.searcher = evoalgo.CMAES(problem, popsize=self.batch_size, center_init = self.mean, stdev_init=optimizer_config["std_prior"])
+        else:
+            raise NotImplementedError
+        
         self.params_history_list = []
         self.values_history = []
         self.list_mu = []
@@ -333,27 +342,42 @@ class SNES(AbstractOptimizer):
 
 
         # Initialization of training data.
+        if self.type == "CMAES":
+            self.values_history.append(self.objective(self.searcher._get_center()).repeat(self.batch_size))
+            # self.values_history.append(train_obj.clone())
+            self.list_mu.append(self.searcher._get_center())
+            self.list_covar.append((self.searcher._get_sigma()**2)*self.searcher.C)
+        else:
+            self.values_history.append(self.objective(self.searcher._get_mu()).repeat(self.batch_size))
+            # self.values_history.append(train_obj.clone())
+            self.list_mu.append(self.searcher._get_mu())
+            self.list_covar.append(self.searcher._get_sigma())
         self.searcher.run(1)
         train_x, train_obj = self.searcher.population.values, self.searcher.population.evals
         self.params_history_list.append(train_x.clone())
         # self.values_history.append(train_obj.clone())
-        self.values_history.append(self.objective(self.searcher._get_mu()).repeat(self.batch_size))
-        # self.values_history.append(train_obj.clone())
-        self.list_mu.append(self.searcher._get_mu())
-        self.list_covar.append(self.searcher._get_sigma())
+        
 
         # np.max(optimizer.objective(torch.vstack(optimizer.list_mu)).cpu().numpy()
 
     def step(self) -> None:
+        if self.type == "CMAES":
+            self.values_history.append(self.objective(self.searcher._get_center()).repeat(self.batch_size))
+            # self.values_history.append(train_obj.clone())
+            self.list_mu.append(self.searcher._get_center())
+            self.list_covar.append((self.searcher._get_sigma()**2)*self.searcher.C)
+        else:
+            self.values_history.append(self.objective(self.searcher._get_mu()).repeat(self.batch_size))
+            # self.values_history.append(train_obj.clone())
+            self.list_mu.append(self.searcher._get_mu())
+            self.list_covar.append(self.searcher._get_sigma())
         self.searcher.run(1)
         train_x, train_obj = self.searcher.population.values, self.searcher.population.evals
         self.params_history_list.append(train_x.clone())
         # self.values_history.append(train_obj.clone())
-        self.values_history.append(self.objective(self.searcher._get_mu()).repeat(self.batch_size))
-        self.list_mu.append(self.searcher._get_mu())
-        self.list_covar.append(self.searcher._get_sigma())
         
     def plot_synthesis(self):
+        """Return the synthesis as a dictionary that can be fed to wandb"""
         if self.objective.dim == 1:
             fig, ax = plt.subplots()
             bounds = self.objective.bounds
@@ -383,9 +407,23 @@ class SNES(AbstractOptimizer):
 
             # Open image with Pillow
             image = Image.open(buf)
-            return image
+            image = wandb.Image(image)
+            if self.type == "CMAES":
+                return {"Image synthesis info": image,
+                        "mean": self.list_mu[-1],
+                        "var": self.list_covar[-1],
+                        "objective": np.max(torch.vstack(self.values_history).cpu().numpy()),
+                        "objective_mean": np.max(self.objective(torch.vstack(self.list_mu)).cpu().numpy())}
+            else:
+                return {"Image synthesis info": image,
+                        "mean": self.list_mu[-1],
+                        "std": self.list_covar[-1],
+                        "objective": np.max(torch.vstack(self.values_history).cpu().numpy()),
+                        "objective_mean": np.max(self.objective(torch.vstack(self.list_mu)).cpu().numpy())}
         else:
-            return torch.tensor([[[0]]], dtype=self.objective.dtype)
+            return {"mean": self.list_mu[-1],
+                    "objective": np.max(torch.vstack(self.values_history).cpu().numpy()),
+                    "objective_mean": np.max(self.objective(torch.vstack(self.list_mu)).cpu().numpy())}
         # elif self.objective.dim == 2:
         #     raise NotImplementedError
         #     fig, ax = plt.subplots()
@@ -1713,6 +1751,9 @@ class ProbES(AbstractOptimizer):
         self.budget=optimizer_config["budget"]
         self.manifold=optimizer_config["manifold"]
         self.gradient_direction = optimizer_config["gradient_direction"]
+        self.type = optimizer_config["type"]
+        self.chi_threshold = np.sqrt(scipy.stats.chi2.ppf(q=0.9973,df=self.d))
+        self.mahalanobis = optimizer_config["mahalanobis"]
         # Assert wolfe condition of parameters
         assert 0 <= self.c1
         assert self.c1 < self.c2
@@ -1772,15 +1813,6 @@ class ProbES(AbstractOptimizer):
 
         # Extract model quantities
         self.extract_model_quantities()
-
-        #### Compute Quadrature
-        # self.covariance_gp_distr = self.gp_covariance + self.distribution.covariance_matrix
-        # self.constant = (self.model.covar_module.outputscale * torch.sqrt(torch.linalg.det(2*torch.pi*self.gp_covariance))).detach().clone()
-        # self.t_1X = self.constant * torch.exp(MultivariateNormal(loc = self.distribution.loc, covariance_matrix = self.covariance_gp_distr).log_prob(self.train_X))
-        # self.R_11 = self.constant * torch.exp(MultivariateNormal(loc = self.distribution.loc, covariance_matrix = self.covariance_gp_distr + self.distribution.covariance_matrix).log_prob(self.distribution.loc))
-        # self.inverse_data_covar_t1X = torch.linalg.solve(self.K_X_X, self.t_1X) #Independant of t!..
-        # self.mean_1 = self.mean_constant + (self.t_1X.T @ self.inverse_data_covar_y)
-        # self.var_1 = self.R_11 - self.t_1X.T @ self.inverse_data_covar_t1X
     
     def step(self):
         """Make a gradient step toward"""
@@ -1788,15 +1820,7 @@ class ProbES(AbstractOptimizer):
         # Extract model quantities
         self.extract_model_quantities()
 
-        #### Compute Quadrature
-        # self.covariance_gp_distr = self.gp_covariance + self.distribution.covariance_matrix
-        # self.constant = (self.model.covar_module.outputscale * torch.sqrt(torch.linalg.det(2*torch.pi*self.gp_covariance))).detach().clone()
-        # self.t_1X = self.constant * torch.exp(MultivariateNormal(loc = self.distribution.loc, covariance_matrix = self.covariance_gp_distr).log_prob(self.train_X))
-        # self.R_11 = self.constant * torch.exp(MultivariateNormal(loc = self.distribution.loc, covariance_matrix = self.covariance_gp_distr + self.distribution.covariance_matrix).log_prob(self.distribution.loc))
-        # self.inverse_data_covar_t1X = torch.linalg.solve(self.K_X_X, self.t_1X) #Independant of t!..
-        # self.mean_1 = self.mean_constant + (self.t_1X.T @ self.inverse_data_covar_y)
-        # self.var_1 = self.R_11 - self.t_1X.T @ self.inverse_data_covar_t1X
-
+        ### Instead do gradient in reparameterization and same for natural gradient
         ## Compute direction (sampled, expected , mdp ect...).
         if self.gradient_direction == "expected":
             m, _ = self._quadrature(self.manifold.take_submanifold_value(self.manifold_point, 0), self.manifold.take_submanifold_value(self.manifold_point, 1))
@@ -1818,10 +1842,21 @@ class ProbES(AbstractOptimizer):
         
         # Taking natural gradient:
         ## TODO make it a function
-        self.d_mu = torch.matmul(self.distribution.covariance_matrix, self.d_mu)
-        self.d_epsilon = torch.matmul(torch.matmul(self.distribution.covariance_matrix, self.d_epsilon), self.distribution.covariance_matrix)
+        if self.type == "SNES":
+            # Here it is assumed both matrix for gp kernel and input distribution are diagonal
+            self.d_mu = torch.matmul(self.distribution.covariance_matrix, self.d_mu)
+            self.d_epsilon = torch.matmul(torch.matmul(self.distribution.covariance_matrix, torch.diag(torch.diag(self.d_epsilon))), self.distribution.covariance_matrix)
+        elif self.type == "XNES":
+            A = torch.linalg.cholesky(self.distribution.covariance_matrix)
+            self.d_mu = torch.matmul(self.distribution.covariance_matrix, self.d_mu)
+            self.d_epsilon = torch.matmul(torch.matmul(A.T, self.d_epsilon), A)
+        elif self.type == "CMAES":
+            self.d_mu = torch.matmul(self.distribution.covariance_matrix, self.d_mu)
+            self.d_epsilon = torch.matmul(torch.matmul(self.distribution.covariance_matrix, self.d_epsilon), self.distribution.covariance_matrix)
+        else:
+            raise NotImplementedError
         
-        ## Line search mehod;
+        ## Line search mehod, decide how far the step take
         if self.policy == "constant":
             self.t_update = self.lr
         elif self.policy in ["wolfe", "armijo"]:
@@ -1851,9 +1886,21 @@ class ProbES(AbstractOptimizer):
             self.t_update = minimize_scalar(self.criterion).x
         
         ## TODO if manifold is euclidean need to project back to semi definite matrices
+        # Taking gradient update:
+        ## TODO make it a function
         # self.manifold_point = self.manifold.expmap(self.manifold_point, self.t_update*torch.tensor([self.d_mu[0], self.d_epsilon[0,0]], device = self.objective.device))
-        self.manifold_point = self.manifold.expmap(self.manifold_point, self.t_update*torch.hstack([self.d_mu, self.d_epsilon.flatten()]))
-        mu_target, covar_target = self.manifold.take_submanifold_value(self.manifold_point, 0), self.manifold.take_submanifold_value(self.manifold_point, 1)
+        if self.type == "SNES":
+            # Here it is assumed both matrix for gp kernel and input distribution are diagonal
+            mu_target = self.manifold.take_submanifold_value(self.manifold_point, 0) + self.t_update*self.d_mu
+            covar_target = self.manifold.take_submanifold_value(self.manifold_point, 1) * torch.exp(self.t_update*self.d_epsilon)
+        elif self.type == "XNES":
+            mu_target = self.manifold.take_submanifold_value(self.manifold_point, 0) + self.t_update*self.d_mu
+            covar_target = torch.matmul(torch.matmul(A, torch.linalg.matrix_exp(self.t_update*self.d_epsilon)), A.T)
+        elif self.type == "CMAES":
+            self.manifold_point = self.manifold.expmap(self.manifold_point, self.t_update*torch.hstack([self.d_mu, self.d_epsilon.flatten()]))
+            mu_target, covar_target = self.manifold.take_submanifold_value(self.manifold_point, 0), self.manifold.take_submanifold_value(self.manifold_point, 1)
+        else:
+            raise NotImplementedError
         # mu_target, covar_target = self.distribution.loc + self.t_update*self.d_mu, self.distribution.covariance_matrix + self.t_update*self.d_epsilon
         # covar_target = torch.max(covar_target, torch.tensor([[1e-14]], device = self.objective.device, dtype = self.objective.dtype))
         self.distribution = MultivariateNormal(mu_target, covar_target)
@@ -1919,11 +1966,18 @@ class ProbES(AbstractOptimizer):
             batch_shape=None,
             outputscale_prior=GammaPrior(2.0, 0.15),
         )
-        train_y_init_standardized = standardize(self.train_y)
-        self.train_y_standardized_mean = self.train_y.mean()
-        self.train_y_standardized_std = self.train_y.std()
+        if self.mahalanobis:
+            mask = _is_in_ellipse(self.distribution.loc, self.distribution.covariance_matrix, self.train_x, self.chi_threshold)
+            train_x = self.train_x[mask]
+            train_y = self.train_y[mask]
+        else:
+            train_x = self.train_x
+            train_y = self.train_y
+        train_y_init_standardized = standardize(train_y)
+        train_y_standardized_mean = train_y.mean()
+        train_y_standardized_std = train_y.std()
 
-        self.model = SingleTaskGP(self.train_x, train_y_init_standardized, covar_module=covar_module).to(self.train_x) ## Can input subset of the dataset
+        self.model = SingleTaskGP(train_x, train_y_init_standardized, covar_module=covar_module).to(train_x) ## Can input subset of the dataset
 
     # The rbf kernel is not a Gaussian kernel (a multiplicative constant is missing)
     def _quadrature(self, mean, covariance):
@@ -2046,10 +2100,15 @@ class ProbES(AbstractOptimizer):
         Wolfe conditions under the current GP model."""
         # For now assume mu2 and epsilon2 are of shape (b1xb2x....xbk)xd and (b1xb2x....xbk)xdxd (assume no batching)
         # Compute mu and PI
-
         mu1 = self.distribution.loc
         Epsilon1 = self.distribution.covariance_matrix
-        
+        self.covariance_gp_distr = self.gp_covariance + self.distribution.covariance_matrix
+        self.constant = (self.model.covar_module.outputscale * torch.sqrt(torch.linalg.det(2*torch.pi*self.gp_covariance))).detach().clone()
+        self.t_1X = self.constant * torch.exp(MultivariateNormal(loc = self.distribution.loc, covariance_matrix = self.covariance_gp_distr).log_prob(self.train_X))
+        self.R_11 = self.constant * torch.exp(MultivariateNormal(loc = self.distribution.loc, covariance_matrix = self.covariance_gp_distr + self.distribution.covariance_matrix).log_prob(self.distribution.loc))
+        self.inverse_data_covar_t1X = torch.linalg.solve(self.K_X_X, self.t_1X) #Independant of t!..
+        self.mean_1 = self.mean_constant + (self.t_1X.T @ self.inverse_data_covar_y)
+        self.var_1 = self.R_11 - self.t_1X.T @ self.inverse_data_covar_t1X
         if not isPD(Epsilon2):
             return None
         
@@ -2264,9 +2323,19 @@ class ProbES(AbstractOptimizer):
 
     def plot_synthesis(self, save_path=".", iteration=0):
         if self.objective.dim == 1:
-            return plot_synthesis_quad(self, iteration=iteration, save_path=self.plot_path, standardize=True)
+            image = plot_synthesis_quad(self, iteration=iteration, save_path=self.plot_path, standardize=True)
+            image = wandb.Image(image)
+            return {"Image synthesis info": image,
+                    "mean": self.distribution.loc,
+                    "std": torch.sqrt(self.distribution.covariance_matrix),
+                    "objective": np.max(torch.vstack(self.values_history).cpu().numpy()),
+                    "objective_mean": np.max(self.objective(torch.vstack(self.list_mu)).cpu().numpy()),
+                    "GP kernel spectrum":torch.linalg.norm(self.model.covar_module.base_kernel.lengthscale[0])}
+            
         else:
-            return torch.tensor([[[0]]], dtype=self.objective.dtype)
+            return {"mean": self.distribution.loc,
+                    "objective": np.max(torch.vstack(self.values_history).cpu().numpy()),
+                    "objective_mean": np.max(self.objective(torch.vstack(self.list_mu)).cpu().numpy())}
     
 #### Add scipy zero order optimiser and multi restart
 class multistart_scipy(AbstractOptimizer):
