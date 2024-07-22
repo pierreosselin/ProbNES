@@ -381,6 +381,7 @@ class ES(AbstractOptimizer):
         batch_samples = self.params_history_list[-1]
         matrix_distances = torch.cdist(batch_samples, batch_samples)
         avg_distance = matrix_distances[torch.triu(torch.ones(matrix_distances.shape), diagonal=1) == 1].mean()
+        avg_from_center = torch.linalg.norm((self.list_mu[-1] - self.params_history_list[-1]), dim=1).mean()
 
         if self.objective.dim == 1:
             fig, ax = plt.subplots()
@@ -399,7 +400,10 @@ class ES(AbstractOptimizer):
             ax.scatter(X, y)
 
             # Plot distribution 
-            mean, std = self.searcher._get_mu().cpu().numpy(), self.searcher._get_sigma().cpu().numpy()
+            if self.type == "CMAES":
+                mean, std = self.searcher._get_mu().cpu().numpy(), self.searcher._get_sigma().cpu().numpy()
+            else:
+                mean, std = self.searcher._get_mu().cpu().numpy(), self.searcher._get_sigma().cpu().numpy()
             ax.vlines(x = mean, ymin = min(y_test), ymax = max(y_test), colors = 'red', label = 'Mean distribution')
             ax.vlines(x = mean - 2*std, ymin = min(y_test), ymax = max(y_test), colors = 'red', linestyle='dashed')
             ax.vlines(x = mean + 2*std, ymin = min(y_test), ymax = max(y_test), colors = 'red', linestyle='dashed')
@@ -412,20 +416,15 @@ class ES(AbstractOptimizer):
             # Open image with Pillow
             image = Image.open(buf)
             image = wandb.Image(image)
-            if self.type == "CMAES":
-                return {"Image synthesis info": image,
-                        "mean": self.list_mu[-1],
-                        "var": self.list_covar[-1],
-                        "objective": np.max(torch.vstack(self.values_history).cpu().numpy()),
-                        "objective_mean": np.max(self.objective(torch.vstack(self.list_mu)).cpu().numpy()),
-                        "Avg distance samples": avg_distance}
-            else:
-                return {"Image synthesis info": image,
-                        "mean": self.list_mu[-1],
-                        "std": torch.sqrt(self.list_covar[-1]),
-                        "objective": np.max(torch.vstack(self.values_history).cpu().numpy()),
-                        "objective_mean": np.max(self.objective(torch.vstack(self.list_mu)).cpu().numpy()),
-                        "Avg distance samples": avg_distance}
+            return {"Image synthesis info": image,
+                    "mean": self.list_mu[-1],
+                    "var": self.list_covar[-1],
+                    "objective": np.max(torch.vstack(self.values_history).cpu().numpy()),
+                    "objective_mean": np.max(self.objective(torch.vstack(self.list_mu)).cpu().numpy()),
+                    "current objective_mean": self.objective(self.list_mu[-1]).cpu().numpy(),
+                    "Avg distance samples": avg_distance,
+                    "Avg distance samples from center": avg_from_center}
+    
         else:
             if len(self.list_mu) > 1:
                 return {"mean": self.list_mu[-1],
@@ -434,7 +433,8 @@ class ES(AbstractOptimizer):
                         "objective": np.max(torch.vstack(self.values_history).cpu().numpy()),
                         "objective_mean": np.max(self.objective(torch.vstack(self.list_mu)).cpu().numpy()),
                         "current objective_mean": self.objective(self.list_mu[-1]).cpu().numpy(),
-                        "Avg distance samples": avg_distance}
+                        "Avg distance samples": avg_distance,
+                        "Avg distance samples from center": avg_from_center}
             else:
                 return {"mean": self.list_mu[-1],
                         "difference mean": 0.,
@@ -442,7 +442,8 @@ class ES(AbstractOptimizer):
                         "objective": np.max(torch.vstack(self.values_history).cpu().numpy()),
                         "objective_mean": np.max(self.objective(torch.vstack(self.list_mu)).cpu().numpy()),
                         "current objective_mean": self.objective(self.list_mu[-1]).cpu().numpy(),
-                        "Avg distance samples": avg_distance}
+                        "Avg distance samples": avg_distance,
+                        "Avg distance samples from center": avg_from_center}
         # elif self.objective.dim == 2:
         #     raise NotImplementedError
         #     fig, ax = plt.subplots()
@@ -1749,6 +1750,7 @@ class ProbES(AbstractOptimizer):
         self.d = self.objective.dim
         
         self.lr = optimizer_config["lr"]
+        self.aqc_type = optimizer_config["aqc_type"]
         self.policy=optimizer_config["policy"]
         self.c1=optimizer_config["c1"]
         self.c2=optimizer_config["c2"]
@@ -1809,11 +1811,13 @@ class ProbES(AbstractOptimizer):
         ## TODO Make option to make it an optimization pb instead of samples
         # self.optimize_acqf = initialize_acqf_optimizer(type="random", candidate_vr=optimizer_config["candidates_vr"], batch_size=batch_size)
         self.optimize_acqf = initialize_acqf_optimizer(
+                                                type = self.aqc_type,
                                                 bounds=self.objective.bounds,
                                                 batch_size=self.batch_size,
                                                 num_restarts=optimizer_config["num_restarts"],
                                                 raw_samples=optimizer_config["raw_samples"],
                                                 batch_acq=optimizer_config["batch_acq"],
+                                                candidates_vr=optimizer_config["candidates_vr"],
                                                 maxiter=200)
 
         # Extract model quantities
@@ -1919,8 +1923,7 @@ class ProbES(AbstractOptimizer):
                     model=self.model,
                     distribution=self.distribution)
         
-        # new_x = self.optimize_acqf(acq_func= self.acquisition_function, dist=self.distribution)
-        new_x = self.optimize_acqf(acq_func= self.acquisition_function)
+        new_x = self.optimize_acqf(acq_func= self.acquisition_function, dist=self.distribution)
         new_y = self.objective(new_x).unsqueeze(-1)
 
         # Update training points.
@@ -2330,6 +2333,7 @@ class ProbES(AbstractOptimizer):
         batch_samples = self.train_x[(-self.batch_size):]
         matrix_distances = torch.cdist(batch_samples, batch_samples)
         avg_distance = matrix_distances[torch.triu(torch.ones(matrix_distances.shape), diagonal=1) == 1].mean()
+        avg_from_center = torch.linalg.norm((self.list_mu[-1] - self.params_history_list[-1]), dim=1).mean()
         if self.objective.dim == 1:
             image = plot_synthesis_quad(self, iteration=iteration, save_path=self.plot_path, standardize=True)
             image = wandb.Image(image)
@@ -2338,8 +2342,10 @@ class ProbES(AbstractOptimizer):
                     "std": torch.sqrt(self.distribution.covariance_matrix),
                     "objective": np.max(torch.vstack(self.values_history).cpu().numpy()),
                     "objective_mean": np.max(self.objective(torch.vstack(self.list_mu)).cpu().numpy()),
+                    "current objective_mean": self.objective(self.distribution.loc).cpu().numpy(),
                     "GP lengthscales norm":torch.linalg.norm(self.model.covar_module.base_kernel.lengthscale[0]),
-                    "Avg distance samples": avg_distance}
+                    "Avg distance samples": avg_distance,
+                    "Avg distance samples from center": avg_from_center}
             
         else:
             if len(self.list_mu) > 1:
@@ -2348,16 +2354,20 @@ class ProbES(AbstractOptimizer):
                         "difference covar": torch.linalg.norm(self.list_covar[-1] - self.list_covar[-2]),
                         "objective": np.max(torch.vstack(self.values_history).cpu().numpy()),
                         "objective_mean": np.max(self.objective(torch.vstack(self.list_mu)).cpu().numpy()),
+                        "current objective_mean": self.objective(self.distribution.loc).cpu().numpy(),
                         "GP lengthscales norm":torch.linalg.norm(self.model.covar_module.base_kernel.lengthscale[0]),
-                        "Avg distance samples": avg_distance}
+                        "Avg distance samples": avg_distance,
+                        "Avg distance samples from center": avg_from_center}
             else:
                 return {"mean": self.list_mu[-1],
                         "difference mean": 0.,
                         "difference covar": 0.,
                         "objective": np.max(torch.vstack(self.values_history).cpu().numpy()),
                         "objective_mean": np.max(self.objective(torch.vstack(self.list_mu)).cpu().numpy()),
+                        "current objective_mean": self.objective(self.distribution.loc).cpu().numpy(),
                         "GP lengthscales norm":torch.linalg.norm(self.model.covar_module.base_kernel.lengthscale[0]),
-                        "Avg distance samples": avg_distance}
+                        "Avg distance samples": avg_distance,
+                        "Avg distance samples from center": avg_from_center}
     
 #### Add scipy zero order optimiser and multi restart
 class multistart_scipy(AbstractOptimizer):

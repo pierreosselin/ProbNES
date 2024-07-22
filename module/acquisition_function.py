@@ -382,7 +382,7 @@ class QuadratureExploration(botorch.acquisition.AnalyticAcquisitionFunction):
         self.distribution=distribution
         self.train_X = self.model.train_inputs[0]
         self.gp_covariance = (torch.diag(self.model.covar_module.base_kernel.lengthscale[0].detach().clone()))**2
-        self.constant = self.model.covar_module.outputscale * torch.sqrt(torch.linalg.det(2*torch.pi*self.gp_covariance))
+        # self.constant = self.model.covar_module.outputscale * torch.sqrt(torch.linalg.det(2*torch.pi*self.gp_covariance))
 
     @t_batch_mode_transform()
     def forward(self, X: Tensor) -> Tensor:
@@ -392,7 +392,8 @@ class QuadratureExploration(botorch.acquisition.AnalyticAcquisitionFunction):
         train_X_batch = torch.unsqueeze(self.train_X, 0).repeat(batch_size, 1, 1)
         X_full = torch.cat((train_X_batch, X), dim= 1)
         noise_tensor = self.model.likelihood.noise.detach().clone() * torch.eye(X[0].shape[0] + self.train_X.shape[0], dtype=X.dtype, device=X.device)
-        t_X = self.constant * torch.exp(torch.distributions.MultivariateNormal(loc = self.distribution.loc, covariance_matrix = self.distribution.covariance_matrix + self.gp_covariance).log_prob(X_full))
+        # t_X = self.constant * torch.exp(torch.distributions.MultivariateNormal(loc = self.distribution.loc, covariance_matrix = self.distribution.covariance_matrix + self.gp_covariance).log_prob(X_full))
+        t_X = torch.exp(torch.distributions.MultivariateNormal(loc = self.distribution.loc, covariance_matrix = self.distribution.covariance_matrix + self.gp_covariance).log_prob(X_full))
         v = torch.linalg.solve((self.model.covar_module(X_full) + noise_tensor).evaluate(), t_X)
         return (v * t_X).sum(dim=-1)
 
@@ -421,7 +422,7 @@ def initialize_model(train_x, train_obj, label, state_dict=None):
 def initialize_acqf_optimizer(type=None, **kwargs):
     """Acquisition function initializer"""
 
-    def optimize_acqfunction(acq_func):
+    def optimize_acqfunction(acq_func, **kwargs):
         """Optimizes the acquisition function, and returns a new candidate."""
         # optimize
 
@@ -433,6 +434,27 @@ def initialize_acqf_optimizer(type=None, **kwargs):
             raw_samples=RAW_SAMPLES,  # used for intialization heuristic
             options={"batch_limit": ACQUISITION_BATCH_OPTIMIZATION, "maxiter": maxiter},
         )
+        return candidates
+    
+    def optimize_acqfunction_mahalanobis(acq_func, dist, **kwargs):
+        """Optimizes the acquisition function, and returns a new candidate."""
+        # optimize
+        M = torch.max(torch.diag(dist.covariance_matrix))
+        dim, device, dtype = dist.loc.shape[0], dist.loc.device, dist.loc.dtype
+        bounds = torch.tensor([[-M] * dim, [M] * dim], device=device, dtype=dtype)
+        candidates, _ = optimize_acqf(
+            acq_function=lambda x: acq_func(x - dist.loc),
+            bounds=bounds,
+            q=BATCH_SIZE,
+            num_restarts=NUM_RESTARTS,
+            raw_samples=RAW_SAMPLES,  # used for intialization heuristic
+            options={"batch_limit": ACQUISITION_BATCH_OPTIMIZATION, "maxiter": maxiter},
+        )
+        return candidates
+    
+    def random_samples(acq_func, dist):
+        # optimize
+        candidates = dist.sample(torch.tensor([BATCH_SIZE])).to(device = dist.loc.device, dtype = dist.loc.dtype)
         return candidates
     
     def optimize_acqfunction_random(acq_func, dist):
@@ -452,16 +474,18 @@ def initialize_acqf_optimizer(type=None, **kwargs):
         new_x = candidates[torch.argmax(res)]
         return new_x
     
-    if type == "random":
-        CANDIDATES_VR = kwargs.get("candidate_vr", 5000)
+    if type == "none":
+        BATCH_SIZE = kwargs.get("batch_size", 1)
+        return random_samples
+    elif type == "random":
+        CANDIDATES_VR = kwargs.get("candidates_vr", 5000)
         BATCH_SIZE = kwargs.get("batch_size", 1)
         return optimize_acqfunction_random
     
     elif type == "sequential":
         BATCH_SIZE = kwargs.get("batch_size", 1)
         return optimize_acqfunction_sequential
-    
-    else:
+    elif type == "optimized_bound":
         bounds = kwargs.get("bounds", None)
         BATCH_SIZE = kwargs.get("batch_size", 1)
         NUM_RESTARTS = kwargs.get("num_restarts", 10)
@@ -469,3 +493,10 @@ def initialize_acqf_optimizer(type=None, **kwargs):
         ACQUISITION_BATCH_OPTIMIZATION = kwargs.get("batch_acq", 5)
         maxiter = kwargs.get("maxiter", 200)
         return optimize_acqfunction
+    elif type == "optimized_mahalanobis":
+        BATCH_SIZE = kwargs.get("batch_size", 1)
+        NUM_RESTARTS = kwargs.get("num_restarts", 10)
+        RAW_SAMPLES = kwargs.get("raw_samples", 512)
+        ACQUISITION_BATCH_OPTIMIZATION = kwargs.get("batch_acq", 5)
+        maxiter = kwargs.get("maxiter", 200)
+        return optimize_acqfunction_mahalanobis

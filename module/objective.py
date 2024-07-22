@@ -196,7 +196,8 @@ def get_objective(
                 """Returns a 'score' for each digit from 0 to 9. It is modeled as a squared exponential
                 centered at the digit '3'.
                 """
-                return -torch.abs(y - 1)
+                # return -torch.abs(y - 1)
+                return torch.exp(-2 * (y - 9) ** 2)
             
             def score_image(x):
                 """The input x is an image and an expected score 

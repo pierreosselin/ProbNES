@@ -5,13 +5,13 @@ verbose_synthesis: 0
 gpu: 0
 
 exp_settings:
-  n_exp: 2
-  n_iter: 30
+  n_exp: 10
+  n_iter: 100
   n_init: 2 # Has to be equal to batch size for evo algo
 
 ## Change config for algorithm setting
 alg_settings:
-  algorithm: ["probES", "ES", "qEI", "piqEI"] #["probES", "ES", "random", "qEI", "piqEI"] 
+  algorithm: "probES" #["probES", "ES", "random", "qEI", "piqEI"] 
   verbose: 10
   batch_size: 2
   piqEI:
@@ -30,10 +30,11 @@ alg_settings:
   probES:
     mean_prior: -1.
     std_prior: [1., 3.]
-    candidates_vr: 5000
-    type: ["CMAES", "XNES"] # One of ["SNES", "XNES", "CMAES"]
+    candidates_vr: 300
+    type: ["CMAES", "XNES", "SNES"] # One of ["SNES", "XNES", "CMAES"]
     lr: 1.
     policy: "constant" # ["wolfe", "ei", "armijo", "constant"]
+    aqc_type: ["random", "optimized_bound"] # ["none", "random", "optimized_bound", "optimized_mahalanobis"] none = random samples, "random" = optimized via random samples, "optimized_bound": optimization on full bounds, "optimized_mahalanobis": optimised on subbounds
     c1: 0.0001
     c2: 0.9
     t_max: 100
@@ -56,5 +57,5 @@ alg_settings:
 problem_settings:
   function: "ackley" # Name of the function in [airfoil, rosenbrock, sphere, ackley, rastrigin]
   noise: 0.
-  dim: 5 # Irrelevant for latent space problem
+  dim: 10 # Irrelevant for latent space problem
   initial_bounds: 10.

@@ -359,7 +359,7 @@ def plot_config(config_name, log_transform=False):
             # ax.set_ylim(0, 5.)
         ax.set(xlabel='number of observations (beyond initial points)', ylabel='best objective value')
         #ax.set_ylim(0,10.)
-        ax.legend(bbox_to_anchor=(0, 1.02, 1, 0.2), loc="lower left", borderaxespad=0, ncol=3)
+        ax.legend(bbox_to_anchor=(0, 1.02, 1, 0.2), loc="lower left", borderaxespad=0, ncol=3, fontsize=2)
         fig.tight_layout()
         
         if not log_transform:

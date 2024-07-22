@@ -65,12 +65,44 @@ def run(save_path: str,
     optimizer = load_optimizer(label, N_INIT, objective, alg_kwargs, plot_path)
     if verbose_synthesis:
         d_plot = optimizer.plot_synthesis()
+        if problem_name == "latent_space":
+            ## take mean point and decode
+            if label == "ES":
+                if alg_kwargs[label]["type"] == "CMAES":
+                    mu = optimizer.searcher._get_center()
+                else:
+                    mu = optimizer.searcher._get_mu()
+            elif label == "probES":
+                mu = optimizer.distribution.loc
+            elif label == "qEI":
+                mu = optimizer.train_X[-1]
+            else:
+                raise NotImplementedError
+            image_latent = objective.decode(mu.view(1, -1)).squeeze().cpu()    
+            d_plot["decoded image"] = wandb.Image(image_latent)
         wandb.log(d_plot)
+                
+
     # run N_BATCH rounds of BayesOpt after the initial random batch
     for _ in tqdm(range(1, N_BATCH + 1), position=0, leave=True, desc = f"Processing algorithm {label} at seed {seed}"):
         optimizer.step()
         if verbose_synthesis:
             d_plot = optimizer.plot_synthesis()
+            if problem_name == "latent_space":
+            ## take mean point and decode
+                if label == "ES":
+                    if alg_kwargs[label]["type"] == "CMAES":
+                        mu = optimizer.searcher._get_center()
+                    else:
+                        mu = optimizer.searcher._get_mu()
+                elif label == "probES":
+                    mu = optimizer.distribution.loc
+                elif label == "qEI":
+                    mu = optimizer.train_X[-1]
+                else:
+                    raise NotImplementedError
+                image_latent = objective.decode(mu.view(1, -1)).squeeze().cpu()    
+                d_plot["decoded image"] = wandb.Image(image_latent)
             wandb.log(d_plot)
 
     history_params = torch.vstack(optimizer.params_history_list).cpu()
