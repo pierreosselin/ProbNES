@@ -62,6 +62,7 @@ class VAE(nn.Module):
 
 class Objective:
     def __init__(self,
+                 label: str,
                  obj_func: Callable,
                  dim: int,
                  device: Any,
@@ -70,6 +71,7 @@ class Objective:
                  noise_std: Optional[float] = None,
                  best_value: Optional[float] = None,
                  negate: bool = False):
+        self.label = label
         self.obj_func = obj_func
         self.noise_std = noise_std
         self.best_value = best_value
@@ -119,23 +121,23 @@ def get_objective(
         initial_bounds = problem_kwargs.get("initial_bounds", 1.)
         bounds = torch.tensor([[-initial_bounds] * dim, [initial_bounds] * dim], device=device, dtype=dtype)
         if test_function == "rosenbrock":
-            obj = Objective(obj_func=Rosenbrock(dim), dim=dim, device=device, dtype=dtype, bounds=bounds, noise_std=noise_std, best_value=0., negate=True)
+            obj = Objective(label=label, obj_func=Rosenbrock(dim), dim=dim, device=device, dtype=dtype, bounds=bounds, noise_std=noise_std, best_value=0., negate=True)
         elif test_function == "ackley":
-            obj = Objective(obj_func=Ackley(dim), dim=dim, device=device, dtype=dtype, bounds=bounds, noise_std=noise_std, best_value=0., negate=True)
+            obj = Objective(label=label, obj_func=Ackley(dim), dim=dim, device=device, dtype=dtype, bounds=bounds, noise_std=noise_std, best_value=0., negate=True)
         elif test_function == "rastrigin":
-            obj = Objective(obj_func=Rastrigin(dim), dim=dim, device=device, dtype=dtype, bounds=bounds, noise_std=noise_std, best_value=0., negate=True)
+            obj = Objective(label=label, obj_func=Rastrigin(dim), dim=dim, device=device, dtype=dtype, bounds=bounds, noise_std=noise_std, best_value=0., negate=True)
         elif test_function == "sphere":
-            obj = Objective(obj_func=Sphere(dim), dim=dim, device=device, dtype=dtype, bounds=bounds, noise_std=noise_std, best_value=0., negate=True)
+            obj = Objective(label=label, obj_func=Sphere(dim), dim=dim, device=device, dtype=dtype, bounds=bounds, noise_std=noise_std, best_value=0., negate=True)
         elif test_function == "function_1":
             obj_function = lambda x: torch.sin(x - 4.) + torch.sin((10./3.)*(x - 4.))
-            obj = Objective(obj_func=obj_function, dim=1, device=device, dtype=dtype, bounds=bounds, noise_std=noise_std, best_value=0., negate=True)
+            obj = Objective(label=label, obj_func=obj_function, dim=1, device=device, dtype=dtype, bounds=bounds, noise_std=noise_std, best_value=0., negate=True)
         elif test_function == "mountains":
             obj_function = lambda x: torch.flatten(5*torch.exp(-2*(x - 1)**2) + 5*torch.exp(-2*(x + 1)**2))
-            obj = Objective(obj_func=obj_function, dim=1, device=device, dtype=dtype, bounds=bounds, noise_std=noise_std, best_value=5., negate=False)
+            obj = Objective(label=label, obj_func=obj_function, dim=1, device=device, dtype=dtype, bounds=bounds, noise_std=noise_std, best_value=5., negate=False)
         elif test_function == "sin3":
             obj_function = lambda x: (-(1.4 - 3*(x/15+0.6))*torch.sin(18*(x/15+0.6))).flatten()
             dim = 1
-            obj = Objective(obj_func=obj_function, dim=1, device=device, dtype=dtype, bounds=bounds, noise_std=noise_std, best_value=1.6, negate=True)
+            obj = Objective(label=label, obj_func=obj_function, dim=1, device=device, dtype=dtype, bounds=bounds, noise_std=noise_std, best_value=1.6, negate=True)
         else:
             raise NotImplementedError(f"Function {test_function} is not implemented")
     
@@ -169,7 +171,7 @@ def get_objective(
                 observed_pred = likelihood(model(x))
             return observed_pred.mean
         
-        obj = Objective(obj_func=objec, noise_std=0., best_value=target_value)
+        obj = Objective(label=label, obj_func=objec, noise_std=0., best_value=target_value)
         return obj
 
     elif label == "latent_space":
@@ -217,7 +219,8 @@ def get_objective(
             
             def objective(x):
                 return score_image(decode(x))
-            obj = Objective(obj_func=objective, dim=dim, device=device, dtype=dtype, bounds=bounds, noise_std=noise_std, best_value=0., negate=False)
+            obj = Objective(label=label, obj_func=objective, dim=dim, device=device, dtype=dtype, bounds=bounds, noise_std=noise_std, best_value=0., negate=False)
+            obj.decode = lambda x: decode(x)
             return obj
         
     else:
