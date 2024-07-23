@@ -475,7 +475,7 @@ def create_path_exp(save_dir, problem_name, problem_kwargs):
     if problem_name == "test_function":
        s = "_".join([problem_kwargs["function"], f'noise-{problem_kwargs["noise"]}', f'dim-{problem_kwargs["dim"]}', f'initial_bounds-{problem_kwargs["initial_bounds"]}'])
     elif problem_name == "latent_space":
-       s = "_".join([problem_kwargs["function"], f'noise-{problem_kwargs["noise"]}', f'initial_bounds-{problem_kwargs["initial_bounds"]}'])
+       s = "_".join([problem_kwargs["function"], f'noise-{problem_kwargs["noise"]}', f'initial_bounds-{problem_kwargs["initial_bounds"]}', f'label-{problem_kwargs["label"]}'])
     else:
         raise NotImplementedError
     save_path = os.path.join(save_dir, s)
