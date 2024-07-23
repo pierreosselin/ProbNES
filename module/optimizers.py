@@ -382,6 +382,11 @@ class ES(AbstractOptimizer):
         matrix_distances = torch.cdist(batch_samples, batch_samples)
         avg_distance = matrix_distances[torch.triu(torch.ones(matrix_distances.shape), diagonal=1) == 1].mean()
         avg_from_center = torch.linalg.norm((self.list_mu[-1] - self.params_history_list[-1]), dim=1).mean()
+        if self.type == "CMAES":
+            covariance_matrix = (self.searcher._get_sigma()**2)*self.searcher.C
+        else:
+            covariance_matrix = self.searcher._distribution.cov
+        covar_volume = torch.linalg.det(covariance_matrix)**(1/self.dim)
 
         if self.objective.dim == 1:
             fig, ax = plt.subplots()
@@ -423,7 +428,8 @@ class ES(AbstractOptimizer):
                     "objective_mean": np.max(self.objective(torch.vstack(self.list_mu)).cpu().numpy()),
                     "current objective_mean": self.objective(self.list_mu[-1]).cpu().numpy(),
                     "Avg distance samples": avg_distance,
-                    "Avg distance samples from center": avg_from_center}
+                    "Avg distance samples from center": avg_from_center,
+                    "Ellipse volume": covar_volume}
     
         else:
             if len(self.list_mu) > 1:
@@ -434,7 +440,8 @@ class ES(AbstractOptimizer):
                         "objective_mean": np.max(self.objective(torch.vstack(self.list_mu)).cpu().numpy()),
                         "current objective_mean": self.objective(self.list_mu[-1]).cpu().numpy(),
                         "Avg distance samples": avg_distance,
-                        "Avg distance samples from center": avg_from_center}
+                        "Avg distance samples from center": avg_from_center,
+                        "Ellipse volume": covar_volume}
             else:
                 return {"mean": self.list_mu[-1],
                         "difference mean": 0.,
@@ -443,7 +450,8 @@ class ES(AbstractOptimizer):
                         "objective_mean": np.max(self.objective(torch.vstack(self.list_mu)).cpu().numpy()),
                         "current objective_mean": self.objective(self.list_mu[-1]).cpu().numpy(),
                         "Avg distance samples": avg_distance,
-                        "Avg distance samples from center": avg_from_center}
+                        "Avg distance samples from center": avg_from_center,
+                        "Ellipse volume": covar_volume}
         # elif self.objective.dim == 2:
         #     raise NotImplementedError
         #     fig, ax = plt.subplots()
@@ -2334,6 +2342,7 @@ class ProbES(AbstractOptimizer):
         matrix_distances = torch.cdist(batch_samples, batch_samples)
         avg_distance = matrix_distances[torch.triu(torch.ones(matrix_distances.shape), diagonal=1) == 1].mean()
         avg_from_center = torch.linalg.norm((self.list_mu[-1] - self.params_history_list[-1]), dim=1).mean()
+        covar_volume = torch.linalg.det(self.distribution.covariance_matrix)**(1/self.d)
         if self.objective.dim == 1:
             image = plot_synthesis_quad(self, iteration=iteration, save_path=self.plot_path, standardize=True)
             image = wandb.Image(image)
@@ -2345,7 +2354,8 @@ class ProbES(AbstractOptimizer):
                     "current objective_mean": self.objective(self.distribution.loc).cpu().numpy(),
                     "GP lengthscales norm":torch.linalg.norm(self.model.covar_module.base_kernel.lengthscale[0]),
                     "Avg distance samples": avg_distance,
-                    "Avg distance samples from center": avg_from_center}
+                    "Avg distance samples from center": avg_from_center,
+                    "Ellipse volume": covar_volume}
             
         else:
             if len(self.list_mu) > 1:
@@ -2357,7 +2367,8 @@ class ProbES(AbstractOptimizer):
                         "current objective_mean": self.objective(self.distribution.loc).cpu().numpy(),
                         "GP lengthscales norm":torch.linalg.norm(self.model.covar_module.base_kernel.lengthscale[0]),
                         "Avg distance samples": avg_distance,
-                        "Avg distance samples from center": avg_from_center}
+                        "Avg distance samples from center": avg_from_center,
+                        "Ellipse volume": covar_volume}
             else:
                 return {"mean": self.list_mu[-1],
                         "difference mean": 0.,
@@ -2367,7 +2378,8 @@ class ProbES(AbstractOptimizer):
                         "current objective_mean": self.objective(self.distribution.loc).cpu().numpy(),
                         "GP lengthscales norm":torch.linalg.norm(self.model.covar_module.base_kernel.lengthscale[0]),
                         "Avg distance samples": avg_distance,
-                        "Avg distance samples from center": avg_from_center}
+                        "Avg distance samples from center": avg_from_center,
+                        "Ellipse volume": covar_volume}
     
 #### Add scipy zero order optimiser and multi restart
 class multistart_scipy(AbstractOptimizer):

@@ -179,6 +179,7 @@ def get_objective(
         noise_std = problem_kwargs.get("noise_std", 0.)
         initial_bounds = problem_kwargs.get("initial_bounds", 1.)
         if model == "mnist":
+            label = problem_kwargs.get("label", 3)
             dim = 20
             bounds = torch.tensor([[-initial_bounds] * dim, [initial_bounds] * dim], device=device, dtype=dtype)
 
@@ -197,7 +198,7 @@ def get_objective(
                 centered at the digit '3'.
                 """
                 # return -torch.abs(y - 1)
-                return torch.exp(-2 * (y - 9) ** 2)
+                return torch.exp(-2 * (y - label) ** 2)
             
             def score_image(x):
                 """The input x is an image and an expected score 

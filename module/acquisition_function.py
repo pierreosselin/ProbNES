@@ -485,14 +485,7 @@ def initialize_acqf_optimizer(type=None, **kwargs):
     elif type == "sequential":
         BATCH_SIZE = kwargs.get("batch_size", 1)
         return optimize_acqfunction_sequential
-    elif type == "optimized_bound":
-        bounds = kwargs.get("bounds", None)
-        BATCH_SIZE = kwargs.get("batch_size", 1)
-        NUM_RESTARTS = kwargs.get("num_restarts", 10)
-        RAW_SAMPLES = kwargs.get("raw_samples", 512)
-        ACQUISITION_BATCH_OPTIMIZATION = kwargs.get("batch_acq", 5)
-        maxiter = kwargs.get("maxiter", 200)
-        return optimize_acqfunction
+    
     elif type == "optimized_mahalanobis":
         BATCH_SIZE = kwargs.get("batch_size", 1)
         NUM_RESTARTS = kwargs.get("num_restarts", 10)
@@ -500,3 +493,12 @@ def initialize_acqf_optimizer(type=None, **kwargs):
         ACQUISITION_BATCH_OPTIMIZATION = kwargs.get("batch_acq", 5)
         maxiter = kwargs.get("maxiter", 200)
         return optimize_acqfunction_mahalanobis
+    
+    else:
+        bounds = kwargs.get("bounds", None)
+        BATCH_SIZE = kwargs.get("batch_size", 1)
+        NUM_RESTARTS = kwargs.get("num_restarts", 10)
+        RAW_SAMPLES = kwargs.get("raw_samples", 512)
+        ACQUISITION_BATCH_OPTIMIZATION = kwargs.get("batch_acq", 5)
+        maxiter = kwargs.get("maxiter", 200)
+        return optimize_acqfunction
