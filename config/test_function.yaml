@@ -11,7 +11,7 @@ exp_settings:
 
 ## Change config for algorithm setting
 alg_settings:
-  algorithm: "probES" #["probES", "ES", "random", "qEI", "piqEI"] 
+  algorithm: ["probES", "ES"] #["probES", "ES", "random", "qEI", "piqEI"] 
   verbose: 10
   batch_size: 2
   piqEI:
@@ -31,10 +31,10 @@ alg_settings:
     mean_prior: -1.
     std_prior: [1., 3.]
     candidates_vr: 300
-    type: ["CMAES", "XNES", "SNES"] # One of ["SNES", "XNES", "CMAES"]
+    type: ["XNES", "SNES","CMAES"] # One of ["SNES", "XNES", "CMAES"]
     lr: 1.
     policy: "constant" # ["wolfe", "ei", "armijo", "constant"]
-    aqc_type: ["random", "optimized_bound"] # ["none", "random", "optimized_bound", "optimized_mahalanobis"] none = random samples, "random" = optimized via random samples, "optimized_bound": optimization on full bounds, "optimized_mahalanobis": optimised on subbounds
+    aqc_type: "random" # ["none", "random", "optimized_bound", "optimized_mahalanobis"] none = random samples, "random" = optimized via random samples, "optimized_bound": optimization on full bounds, "optimized_mahalanobis": optimised on subbounds
     c1: 0.0001
     c2: 0.9
     t_max: 100
@@ -47,9 +47,9 @@ alg_settings:
     raw_samples: 512 #For qEI and piqEI
     batch_acq: 5 # Number of batches used to evaluate the acquisition function at the same time
   ES:
-    std_prior: 3.
+    std_prior: [1., 3.]
     mean_prior: -1.
-    type: "CMAES" # One of ["SNES", "XNES", CMAES]
+    type: ["SNES", "XNES"] # One of ["SNES", "XNES", CMAES]
   random:
     std_prior: 3.
     mean_prior: 1.

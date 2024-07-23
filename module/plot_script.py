@@ -23,6 +23,58 @@ from io import BytesIO
 import yaml
 from itertools import product
 import pandas as pd
+import math
+
+import numpy as np
+from matplotlib.colors import ListedColormap
+from matplotlib.cm import hsv
+
+
+def generate_colormap(number_of_distinct_colors: int = 80):
+    if number_of_distinct_colors == 0:
+        number_of_distinct_colors = 80
+
+    number_of_shades = 7
+    number_of_distinct_colors_with_multiply_of_shades = int(math.ceil(number_of_distinct_colors / number_of_shades) * number_of_shades)
+
+    # Create an array with uniformly drawn floats taken from <0, 1) partition
+    linearly_distributed_nums = np.arange(number_of_distinct_colors_with_multiply_of_shades) / number_of_distinct_colors_with_multiply_of_shades
+
+    # We are going to reorganise monotonically growing numbers in such way that there will be single array with saw-like pattern
+    #     but each saw tooth is slightly higher than the one before
+    # First divide linearly_distributed_nums into number_of_shades sub-arrays containing linearly distributed numbers
+    arr_by_shade_rows = linearly_distributed_nums.reshape(number_of_shades, number_of_distinct_colors_with_multiply_of_shades // number_of_shades)
+
+    # Transpose the above matrix (columns become rows) - as a result each row contains saw tooth with values slightly higher than row above
+    arr_by_shade_columns = arr_by_shade_rows.T
+
+    # Keep number of saw teeth for later
+    number_of_partitions = arr_by_shade_columns.shape[0]
+
+    # Flatten the above matrix - join each row into single array
+    nums_distributed_like_rising_saw = arr_by_shade_columns.reshape(-1)
+
+    # HSV colour map is cyclic (https://matplotlib.org/tutorials/colors/colormaps.html#cyclic), we'll use this property
+    initial_cm = hsv(nums_distributed_like_rising_saw)
+
+    lower_partitions_half = number_of_partitions // 2
+    upper_partitions_half = number_of_partitions - lower_partitions_half
+
+    # Modify lower half in such way that colours towards beginning of partition are darker
+    # First colours are affected more, colours closer to the middle are affected less
+    lower_half = lower_partitions_half * number_of_shades
+    for i in range(3):
+        initial_cm[0:lower_half, i] *= np.arange(0.2, 1, 0.8/lower_half)
+
+    # Modify second half in such way that colours towards end of partition are less intense and brighter
+    # Colours closer to the middle are affected less, colours closer to the end are affected more
+    for i in range(3):
+        for j in range(upper_partitions_half):
+            modifier = np.ones(number_of_shades) - initial_cm[lower_half + j * number_of_shades: lower_half + (j + 1) * number_of_shades, i]
+            modifier = j * modifier / upper_partitions_half
+            initial_cm[lower_half + j * number_of_shades: lower_half + (j + 1) * number_of_shades, i] += modifier
+
+    return ListedColormap(initial_cm)
 
 algo_to_label = {"probES": "Proba ES (ours)",
                  "ES": "ES",
@@ -240,7 +292,7 @@ def plot_cov_ellipse(cov, pos, nstd=2, ax=None, **kwargs):
 def ci(y, N_TRIALS):
     return 1.96 * y.std(axis=0) / np.sqrt(N_TRIALS)
 
-def plot_figure_algo(alg_dir, ax, log_transform=False):
+def plot_figure_algo(alg_dir, ax, log_transform=False, color=None):
     data_path_seeds = [f for f in os.listdir(alg_dir) if ".pt" in f]
     data_over_seeds = []
     for _, df in enumerate(data_path_seeds):
@@ -260,14 +312,14 @@ def plot_figure_algo(alg_dir, ax, log_transform=False):
     y = pd.DataFrame(y).cummin(axis=1)
     y = y.iloc[:, iters_index]
     if log_transform:
-        ax.plot(iters, np.log(y.mean(axis=0).to_numpy()), ".-", label=algo_to_label[label] + alg_dir.split("/")[-1])
+        ax.plot(iters, np.log(y.mean(axis=0).to_numpy()), ".-", label=algo_to_label[label] + alg_dir.split("/")[-1], color=color)
     else:
-        ax.plot(iters, y.mean(axis=0).to_numpy(), ".-", label=algo_to_label[label] + alg_dir.split("/")[-1])
+        ax.plot(iters, y.mean(axis=0).to_numpy(), ".-", label=algo_to_label[label] + alg_dir.split("/")[-1], color=color)
     yerr=ci(y, N_TRIALS)
     if log_transform:
-        ax.fill_between(iters, np.log(np.clip(y.mean(axis=0)-yerr, a_min=1e-5, a_max=None)), np.log(np.clip(y.mean(axis=0)+yerr, a_min=1e-5, a_max=None)), alpha=0.1)
+        ax.fill_between(iters, np.log(np.clip(y.mean(axis=0)-yerr, a_min=1e-5, a_max=None)), np.log(np.clip(y.mean(axis=0)+yerr, a_min=1e-5, a_max=None)), alpha=0.1, color=color)
     else:
-        ax.fill_between(iters, y.mean(axis=0)-yerr, y.mean(axis=0)+yerr, alpha=0.1)
+        ax.fill_between(iters, y.mean(axis=0)-yerr, y.mean(axis=0)+yerr, alpha=0.1, color=color)
 
 def plot_config(config_name, log_transform=False):
     with open(f'config/{config_name}.yaml', 'r') as file:
@@ -335,7 +387,10 @@ def plot_config(config_name, log_transform=False):
             
             ## Loop on algorithm configurations
             list_keys_algo, list_values_algo = dict_keys_algo[alg_kwargs["algorithm"]]
-            for t_algo in product(*list_values_algo):
+            N_colours = len(list(product(*list_values_algo)))
+            cmap = plt.get_cmap('hsv')
+            colors = [cmap(i / N_colours) for i in range(N_colours)]
+            for index_plot, t_algo in enumerate(product(*list_values_algo)):    
                 for i, el in enumerate(t_algo):
                     alg_kwargs[alg_kwargs["algorithm"]][list_keys_algo[i]] = el
 
@@ -351,10 +406,10 @@ def plot_config(config_name, log_transform=False):
                     os.makedirs(algo_path)
 
                 alg_path = create_path_alg(algo_path, algo, alg_kwargs)
-                plot_figure_algo(alg_path, ax, log_transform)
+                plot_figure_algo(alg_path, ax, log_transform, color=colors[index_plot])
     
         N_BATCH, BATCH_SIZE = exp_kwargs["n_iter"], alg_kwargs["batch_size"]
-        if not log_transform:    
+        if not log_transform:
             ax.plot([0, N_BATCH * BATCH_SIZE], [0.] * 2, 'k', label="true best objective", linewidth=2)
             # ax.set_ylim(0, 5.)
         ax.set(xlabel='number of observations (beyond initial points)', ylabel='best objective value')
