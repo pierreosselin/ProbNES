@@ -389,7 +389,7 @@ def plot_config(config_name, log_transform=False):
             list_keys_algo, list_values_algo = dict_keys_algo[alg_kwargs["algorithm"]]
             N_colours = len(list(product(*list_values_algo)))
             cmap = plt.get_cmap('hsv')
-            colors = [cmap(i / N_colours) for i in range(N_colours)]
+            colors = [cmap((i+1) / (N_colours+1)) for i in range(N_colours)]
             for index_plot, t_algo in enumerate(product(*list_values_algo)):    
                 for i, el in enumerate(t_algo):
                     alg_kwargs[alg_kwargs["algorithm"]][list_keys_algo[i]] = el
