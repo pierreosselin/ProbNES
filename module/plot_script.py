@@ -373,40 +373,44 @@ def plot_config(config_name, log_transform=False):
 
     for t_pb in product(*list_values_pb):
         fig, ax = plt.subplots(1, 1, figsize=(8, 6))
-        for t_exp_alg in product(*(list_values_alg+list_values_exp)): ## For loop on experiment problem parameters and algorithms
-            t = t_pb + t_exp_alg
-            list_keys = list_keys = list_keys_pb + list_keys_alg + list_keys_exp
-            for i, el in enumerate(t):
-                type_param, key = list_keys[i]
-                if type_param == "pb":
-                    problem_kwargs[key] = el
-                elif type_param == "alg":
-                    alg_kwargs[key] = el
-                elif type_param == "exp":
-                    exp_kwargs[key] = el
-            
-            ## Loop on algorithm configurations
-            list_keys_algo, list_values_algo = dict_keys_algo[alg_kwargs["algorithm"]]
-            N_colours = len(list(product(*list_values_algo)))
+        for t_exp in product(*(list_values_exp)):
+            N_colours = 3
             cmap = plt.get_cmap('hsv')
             colors = [cmap((i+1) / (N_colours+1)) for i in range(N_colours)]
-            for index_plot, t_algo in enumerate(product(*list_values_algo)):    
-                for i, el in enumerate(t_algo):
-                    alg_kwargs[alg_kwargs["algorithm"]][list_keys_algo[i]] = el
+            count_color = -1
+            for t_alg in product(*(list_values_alg)): ## For loop on experiment problem parameters and algorithms
+                t = t_pb + t_exp + t_alg
+                list_keys = list_keys = list_keys_pb + list_keys_alg + list_keys_exp
+                for i, el in enumerate(t):
+                    type_param, key = list_keys[i]
+                    if type_param == "pb":
+                        problem_kwargs[key] = el
+                    elif type_param == "alg":
+                        alg_kwargs[key] = el
+                    elif type_param == "exp":
+                        exp_kwargs[key] = el
+                
+                ## Loop on algorithm configurations
+                list_keys_algo, list_values_algo = dict_keys_algo[alg_kwargs["algorithm"]]
 
-                exp_path = create_path_exp(save_dir, problem_name, problem_kwargs)
-                #### Build new save dir for problem
+                for index_plot, t_algo in enumerate(product(*list_values_algo)):
+                    for i, el in enumerate(t_algo):
+                        alg_kwargs[alg_kwargs["algorithm"]][list_keys_algo[i]] = el
 
-                if not os.path.exists(exp_path):
-                    os.makedirs(exp_path)
+                    exp_path = create_path_exp(save_dir, problem_name, problem_kwargs)
+                    #### Build new save dir for problem
 
-                algo = alg_kwargs["algorithm"]
-                algo_path = os.path.join(exp_path, algo)
-                if not os.path.exists(algo_path):
-                    os.makedirs(algo_path)
+                    if not os.path.exists(exp_path):
+                        os.makedirs(exp_path)
 
-                alg_path = create_path_alg(algo_path, algo, alg_kwargs)
-                plot_figure_algo(alg_path, ax, log_transform, color=colors[index_plot])
+                    algo = alg_kwargs["algorithm"]
+                    algo_path = os.path.join(exp_path, algo)
+                    if not os.path.exists(algo_path):
+                        os.makedirs(algo_path)
+                    
+                    alg_path = create_path_alg(algo_path, algo, alg_kwargs)
+                    count_color += 1
+                    plot_figure_algo(alg_path, ax, log_transform, color=colors[count_color])
     
         N_BATCH, BATCH_SIZE = exp_kwargs["n_iter"], alg_kwargs["batch_size"]
         if not log_transform:
