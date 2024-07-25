@@ -8,7 +8,7 @@
             "name": "Semisupervised",
             "type": "python",
             "request": "launch",
-            "program": "${workspaceFolder}/plot_script.py",
+            "program": "${workspaceFolder}/main.py",
             "args": ["--config", "test_function"],
             "console": "integratedTerminal",
             "justMyCode": true
