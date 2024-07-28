@@ -5,7 +5,7 @@ verbose_synthesis: 0
 gpu: 0
 
 exp_settings:
-  n_exp: 10
+  n_exp: 5
   n_iter: 100
   n_init: 3 # Has to be equal to batch size for evo algo
 
@@ -31,7 +31,7 @@ alg_settings:
     mean_prior: -1.
     std_prior: 3.
     candidates_vr: 300
-    type: "SNES" # One of ["SNES", "XNES", "CMAES"]
+    type: "CMAES" # One of ["SNES", "XNES", "CMAES"]
     lr: 1.
     policy: "constant" # ["wolfe", "ei", "armijo", "constant"]
     aqc_type: "random" # ["none", "random", "optimized_bound", "optimized_mahalanobis"] none = random samples, "random" = optimized via random samples, "optimized_bound": optimization on full bounds, "optimized_mahalanobis": optimised on subbounds
@@ -40,7 +40,7 @@ alg_settings:
     t_max: 100
     budget: 500
     manifold: False
-    mahalanobis: [True, False]
+    mahalanobis: True
     gradient_direction: "expected" #["sample", "mpd"]
     num_restarts: 10 #For qEI and piqEI
     mc_samples: 256 #For qEI and piqEI
@@ -49,13 +49,13 @@ alg_settings:
   ES:
     std_prior: 3.
     mean_prior: -1.
-    type: "SNES" # One of ["SNES", "XNES", "CMAES"]
+    type: "CMAES" # One of ["SNES", "XNES", CMAES]
   random:
     std_prior: 3.
     mean_prior: 1.
 
 problem_settings:
-  function: ["ackley", "rosenbrock", "rastrigin"] # Name of the function in [airfoil, rosenbrock, sphere, ackley, rastrigin]
-  noise: [0., 0.1, 0.5]
+  function: "ackley" # Name of the function in [airfoil, rosenbrock, sphere, ackley, rastrigin, function_1, mountains, sin3]
+  noise: 0.
   dim: [1, 5, 10] # Irrelevant for latent space problem
   initial_bounds: 10.

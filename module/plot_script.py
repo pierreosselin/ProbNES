@@ -29,68 +29,11 @@ import numpy as np
 from matplotlib.colors import ListedColormap
 from matplotlib.cm import hsv
 
-
-def generate_colormap(number_of_distinct_colors: int = 80):
-    if number_of_distinct_colors == 0:
-        number_of_distinct_colors = 80
-
-    number_of_shades = 7
-    number_of_distinct_colors_with_multiply_of_shades = int(math.ceil(number_of_distinct_colors / number_of_shades) * number_of_shades)
-
-    # Create an array with uniformly drawn floats taken from <0, 1) partition
-    linearly_distributed_nums = np.arange(number_of_distinct_colors_with_multiply_of_shades) / number_of_distinct_colors_with_multiply_of_shades
-
-    # We are going to reorganise monotonically growing numbers in such way that there will be single array with saw-like pattern
-    #     but each saw tooth is slightly higher than the one before
-    # First divide linearly_distributed_nums into number_of_shades sub-arrays containing linearly distributed numbers
-    arr_by_shade_rows = linearly_distributed_nums.reshape(number_of_shades, number_of_distinct_colors_with_multiply_of_shades // number_of_shades)
-
-    # Transpose the above matrix (columns become rows) - as a result each row contains saw tooth with values slightly higher than row above
-    arr_by_shade_columns = arr_by_shade_rows.T
-
-    # Keep number of saw teeth for later
-    number_of_partitions = arr_by_shade_columns.shape[0]
-
-    # Flatten the above matrix - join each row into single array
-    nums_distributed_like_rising_saw = arr_by_shade_columns.reshape(-1)
-
-    # HSV colour map is cyclic (https://matplotlib.org/tutorials/colors/colormaps.html#cyclic), we'll use this property
-    initial_cm = hsv(nums_distributed_like_rising_saw)
-
-    lower_partitions_half = number_of_partitions // 2
-    upper_partitions_half = number_of_partitions - lower_partitions_half
-
-    # Modify lower half in such way that colours towards beginning of partition are darker
-    # First colours are affected more, colours closer to the middle are affected less
-    lower_half = lower_partitions_half * number_of_shades
-    for i in range(3):
-        initial_cm[0:lower_half, i] *= np.arange(0.2, 1, 0.8/lower_half)
-
-    # Modify second half in such way that colours towards end of partition are less intense and brighter
-    # Colours closer to the middle are affected less, colours closer to the end are affected more
-    for i in range(3):
-        for j in range(upper_partitions_half):
-            modifier = np.ones(number_of_shades) - initial_cm[lower_half + j * number_of_shades: lower_half + (j + 1) * number_of_shades, i]
-            modifier = j * modifier / upper_partitions_half
-            initial_cm[lower_half + j * number_of_shades: lower_half + (j + 1) * number_of_shades, i] += modifier
-
-    return ListedColormap(initial_cm)
-
 algo_to_label = {"probES": "Proba ES (ours)",
                  "ES": "ES",
                  "piqEI": "piBO",
                  "random": "random",
                  "qEI": "BO"}
-
-"""
-Scripts to produce plots from the files contained in path
-Refactor in the following manner:
-- have a function for:
-    - plotting gp fit
-    - plotting distribution (1D and 2D ellipse)
-    - plot data
-
-""" 
 
 def plot_gp_fit(ax, model, train_X, targets, obj, batch, normalize_flag=False):
     """Plot the gp fit, normalize parameter in case of input normalization"""
@@ -145,7 +88,7 @@ def plot_synthesis_quad(optimizer, iteration, save_path=".", standardize=True):
     # result, result_ei, result_bivariate_ei = [], [], []
     
     for el in tqdm(res):
-        post = optimizer._quadrature(torch.tensor([el[0]]).to(device=optimizer.objective.device, dtype=optimizer.objective.dtype), torch.tensor([[el[1]]]).to(device=optimizer.objective.device, dtype=optimizer.objective.dtype))
+        post = optimizer.quad_model.quadrature(torch.tensor([el[0]]).to(device=optimizer.objective.device, dtype=optimizer.objective.dtype), torch.tensor([[el[1]]]).to(device=optimizer.objective.device, dtype=optimizer.objective.dtype))
         result.append(post)
         # mean_joint, covar_joint = optimizer.compute_joint_distribution_zero_order(torch.tensor([el[0]]).to(device=optimizer.objective.device, dtype=optimizer.objective.dtype), torch.tensor([[el[1]]]).to(device=optimizer.objective.device, dtype=optimizer.objective.dtype))
         # result_ei.append(log_EI(mean_joint[1], covar_joint[1,1], optimizer.objective.best_value))
@@ -155,22 +98,35 @@ def plot_synthesis_quad(optimizer, iteration, save_path=".", standardize=True):
     std = torch.sqrt(torch.tensor(result)).cpu().numpy()[:,1].reshape(m,n)
     # ei = torch.tensor(result_ei).cpu().numpy().reshape(m,n)
     # ei_bivariate = torch.tensor(result_bivariate_ei).cpu().numpy().reshape(m,n)
-    # fig, axs = plt.subplots(2, 3, figsize=(22, 12))
+    fig, axs = plt.subplots(2, 3, figsize=(22, 12))
+    if iteration >= 1:
+        if optimizer.policy in ["wolfe", "armijo"]:
+            t_linspace = torch.linspace(0., 10, 200, dtype=optimizer.train_x.dtype)[1:]
+            mu1, Epsilon1 = optimizer.list_mu[-2], optimizer.list_covar[-2]
+            # For cmaes here
+            
+            result_wolfe, result_armijo = [], []
+            for t in t_linspace:
+                mu2, Epsilon2 = mu1 + t*optimizer.d_mu, Epsilon1 + t*optimizer.d_epsilon
+                mean_joint, covar_joint = optimizer.quad_model.compute_joint_distribution(mu1, Epsilon1, mu2, Epsilon2, [optimizer.d_mu, optimizer.d_epsilon])
+                if mean_joint == None and covar_joint == None:
+                    result_wolfe.append(0.)
+                else:
+                    mean_joint = -mean_joint
+                    result_wolfe.append(float(optimizer.linesearch.compute_wolfe_from_joint(mean_joint, covar_joint, t)))
+                
+                # result_armijo.append(optimizer.armijo_criterion(t))
+            wolfe_tensor = torch.tensor(result_wolfe).cpu().numpy()
+            # armijo_tensor = torch.tensor(result_armijo).cpu().numpy()
 
-    # if optimizer.policy in ["wolfe", "armijo"]:
-    #     t_linspace = torch.linspace(0., optimizer.t_max, optimizer.budget + 1, dtype=optimizer.train_x.dtype)[1:]
-    #     result_wolfe, result_armijo = [], []
-    #     for t in t_linspace:
-    #         result_wolfe.append(optimizer.wolfe_criterion(t))
-    #         result_armijo.append(optimizer.armijo_criterion(t))
-    #     wolfe_tensor = torch.tensor(result_wolfe).cpu().numpy()
-    #     armijo_tensor = torch.tensor(result_armijo).cpu().numpy()
-
-    #     axs[1,0].plot(t_linspace.cpu().numpy(), wolfe_tensor, color='blue', label = "Probability Wolfe condition")
-    #     axs[1,0].plot(t_linspace.cpu().numpy(), armijo_tensor, color='red', label = "Probability Armijo condition")
-    #     axs[1,0].set_title("Probabilistic conditions line search")
-    #     axs[1,0].legend()
-
+            axs[1,0].plot(t_linspace.cpu().numpy(), wolfe_tensor, color='blue', label = "Probability Wolfe condition")
+            # axs[1,0].plot(t_linspace.cpu().numpy(), armijo_tensor, color='red', label = "Probability Armijo condition")
+            axs[1,0].set_title("Probabilistic conditions line search for next update")
+            axs[1,0].legend()
+            
+            # target_point[1] = max(target_point[1], 1e-14)
+            
+            
     ## Compute gradients at multiple places
     # b_grad = np.arange(float(bounds[0][0]), float(bounds[1][0]), 1)
     # d_grad = np.arange(0, 3, 0.5)[1:]**2
@@ -193,7 +149,6 @@ def plot_synthesis_quad(optimizer, iteration, save_path=".", standardize=True):
     #     max_length = max(max_length, np.sqrt(mu_grad**2 + epsilon_grad**2))
     #     result_grad.append([mu_grad, epsilon_grad])
         
-    fig, axs = plt.subplots(2, 3, figsize=(22, 12))
     lb, up = float(bounds[0][0]), float(bounds[1][0])
     axs[0,0].set_xlim(lb, up)
     plot_gp_fit(axs[0,0], optimizer.model, optimizer.train_x, optimizer.train_y, optimizer.objective, optimizer.batch_size, normalize_flag=False)

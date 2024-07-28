@@ -395,38 +395,6 @@ def isPD(B):
     except:
         return False
 
-def plot_GP_fit(model, distribution, train_X, targets, obj, normalize=False, lb=-10., up=10., mean_Y=None, std_Y=None):
-    """ Plot the figures corresponding to the Gaussian process fit
-    """
-    model.eval()
-    model.likelihood.eval()
-    test_x = torch.linspace(lb, up, 200, device=train_X.device, dtype=train_X.dtype)
-    with torch.no_grad():
-        # Make predictions
-        predictions = model.likelihood(model(test_x))
-        lower, upper = predictions.confidence_region()
-    
-    if normalize:
-        predictions = predictions*float(std_Y) + float(mean_Y)
-        lower, upper = lower*float(std_Y), upper*float(std_Y)
-        targets = targets*float(std_Y) + float(mean_Y)
-    value_ = (obj(test_x.unsqueeze(-1))).flatten()
-
-    plt.scatter(train_X.cpu().numpy(), targets.cpu().numpy(), color='black', label='Training data')
-    plt.plot(test_x.cpu().numpy(), predictions.mean.cpu().numpy(), color='blue', label='Predictive mean')
-    plt.plot(test_x.cpu().numpy(), value_.cpu().numpy(), color='green', label='True Function')
-    plt.fill_between(test_x.cpu().numpy(), lower.cpu().numpy(), upper.cpu().numpy(), color='lightblue', alpha=0.5, label='Confidence region')
-    
-    x = np.linspace(distribution.loc - 3*distribution.covariance_matrix, distribution.loc + 3*distribution.covariance_matrix, 100).flatten()
-    y_lim = plt.gca().get_ylim()
-    plt.plot(x, (y_lim[1] - y_lim[0])*stats.norm.pdf(x, distribution.loc, distribution.covariance_matrix).flatten(), "k")
-    
-    plt.xlabel('x')
-    plt.ylabel('y')
-    plt.title('Gaussian Process Regression')
-    plt.legend()
-    plt.show()
-
 def EI_bivariate(mean, covar):
    ### Compute E[max(f(x) - f(x*), 0)]
    ### Assume first element of covar and mean is for the variable f(x*)
@@ -483,7 +451,7 @@ def create_path_exp(save_dir, problem_name, problem_kwargs):
 
 def alg_name(algorithm_name, alg_kwargs):
   if algorithm_name == "probES":  #["probES", "ES", "random", "qEI", "piqEI"]
-    s = "_".join([f'type-{alg_kwargs[algorithm_name]["type"]}', f'aqc_typef-{alg_kwargs[algorithm_name]["aqc_type"]}', f'mahalanobis-{alg_kwargs[algorithm_name]["mahalanobis"]}', f'mean_prior-{alg_kwargs[algorithm_name]["mean_prior"]}', f'std_prior-{alg_kwargs[algorithm_name]["std_prior"]}', f'lr-{alg_kwargs[algorithm_name]["lr"]}', f'batch_size-{alg_kwargs["batch_size"]}'])
+    s = "_".join([f'type-{alg_kwargs[algorithm_name]["type"]}', f'policy-{alg_kwargs[algorithm_name]["policy"]}', f'aqc_typef-{alg_kwargs[algorithm_name]["aqc_type"]}', f'mahalanobis-{alg_kwargs[algorithm_name]["mahalanobis"]}', f'mean_prior-{alg_kwargs[algorithm_name]["mean_prior"]}', f'std_prior-{alg_kwargs[algorithm_name]["std_prior"]}', f'lr-{alg_kwargs[algorithm_name]["lr"]}', f'batch_size-{alg_kwargs["batch_size"]}'])
   elif algorithm_name == "ES":
     s = "_".join([f'type-{alg_kwargs[algorithm_name]["type"]}', f'std_prior-{alg_kwargs[algorithm_name]["std_prior"]}', f'batch_size-{alg_kwargs["batch_size"]}'])
   elif algorithm_name == "qEI":
@@ -498,3 +466,4 @@ def create_path_alg(save_path, algorithm_name, alg_kwargs):
     s = alg_name(algorithm_name, alg_kwargs)
     save_path = os.path.join(save_path, s)
     return save_path
+

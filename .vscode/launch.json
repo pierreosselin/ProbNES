@@ -9,7 +9,7 @@
             "type": "python",
             "request": "launch",
             "program": "${workspaceFolder}/main.py",
-            "args": ["--config", "test_function"],
+            "args": ["--config", "test_function_linesearch"],
             "console": "integratedTerminal",
             "justMyCode": true
         }

@@ -10,9 +10,10 @@ import botorch
 from module.model import DerivativeExactGPSEModel
 from module.environment_api import EnvironmentObjective
 from module.acquisition_function import GradientInformation, DownhillQuadratic, initialize_acqf_optimizer, piqExpectedImprovement, QuadratureExploration
-from module.plot_script import plot_gp_fit, plot_synthesis_quad, plot_distribution_1D
+from module.plot_script import plot_synthesis_quad
+from module.quadrature import Quadrature
+from module.linesearch import load_linesearch
 
-from scipy.optimize import minimize_scalar
 from torch.distributions.multivariate_normal import MultivariateNormal
 from .utils import bounded_bivariate_normal_integral, nearestPD, isPD, EI, log_EI, _is_in_ellipse
 from botorch import fit_gpytorch_mll
@@ -23,9 +24,7 @@ import matplotlib.pyplot as plt
 import scipy
 import wandb
 
-from botorch.utils.probability.utils import (
-    ndtr as Phi
-)
+
 from botorch.utils.transforms import standardize, normalize, unnormalize
 from gpytorch.kernels import RBFKernel
 from gpytorch.kernels.scale_kernel import ScaleKernel
@@ -37,7 +36,6 @@ from botorch.sampling.normal import SobolQMCNormalSampler
 
 from evotorch import Problem
 import evotorch.algorithms as evoalgo
-from evotorch.logging import StdOutLogger
 import torch
 from PIL import Image
 from io import BytesIO
@@ -1727,7 +1725,7 @@ class FiniteDiffGradientAscentOptimizerv2(FiniteDiffGradientAscentOptimizer):
         else:
             self.params_history_list.append(self.params.clone())
 
-## TODO Be careful computational graphs when using .copy() as not deleted and can result in using too much memory
+## Warning: Be careful computational graphs when using .copy() as not deleted and can result in using too much memory
 class ProbES(AbstractOptimizer):
     def __init__(
         self,
@@ -1745,7 +1743,7 @@ class ProbES(AbstractOptimizer):
         if not os.path.exists(os.path.join(self.plot_path, "fitgp")):
             os.makedirs(os.path.join(self.plot_path, "fitgp"))
         ## Load parameter distribution
-        mu, var = optimizer_config["mean_prior"], optimizer_config["std_prior"]**2 ## TODO option for different starting point
+        mu, var = optimizer_config["mean_prior"], optimizer_config["std_prior"]**2
         mean, loc = mu*torch.ones(objective.dim, device=objective.device, dtype=objective.dtype), var*torch.eye(objective.dim, device=objective.device, dtype=objective.dtype)
         self.distribution = MultivariateNormal(mean, loc)
 
@@ -1757,41 +1755,16 @@ class ProbES(AbstractOptimizer):
 
         self.d = self.objective.dim
         
-        self.lr = optimizer_config["lr"]
         self.aqc_type = optimizer_config["aqc_type"]
         self.policy=optimizer_config["policy"]
-        self.c1=optimizer_config["c1"]
-        self.c2=optimizer_config["c2"]
-        self.t_max=optimizer_config["t_max"]
-        self.budget=optimizer_config["budget"]
-        self.manifold=optimizer_config["manifold"]
-        self.gradient_direction = optimizer_config["gradient_direction"]
         self.type = optimizer_config["type"]
         self.chi_threshold = np.sqrt(scipy.stats.chi2.ppf(q=0.9973,df=self.d))
         self.mahalanobis = optimizer_config["mahalanobis"]
-        # Assert wolfe condition of parameters
-        assert 0 <= self.c1
-        assert self.c1 < self.c2
-        assert self.c2 <= 1
+        self.t_update = optimizer_config["lr"]
 
         ## Create Manifold
-        if self.manifold:
-            euclidean = geoopt.manifolds.Euclidean()
-            spd = geoopt.manifolds.SymmetricPositiveDefinite()
-            self.manifold = geoopt.manifolds.ProductManifold((euclidean, objective.dim), (spd, (objective.dim,objective.dim)))
-        else:
-            euclidean = geoopt.manifolds.Euclidean()
-            self.manifold = geoopt.manifolds.ProductManifold((euclidean, objective.dim), (euclidean, (objective.dim,objective.dim)))
-
-        ## Define criterion
-        if self.policy == "ei": # Change for multivariate gaussian 
-            self.optimizer = geoopt.optim.RiemannianAdam((self.param,), lr=1e-2)
-        
-        elif self.policy in ["wolfe", "armijo"]:
-            if self.policy == "wolfe":
-                self.criterion = self.wolfe_criterion
-            elif self.policy == "armijo":
-                self.criterion = self.armijo_criterion
+        euclidean = geoopt.manifolds.Euclidean()
+        self.manifold = geoopt.manifolds.ProductManifold((euclidean, objective.dim), (euclidean, (objective.dim,objective.dim)))
 
         ## Register mu and covariance history
         self.list_mu, self.list_covar = [self.distribution.loc.detach().clone()], [self.distribution.covariance_matrix.detach().clone()]
@@ -1816,7 +1789,6 @@ class ProbES(AbstractOptimizer):
             model=self.model,
             distribution=self.distribution)
         
-        ## TODO Make option to make it an optimization pb instead of samples
         # self.optimize_acqf = initialize_acqf_optimizer(type="random", candidate_vr=optimizer_config["candidates_vr"], batch_size=batch_size)
         self.optimize_acqf = initialize_acqf_optimizer(
                                                 type = self.aqc_type,
@@ -1827,35 +1799,21 @@ class ProbES(AbstractOptimizer):
                                                 batch_acq=optimizer_config["batch_acq"],
                                                 candidates_vr=optimizer_config["candidates_vr"],
                                                 maxiter=200)
-
-        # Extract model quantities
-        self.extract_model_quantities()
+        
+        # Quadrature model
+        self.quad_model = Quadrature(self.model)
+        self.linesearch = load_linesearch(self.policy, quad_model = self.quad_model, dict_parameter=optimizer_config)
     
     def step(self):
         """Make a gradient step toward"""
 
-        # Extract model quantities
-        self.extract_model_quantities()
-
         ### Instead do gradient in reparameterization and same for natural gradient
         ## Compute direction (sampled, expected , mdp ect...).
-        if self.gradient_direction == "expected":
-            m, _ = self._quadrature(self.manifold.take_submanifold_value(self.manifold_point, 0), self.manifold.take_submanifold_value(self.manifold_point, 1))
-            m.backward()
-            self.d_manifold = self.manifold_point.grad
-            self.d_mu, self.d_epsilon = self.manifold.take_submanifold_value(self.d_manifold, 0), self.manifold.take_submanifold_value(self.d_manifold, 1)
-        elif self.gradient_direction == "sampled": ## TODO implement the sampled gradient (require running backprop on v as well)
-            raise NotImplementedError
-            m, v = self._quadrature(self.manifold.take_submanifold_value(self.manifold_point, 0), self.manifold.take_submanifold_value(self.manifold_point, 1))
-            m.backward()
-            v.backward()
-            s = torch.normal(0, 1, size=(1,), device = self.train_X.device, dtype=self.train_X.dtype)
-            self.grad_direction = self.manifold_point.grad + s
-            self.d_mu = self.manifold.take_submanifold_value(self.manifold_point.grad, 0) +s*self.manifold.take_submanifold_value(self.manifold_point.grad, 0)
-
-            self.d_epsilon = self.manifold.take_submanifold_value(self.manifold_point.grad, 1) + s*self.manifold.take_submanifold_value(self.manifold_point.grad, 1)
-        else:
-            raise NotImplementedError
+        m, _ = self.quad_model.quadrature(self.manifold.take_submanifold_value(self.manifold_point, 0), self.manifold.take_submanifold_value(self.manifold_point, 1))
+        m.backward()
+        self.d_manifold = self.manifold_point.grad.detach().clone()
+        self.manifold_point.grad.zero_()
+        self.d_mu, self.d_epsilon = self.manifold.take_submanifold_value(self.d_manifold, 0), self.manifold.take_submanifold_value(self.d_manifold, 1)
         
         # Taking natural gradient:
         ## TODO make it a function
@@ -1874,52 +1832,25 @@ class ProbES(AbstractOptimizer):
             raise NotImplementedError
         
         ## Line search mehod, decide how far the step take
-        if self.policy == "constant":
-            self.t_update = self.lr
-        elif self.policy in ["wolfe", "armijo"]:
-            ## Precompute quantities for method of lines
-            Pi_1_1 = self.gp_covariance + 2*self.distribution.covariance_matrix
-            self.Pi_inv_1_1 = torch.linalg.inv(Pi_1_1)
-            self.fourth_order_Pi1_Pi1 = torch.einsum("ij,kl->ijkl", self.Pi_inv_1_1, self.Pi_inv_1_1)
-
-            # Compute tau matrix
-            self.diff_data = (self.train_X - self.distribution.loc) # Nxd
-            self.normal_data_unsqueezed = torch.unsqueeze(self.t_1X, -1).repeat(1,self.d)
-            self.Tau_mu1 = torch.linalg.solve(self.covariance_gp_distr, self.diff_data * self.normal_data_unsqueezed, left=False)
-            
-            self.normal_data_unsqueezed = torch.unsqueeze(self.normal_data_unsqueezed, -1).repeat(1,1,self.d)
-            self.outer_prod = torch.bmm(torch.unsqueeze(self.diff_data, -1), torch.unsqueeze(self.diff_data, 1))
-            self.outer_prod = (self.outer_prod - self.covariance_gp_distr) * self.normal_data_unsqueezed
-            self.Tau_epsilon1 = 0.5 * torch.linalg.solve(self.covariance_gp_distr, torch.linalg.solve(self.covariance_gp_distr, self.outer_prod, left=False))
-            
-            self.R11_prime_epsilon = -0.5*self.R_11*self.Pi_inv_1_1
-            self.R1_prime_1_prime_mu_mu = self.Pi_inv_1_1 * self.R_11
-            self.R1_prime_1_prime_epsilon_epsilon = (self.fourth_order_Pi1_Pi1 + torch.einsum("ijkl->ikjl" ,self.fourth_order_Pi1_Pi1) + torch.einsum("ijkl->iljk" ,self.fourth_order_Pi1_Pi1)) * self.R_11
-
-            self.mean_prime_1 = (self.d_mu * (self.Tau_mu1.T @ self.inverse_data_covar_y)).sum() + (self.d_epsilon * (self.Tau_epsilon1.T @ self.inverse_data_covar_y)).sum()
-            self.cov_1_1_prime = (self.d_epsilon*self.R11_prime_epsilon).sum() - (self.d_mu * (self.Tau_mu1.T @ self.inverse_data_covar_t1X)).sum() - (self.d_epsilon * (self.Tau_epsilon1.T @ self.inverse_data_covar_t1X)).sum()
-            self.var_prime_1 = self.d_mu @ self.R1_prime_1_prime_mu_mu @ self.d_mu \
-                        + 0.25*((torch.unsqueeze(torch.unsqueeze(self.d_epsilon, -1), -1)) * self.R1_prime_1_prime_epsilon_epsilon * (torch.unsqueeze(torch.unsqueeze(self.d_epsilon, 0), 0).repeat(self.d,self.d,1,1))).sum()
-            self.t_update = minimize_scalar(self.criterion).x
+        if self.policy != "constant":
+            self.quad_model.precompute_linesearch(self.distribution.loc, self.distribution.covariance_matrix, [self.d_mu, self.d_epsilon])
+        self.t_update = self.linesearch.compute_t()
         
-        ## TODO if manifold is euclidean need to project back to semi definite matrices
         # Taking gradient update:
         ## TODO make it a function
-        # self.manifold_point = self.manifold.expmap(self.manifold_point, self.t_update*torch.tensor([self.d_mu[0], self.d_epsilon[0,0]], device = self.objective.device))
         if self.type == "SNES":
             # Here it is assumed both matrix for gp kernel and input distribution are diagonal
-            mu_target = self.manifold.take_submanifold_value(self.manifold_point, 0) + self.t_update*self.d_mu
-            covar_target = self.manifold.take_submanifold_value(self.manifold_point, 1) * torch.exp(self.t_update*self.d_epsilon)
+            mu_target = self.distribution.loc + self.t_update*self.d_mu
+            covar_target = self.distribution.covariance_matrix * torch.exp(self.t_update*self.d_epsilon)
         elif self.type == "XNES":
-            mu_target = self.manifold.take_submanifold_value(self.manifold_point, 0) + self.t_update*self.d_mu
+            mu_target = self.distribution.loc + self.t_update*self.d_mu
             covar_target = torch.matmul(torch.matmul(A, torch.linalg.matrix_exp(self.t_update*self.d_epsilon)), A.T)
         elif self.type == "CMAES":
             self.manifold_point = self.manifold.expmap(self.manifold_point, self.t_update*torch.hstack([self.d_mu, self.d_epsilon.flatten()]))
-            mu_target, covar_target = self.manifold.take_submanifold_value(self.manifold_point, 0), self.manifold.take_submanifold_value(self.manifold_point, 1)
+            mu_target = self.distribution.loc + self.t_update*self.d_mu
+            covar_target = self.distribution.covariance_matrix + self.t_update*self.d_epsilon
         else:
             raise NotImplementedError
-        # mu_target, covar_target = self.distribution.loc + self.t_update*self.d_mu, self.distribution.covariance_matrix + self.t_update*self.d_epsilon
-        # covar_target = torch.max(covar_target, torch.tensor([[1e-14]], device = self.objective.device, dtype = self.objective.dtype))
         self.distribution = MultivariateNormal(mu_target, covar_target)
 
         """
@@ -1956,6 +1887,10 @@ class ProbES(AbstractOptimizer):
         )
         fit_gpytorch_mll(mll)
 
+        # Update quad and linesearch
+        self.quad_model = Quadrature(self.model)
+        self.linesearch.quad_model = self.quad_model
+
         self.params_history_list.append(new_x.clone())
         # self.values_history.append(new_y.clone())
         self.values_history.append(self.objective(self.distribution.loc).repeat(self.batch_size))
@@ -1963,6 +1898,7 @@ class ProbES(AbstractOptimizer):
 
     def extract_model_quantities(self):
         # Extract model quantities
+        # TODO Optimise code computation of model quantities, redundancy in computations, same with wolfe
         self.train_X = self.model.train_inputs[0]
         self.noise_tensor = self.model.likelihood.noise.detach().clone() * torch.eye(self.train_X.shape[0], dtype=self.train_X.dtype, device=self.train_X.device)
         self.gp_covariance = ((torch.diag(self.model.covar_module.base_kernel.lengthscale[0].detach().clone()))**2).detach().clone()
@@ -1971,6 +1907,17 @@ class ProbES(AbstractOptimizer):
         self.mean_constant = self.model.mean_module.constant.detach().clone()
         self.inverse_data_covar_y = torch.linalg.solve(self.K_X_X, self.model.train_targets - self.mean_constant)
         self.inverse_data = torch.linalg.inv(self.K_X_X)
+        if self.policy != "constant":
+            self.covariance_gp_distr = self.gp_covariance + self.distribution.covariance_matrix
+            self.constant = (self.outputscale * torch.sqrt(torch.linalg.det(2*torch.pi*self.gp_covariance))).detach().clone()
+            
+            self.t_1X = self.constant * torch.exp(MultivariateNormal(loc = self.distribution.loc, covariance_matrix = self.covariance_gp_distr).log_prob(self.train_X))
+            self.R_11 = self.constant * torch.exp(MultivariateNormal(loc = self.distribution.loc, covariance_matrix = self.covariance_gp_distr + self.distribution.covariance_matrix).log_prob(self.distribution.loc))
+
+            self.inverse_data_covar_t1X = torch.linalg.solve(self.K_X_X, self.t_1X) #Independant of t!..
+
+            self.mean_1 = self.mean_constant + (self.t_1X.T @ self.inverse_data_covar_y)
+            self.var_1 = self.R_11 - self.t_1X.T @ self.inverse_data_covar_t1X
 
     def create_model(self):
         covar_module = ScaleKernel(
@@ -1990,352 +1937,15 @@ class ProbES(AbstractOptimizer):
             train_x = self.train_x
             train_y = self.train_y
         train_y_init_standardized = standardize(train_y)
-        train_y_standardized_mean = train_y.mean()
-        train_y_standardized_std = train_y.std()
+        # train_y_standardized_mean = train_y.mean()
+        # train_y_standardized_std = train_y.std()
 
         self.model = SingleTaskGP(train_x, train_y_init_standardized, covar_module=covar_module).to(train_x) ## Can input subset of the dataset
 
-    # The rbf kernel is not a Gaussian kernel (a multiplicative constant is missing)
-    def _quadrature(self, mean, covariance):
-        ### quadrature function for optimization and gradient differentiation
-        covariance_gp_distr = self.gp_covariance + covariance
-        constant = (self.outputscale * torch.sqrt(torch.linalg.det(2*torch.pi*self.gp_covariance))).detach().clone()
-        
-        t_1X = constant * torch.exp(MultivariateNormal(loc = mean, covariance_matrix = covariance_gp_distr).log_prob(self.train_X))
-        R_11 = constant * torch.exp(MultivariateNormal(loc = mean, covariance_matrix = covariance_gp_distr + covariance).log_prob(mean))
-
-        inverse_data_covar_t1X = torch.linalg.solve(self.K_X_X, t_1X) #Independant of t!..
-
-        # mean_1 = self.train_y_standardized_std*(self.mean_constant + (t_1X.T @ self.inverse_data_covar_y)) + self.train_y_standardized_mean
-        # var_1 = (self.train_y_standardized_std**2)*(R_11 - t_1X.T @ inverse_data_covar_t1X)
-
-        mean_1 = self.mean_constant + (t_1X.T @ self.inverse_data_covar_y)
-        var_1 = R_11 - t_1X.T @ inverse_data_covar_t1X
-        
-        return mean_1, var_1
-
-    # The rbf kernel is not a Gaussian kernel (a multiplicative constant is missing)
     def loss_ei(self):
         mu, Epsilon = self.manifold.take_submanifold_value(self.param, 0), self.manifold.take_submanifold_value(self.param, 1)
         mean, covar = self.compute_target_distribution_zero_order(mu, Epsilon)
         return -log_EI(mean, torch.sqrt(covar), self.best_f)
-
-    def gradient_direction(self, sample = False):
-        ## Check output scale
-        self.gradient_m_mu = self.Tau_mu1.T @ self.inverse_data_covar_y
-        self.gradient_m_epsilon = self.Tau_epsilon1.T @ self.inverse_data_covar_y
-
-        ### Sample a gradient or take the expected gradient direction
-        if sample:
-            print("Sampling gradient not yet implemented properly")
-            self.inverse_data_covar_t = self.inverse_data_covar_t1X
-            self.R_prime = -0.5 * self.theta * torch.linalg.inv(self.covariance_gp_distr + self.distribution.covariance_matrix) * torch.exp(MultivariateNormal(loc = self.distribution.loc, covariance_matrix = self.covariance_gp_distr).log_prob(self.distribution.loc))
-            self.gradient_v_mu = self.Tau_mu1.T @ self.inverse_data_covar_t
-            self.gradient_v_epsilon = self.R_prime - self.Tau_epsilon.T @ self.inverse_data_covar_t
-            s = torch.normal(0, 1, size=(1,), device = self.train_X.device, dtype=self.train_X.dtype)
-            self.d_mu = self.theta*(self.gradient_m_mu + s*self.gradient_v_mu)
-            self.d_epsilon = self.theta*(self.gradient_m_epsilon + s*self.gradient_v_epsilon)
-        else:
-            self.d_mu = self.gradient_m_mu
-            self.d_epsilon = self.gradient_m_epsilon
-    
-        ## Precompute quantities for method of lines
-        self.R11_prime_epsilon = -0.5*self.R_11*self.Pi_inv_1_1
-        self.R1_prime_1_prime_mu_mu = self.Pi_inv_1_1 * self.R_11
-        self.R1_prime_1_prime_epsilon_epsilon = (self.fourth_order_Pi1_Pi1 + torch.einsum("ijkl->ikjl" ,self.fourth_order_Pi1_Pi1) + torch.einsum("ijkl->iljk" ,self.fourth_order_Pi1_Pi1)) * self.R_11
-
-        self.mean_prime_1 = (self.d_mu * (self.Tau_mu1.T @ self.inverse_data_covar_y)).sum() + (self.d_epsilon * (self.Tau_epsilon1.T @ self.inverse_data_covar_y)).sum()
-        self.cov_1_1_prime = (self.d_epsilon*self.R11_prime_epsilon).sum() - (self.d_mu * (self.Tau_mu1.T @ self.inverse_data_covar_t1X)).sum() - (self.d_epsilon * (self.Tau_epsilon1.T @ self.inverse_data_covar_t1X)).sum()
-        self.var_prime_1 = self.d_mu @ self.R1_prime_1_prime_mu_mu @ self.d_mu \
-                    + 0.25*((torch.unsqueeze(torch.unsqueeze(self.d_epsilon, -1), -1)) * self.R1_prime_1_prime_epsilon_epsilon * (torch.unsqueeze(torch.unsqueeze(self.d_epsilon, 0), 0).repeat(self.d,self.d,1,1))).sum()
-
-    def wolfe_criterion(self, t):
-        target_point = self.manifold.expmap(self.manifold_point, t*self.d_manifold)
-        target_point[1] = max(target_point[1], 1e-14)
-        mean_joint, covar_joint = self.compute_joint_distribution(self.manifold.take_submanifold_value(target_point, 0), self.manifold.take_submanifold_value(target_point, 1))
-        mean_joint = -mean_joint
-        return -float(self.compute_wolfe(mean_joint, covar_joint, t))
-    
-    def armijo_criterion(self, t):
-        target_point = self.manifold.expmap(self.manifold_point, t*self.d_manifold)
-        mean_joint, covar_joint = self.compute_joint_distribution_first_order(self.manifold.take_submanifold_value(target_point, 0), self.manifold.take_submanifold_value(target_point, 1))
-        mean_joint = -mean_joint
-        return -float(self.compute_armijo(mean_joint, covar_joint, t).detach().clone().cpu())
-    
-    def compute_armijo(self, mean_joint, covar_joint, t):
-        A_transform = torch.tensor([[1, self.c1*t, -1]], dtype=self.train_X.dtype, device=self.train_X.device)
-        if not isPD(covar_joint):
-            return torch.tensor(0.)
-        
-        mean_armijo = (A_transform @ mean_joint).squeeze(0)
-        sigma_armijo = torch.sqrt(A_transform @ covar_joint @ A_transform.T).squeeze(0).squeeze(0)
-        # Very small variances can cause numerical problems. Safeguard against
-        # this with a deterministic evaluation of the Wolfe conditions.
-        
-        # Compute correlation factor and integration bounds for adjusted p_Wolfe
-        # and return the result of the bivariate normal integral.
-        
-        return Phi(mean_armijo/sigma_armijo)
-
-    def compute_wolfe(self, mean_joint, covar_joint, t):
-        A_transform = torch.tensor([[1, self.c1*t, -1, 0], [0, -self.c2, 0, 1]], dtype=self.train_X.dtype, device=self.train_X.device)
-        if not isPD(covar_joint):
-            return torch.tensor(0.)
-        
-        mean_wolfe = A_transform @ mean_joint
-        covar_wolfe = A_transform @ covar_joint @ A_transform.T
-        # Very small variances can cause numerical problems. Safeguard against
-        # this with a deterministic evaluation of the Wolfe conditions.
-        
-        # Compute correlation factor and integration bounds for adjusted p_Wolfe
-        # and return the result of the bivariate normal integral.
-        rho = (covar_wolfe[0,1]/torch.sqrt(covar_wolfe[0,0]*covar_wolfe[1,1])).detach().cpu()
-        al = -(mean_wolfe[0]/torch.sqrt(covar_wolfe[0,0])).detach().cpu()
-        bl = -(mean_wolfe[1]/torch.sqrt(covar_wolfe[1,1])).detach().cpu()
-        
-        return bounded_bivariate_normal_integral(rho, al, torch.inf, bl, torch.inf)
-    
-    def compute_p_wolfe(self, t):
-        result = self.compute_joint_distribution(t)
-        if not result:
-            return 0
-        mean_joint, covar_joint = result
-        mean_joint = -mean_joint ## wolfe is for minimization, we maximize by default
-        return self.compute_wolfe(mean_joint, covar_joint, t)
-        
-    def compute_p_armijo(self, t):
-        result = self.compute_joint_distribution_first_order(t)
-        if not result:
-            return 0
-        mean_joint, covar_joint = result
-        mean_joint = -mean_joint ## wolfe is for minimization, we maximize by default
-        return self.compute_armijo(mean_joint, covar_joint, t)
-        
-    def compute_joint_distribution_zero_order(self, mu2, Epsilon2):
-        """Computes the probability that step size ``t`` satisfies the adjusted
-        Wolfe conditions under the current GP model."""
-        # For now assume mu2 and epsilon2 are of shape (b1xb2x....xbk)xd and (b1xb2x....xbk)xdxd (assume no batching)
-        # Compute mu and PI
-        mu1 = self.distribution.loc
-        Epsilon1 = self.distribution.covariance_matrix
-        self.covariance_gp_distr = self.gp_covariance + self.distribution.covariance_matrix
-        self.constant = (self.model.covar_module.outputscale * torch.sqrt(torch.linalg.det(2*torch.pi*self.gp_covariance))).detach().clone()
-        self.t_1X = self.constant * torch.exp(MultivariateNormal(loc = self.distribution.loc, covariance_matrix = self.covariance_gp_distr).log_prob(self.train_X))
-        self.R_11 = self.constant * torch.exp(MultivariateNormal(loc = self.distribution.loc, covariance_matrix = self.covariance_gp_distr + self.distribution.covariance_matrix).log_prob(self.distribution.loc))
-        self.inverse_data_covar_t1X = torch.linalg.solve(self.K_X_X, self.t_1X) #Independant of t!..
-        self.mean_1 = self.mean_constant + (self.t_1X.T @ self.inverse_data_covar_y)
-        self.var_1 = self.R_11 - self.t_1X.T @ self.inverse_data_covar_t1X
-        if not isPD(Epsilon2):
-            return None
-        
-        Pi_1_2 = self.gp_covariance + Epsilon1 + Epsilon2
-        Pi_2_2 = self.gp_covariance + 2*Epsilon2
-
-
-        R22 = self.constant * torch.exp(MultivariateNormal(loc = mu2, covariance_matrix = Pi_2_2).log_prob(mu2))
-        R12 = self.constant * torch.exp(MultivariateNormal(loc = mu1, covariance_matrix = Pi_1_2).log_prob(mu2))
-
-        t2X = self.constant * torch.exp(MultivariateNormal(loc = mu2, covariance_matrix=Epsilon2 + self.gp_covariance).log_prob(self.train_X))
-
-        # Compute Tau mu 2
-        diff_data2 = (self.train_X - mu2) # Nxd
-        normal_data_unsqueezed2 = torch.unsqueeze(t2X, -1).repeat(1,self.d)
-
-        # Compute Tau Epsilon2
-        normal_data_unsqueezed2 = torch.unsqueeze(normal_data_unsqueezed2, -1).repeat(1,1,self.d)
-        outer_prod2 = torch.bmm(torch.unsqueeze(diff_data2, -1), torch.unsqueeze(diff_data2, 1))
-        outer_prod2 = (outer_prod2 - Epsilon2 - self.gp_covariance) * normal_data_unsqueezed2
-        
-        #Compute posterior term
-        inverse_data_covar_t2X = torch.linalg.solve(self.K_X_X, t2X) 
-
-        # Compute covariance structure
-        ## Compute mean elements
-        mean_2 = self.model.mean_module.constant + t2X @ self.inverse_data_covar_y
-
-        ## Compute Var elements
-        var_2 = R22 - t2X @ inverse_data_covar_t2X
-        cov_1_2 = R12 - self.t_1X @ inverse_data_covar_t2X
-        mean_joint = torch.cat((self.mean_1.unsqueeze(0), mean_2.unsqueeze(0)))
-        covar_joint = torch.cat((self.var_1.unsqueeze(0), cov_1_2.unsqueeze(0), cov_1_2.unsqueeze(0), var_2.unsqueeze(0))).reshape(2,2)
-        return mean_joint, covar_joint
-    
-    def compute_target_distribution_zero_order(self, mu, Epsilon):
-        """Computes the probability that step size ``t`` satisfies the adjusted
-        Wolfe conditions under the current GP model."""
-        # For now assume mu2 and epsilon2 are of shape (b1xb2x....xbk)xd and (b1xb2x....xbk)xdxd (assume no batching)
-        # Compute mu and PI
-        if not isPD(Epsilon):
-            return None
-        
-        Pi_2_2 = self.gp_covariance + 2*Epsilon
-
-
-        R22 = self.constant * torch.exp(MultivariateNormal(loc = mu, covariance_matrix = Pi_2_2).log_prob(mu))
-        t2X = self.constant * torch.exp(MultivariateNormal(loc = mu, covariance_matrix=Epsilon + self.gp_covariance).log_prob(self.train_X))
-
-        # Compute Tau mu 2
-        diff_data2 = (self.train_X - mu) # Nxd
-        normal_data_unsqueezed2 = torch.unsqueeze(t2X, -1).repeat(1,self.d)
-
-        # Compute Tau Epsilon2
-        normal_data_unsqueezed2 = torch.unsqueeze(normal_data_unsqueezed2, -1).repeat(1,1,self.d)
-        outer_prod2 = torch.bmm(torch.unsqueeze(diff_data2, -1), torch.unsqueeze(diff_data2, 1))
-        outer_prod2 = (outer_prod2 - Epsilon - self.gp_covariance) * normal_data_unsqueezed2
-        
-        #Compute posterior term
-        inverse_data_covar_t2X = torch.linalg.solve(self.K_X_X, t2X) 
-
-        # Compute covariance structure
-        ## Compute mean elements
-        mean_2 = self.mean_constant + t2X @ self.inverse_data_covar_y
-
-        ## Compute Var elements
-        var_2 = R22 - t2X @ inverse_data_covar_t2X
-        return mean_2, var_2
-    
-    def compute_joint_distribution_first_order(self, mu2, Epsilon2):
-        """Computes joint distribution (f(0), f'(0), f(t))"""
-        # Already changed dCov and Covd here
-        """Computes the probability that step size ``t`` satisfies the adjusted
-        Wolfe conditions under the current GP model."""
-        mu1, Epsilon1 = self.distribution.loc, self.distribution.covariance_matrix
-
-        if not isPD(Epsilon2):
-            Epsilon2 = nearestPD(Epsilon2)
-            return None
-        
-        Pi_1_2 = self.gp_covariance + Epsilon1 + Epsilon2
-        Pi_2_2 = self.gp_covariance + 2*Epsilon2
-        Pi_inv_1_2 = torch.linalg.inv(Pi_1_2)
-        nu = Pi_inv_1_2 @ (mu1 - mu2)
-        
-        R22 = self.constant * torch.exp(MultivariateNormal(loc = mu2, covariance_matrix = Pi_2_2).log_prob(mu2))
-        R12 = self.constant * torch.exp(MultivariateNormal(loc = mu1, covariance_matrix = Pi_1_2).log_prob(mu2))
-        R12_prime_mu = nu*R12
-        R12_prime_epsilon = -0.5*(torch.linalg.inv(Pi_1_2) - nu @ nu.T)*R12
-        t2X = self.constant * torch.exp(MultivariateNormal(loc = mu2, covariance_matrix=Epsilon2 + self.gp_covariance).log_prob(self.train_X))
-
-        # Compute Tau mu 2
-        diff_data2 = (self.train_X - mu2) # Nxd
-        normal_data_unsqueezed2 = torch.unsqueeze(t2X, -1).repeat(1,self.d)
-
-        # Compute Tau Epsilon2
-        normal_data_unsqueezed2 = torch.unsqueeze(normal_data_unsqueezed2, -1).repeat(1,1,self.d)
-        outer_prod2 = torch.bmm(torch.unsqueeze(diff_data2, -1), torch.unsqueeze(diff_data2, 1))
-        outer_prod2 = (outer_prod2 - Epsilon2 - self.gp_covariance) * normal_data_unsqueezed2
-        
-        #Compute posterior term
-        inverse_data_covar_t2X = torch.linalg.solve(self.K_X_X, t2X) 
-
-        # Compute covariance structure
-        ## Compute mean elements
-        mean_2 = self.model.mean_module.constant + t2X @ self.inverse_data_covar_y
-
-        ## Compute Var elements
-        var_2 = R22 - t2X @ inverse_data_covar_t2X
-        cov_1_2 = R12 - self.t_1X @ inverse_data_covar_t2X
-        
-        product_R12_prime_mu, product_R12_prime_epsilon = (self.d_mu*R12_prime_mu).sum(), (self.d_epsilon*R12_prime_epsilon).sum()
-        #R21_prime_mu = - R12_prime_mu and R21_prime_epsilon = R12_prime_epsilon
-        cov_2_1_prime = -product_R12_prime_mu + product_R12_prime_epsilon - (self.d_mu * (self.Tau_mu1.T @ inverse_data_covar_t2X)).sum() - (self.d_epsilon * (self.Tau_epsilon1.T @ inverse_data_covar_t2X)).sum()
-        
-        
-        mean_joint = torch.tensor([self.mean_1, self.mean_prime_1, mean_2], dtype=self.train_X.dtype, device=self.train_X.device)
-        covar_joint = torch.tensor([[self.var_1, self.cov_1_1_prime, cov_1_2],
-                                    [self.cov_1_1_prime, self.var_prime_1, cov_2_1_prime],
-                                    [cov_1_2, cov_2_1_prime, var_2]], dtype=self.train_X.dtype, device=self.train_X.device)
-        return mean_joint.detach(), covar_joint.detach()
-
-    def compute_joint_distribution(self, mu2, Epsilon2):
-        # Already changed dCov and Covd here
-        """Computes the probability that step size ``t`` satisfies the adjusted
-        Wolfe conditions under the current GP model."""
-        # Compute mu and PI
-        mu1, Epsilon1 = self.distribution.loc, self.distribution.covariance_matrix
-        
-        if not isPD(Epsilon2):
-            Epsilon2 = nearestPD(Epsilon2)
-            return None
-        
-        Pi_1_2 = self.gp_covariance + Epsilon1 + Epsilon2
-        Pi_2_2 = self.gp_covariance + 2*Epsilon2
-        Pi_inv_1_2 = torch.linalg.inv(Pi_1_2)
-        Pi_inv_2_2 = torch.linalg.inv(Pi_2_2)
-        
-        nu = Pi_inv_1_2 @ (mu1 - mu2)
-        
-        third_order_Pi_nu = torch.einsum("i,jk->ijk", nu, Pi_inv_1_2)
-        third_order_nu_nu_nu = torch.einsum("i,j,k->ijk", nu, nu, nu)
-
-        fourth_order_Pi_nu_nu = torch.einsum("ij,k,l->ijkl", Pi_inv_1_2, nu, nu)
-        fourth_order_nu_nu_nu_nu = torch.einsum("i,j,k,l->ijkl", nu, nu, nu, nu)
-        fourth_order_Pi_Pi = torch.einsum("ij,kl->ijkl", Pi_inv_1_2, Pi_inv_1_2)
-        fourth_order_Pi2_Pi2 = torch.einsum("ij,kl->ijkl", Pi_inv_2_2, Pi_inv_2_2)
-        
-        R22 = self.constant * torch.exp(MultivariateNormal(loc = mu2, covariance_matrix = Pi_2_2).log_prob(mu2))
-        R12 = self.constant * torch.exp(MultivariateNormal(loc = mu1, covariance_matrix = Pi_1_2).log_prob(mu2))
-        R12_prime_mu = nu*R12
-        R12_prime_epsilon = -0.5*(torch.linalg.inv(Pi_1_2) - nu @ nu.T)*R12
-        R1_prime_2_prime_mu_mu = -2*R12_prime_epsilon
-        R1_prime_2_prime_mu_epsilon = 0.5*R12*(third_order_Pi_nu + torch.einsum("ijk->jki" ,third_order_Pi_nu) + torch.einsum("ijk->kij" ,third_order_Pi_nu) - third_order_nu_nu_nu)
-        R1_prime_2_prime_epsilon_epsilon = 0.25*R12*(fourth_order_nu_nu_nu_nu
-                                                    - fourth_order_Pi_nu_nu - torch.einsum("ijkl->ikjl" ,fourth_order_Pi_nu_nu) - torch.einsum("ijkl->iljk" ,fourth_order_Pi_nu_nu) - torch.einsum("ijkl->jkil" ,fourth_order_Pi_nu_nu) - torch.einsum("ijkl->jlik" ,fourth_order_Pi_nu_nu) - torch.einsum("ijkl->klij" ,fourth_order_Pi_nu_nu)
-                                                    + fourth_order_Pi_Pi + torch.einsum("ijkl->ikjl" ,fourth_order_Pi_Pi) + torch.einsum("ijkl->iljk" ,fourth_order_Pi_Pi))
-
-        R22_prime_epsilon = -0.5*R22*Pi_inv_2_2
-        R2_prime_2_prime_mu_mu = Pi_inv_2_2 * R22
-        R2_prime_2_prime_epsilon_epsilon = (fourth_order_Pi2_Pi2 + torch.einsum("ijkl->ikjl" ,fourth_order_Pi2_Pi2) + torch.einsum("ijkl->iljk" ,fourth_order_Pi2_Pi2)) * R22
-
-        t2X = self.constant * torch.exp(MultivariateNormal(loc = mu2, covariance_matrix=Epsilon2 + self.gp_covariance).log_prob(self.train_X))
-
-        # Compute Tau mu 2
-        diff_data2 = (self.train_X - mu2) # Nxd
-        normal_data_unsqueezed2 = torch.unsqueeze(t2X, -1).repeat(1,self.d)
-        Tau2_mu = torch.linalg.solve(Epsilon2 + self.gp_covariance, diff_data2 * normal_data_unsqueezed2, left=False)
-
-        # Compute Tau Epsilon2
-        normal_data_unsqueezed2 = torch.unsqueeze(normal_data_unsqueezed2, -1).repeat(1,1,self.d)
-        outer_prod2 = torch.bmm(torch.unsqueeze(diff_data2, -1), torch.unsqueeze(diff_data2, 1))
-        outer_prod2 = (outer_prod2 - Epsilon2 - self.gp_covariance) * normal_data_unsqueezed2
-        
-        Tau_epsilon2 = 0.5*torch.linalg.solve(Epsilon2 + self.gp_covariance, torch.linalg.solve(Epsilon2 + self.gp_covariance, outer_prod2, left=False))
-        #Compute posterior term
-        inverse_data_covar_t2X = torch.linalg.solve(self.K_X_X, t2X) 
-
-        # Compute covariance structure
-        ## Compute mean elements
-        mean_2 = self.model.mean_module.constant + t2X @ self.inverse_data_covar_y
-        mean_prime_2 = (self.d_mu * (Tau2_mu.T @ self.inverse_data_covar_y)).sum() + (self.d_epsilon * (Tau_epsilon2.T @ self.inverse_data_covar_y)).sum()
-
-        ## Compute Var elements
-        var_2 = R22 - t2X @ inverse_data_covar_t2X
-        cov_1_2 = R12 - self.t_1X @ inverse_data_covar_t2X
-        
-        # Compute Var 
-        cov_2_2_prime = (self.d_epsilon*R22_prime_epsilon).sum() - (self.d_mu * (Tau2_mu.T @ inverse_data_covar_t2X)).sum() - (self.d_epsilon * (Tau_epsilon2.T @ inverse_data_covar_t2X)).sum()
-
-        product_R12_prime_mu, product_R12_prime_epsilon = (self.d_mu*R12_prime_mu).sum(), (self.d_epsilon*R12_prime_epsilon).sum()
-        cov_1_2_prime = product_R12_prime_mu + product_R12_prime_epsilon - (self.d_mu * (Tau2_mu.T @ self.inverse_data_covar_t1X)).sum() - (self.d_epsilon * (Tau_epsilon2.T @ self.inverse_data_covar_t1X)).sum()
-        #R21_prime_mu = - R12_prime_mu and R21_prime_epsilon = R12_prime_epsilon
-        cov_2_1_prime = -product_R12_prime_mu + product_R12_prime_epsilon - (self.d_mu * (self.Tau_mu1.T @ inverse_data_covar_t2X)).sum() - (self.d_epsilon * (self.Tau_epsilon1.T @ inverse_data_covar_t2X)).sum()
-        
-        ## Compute fourth term
-        cov_1_prime_2_prime = self.d_mu @ R1_prime_2_prime_mu_mu @ self.d_mu \
-                            + 2*((self.d_mu @ R1_prime_2_prime_mu_epsilon) * self.d_epsilon).sum() \
-                            + ((torch.unsqueeze(torch.unsqueeze(self.d_epsilon, -1), -1)) * R1_prime_2_prime_epsilon_epsilon * (torch.unsqueeze(torch.unsqueeze(self.d_epsilon, 0), 0).repeat(self.d,self.d,1,1))).sum() \
-                            - self.d_mu @ self.Tau_mu1.T @ self.inverse_data @ Tau2_mu @ self.d_mu - (self.d_epsilon*(self.Tau_epsilon1.T @ self.inverse_data @ Tau2_mu @ self.d_mu)).sum() - (self.d_epsilon*(Tau_epsilon2.T @ self.inverse_data @ self.Tau_mu1 @ self.d_mu)).sum() \
-                            - ((torch.unsqueeze(torch.unsqueeze(self.d_epsilon, -1), -1)) * torch.einsum("ijk, klm->ijlm", self.Tau_epsilon1.T, torch.einsum("ij, jkl->ikl", self.inverse_data, Tau_epsilon2)) * (torch.unsqueeze(torch.unsqueeze(self.d_epsilon, 0), 0).repeat(self.d,self.d,1,1))).sum()
-        
-        var_prime_2 = self.d_mu @ R2_prime_2_prime_mu_mu @ self.d_mu \
-                    + 0.25*((torch.unsqueeze(torch.unsqueeze(self.d_epsilon, -1), -1)) * R2_prime_2_prime_epsilon_epsilon * (torch.unsqueeze(torch.unsqueeze(self.d_epsilon, 0), 0).repeat(self.d,self.d,1,1))).sum()
-
-        mean_joint = torch.tensor([self.mean_1, self.mean_prime_1, mean_2,  mean_prime_2], dtype=self.train_X.dtype, device=self.train_X.device)
-        covar_joint = torch.tensor([[self.var_1, self.cov_1_1_prime, cov_1_2, cov_1_2_prime],
-                                    [self.cov_1_1_prime, self.var_prime_1, cov_2_1_prime, cov_1_prime_2_prime],
-                                    [cov_1_2, cov_2_1_prime, var_2, cov_2_2_prime],
-                                    [cov_1_2_prime, cov_1_prime_2_prime, cov_2_2_prime, var_prime_2]], dtype=self.train_X.dtype, device=self.train_X.device)
-        return mean_joint.detach(), covar_joint.detach()
 
     def plot_synthesis(self, save_path=".", iteration=0):
         batch_samples = self.train_x[(-self.batch_size):]
@@ -2343,60 +1953,28 @@ class ProbES(AbstractOptimizer):
         avg_distance = matrix_distances[torch.triu(torch.ones(matrix_distances.shape), diagonal=1) == 1].mean()
         avg_from_center = torch.linalg.norm((self.list_mu[-1] - self.params_history_list[-1]), dim=1).mean()
         covar_volume = torch.linalg.det(self.distribution.covariance_matrix)**(1/self.d)
+        dict_plot = {"mean": self.distribution.loc,
+                     "objective": np.max(torch.vstack(self.values_history).cpu().numpy()),
+                     "objective_mean": np.max(self.objective(torch.vstack(self.list_mu)).cpu().numpy()),
+                     "current objective_mean": self.objective(self.distribution.loc).cpu().numpy(),
+                     "GP lengthscales norm":torch.linalg.norm(self.model.covar_module.base_kernel.lengthscale[0]),
+                     "Avg distance samples": avg_distance,
+                     "Avg distance samples from center": avg_from_center,
+                     "Ellipse volume": covar_volume,
+                     "lr": self.t_update}
+        
         if self.objective.dim == 1:
             image = plot_synthesis_quad(self, iteration=iteration, save_path=self.plot_path, standardize=True)
             image = wandb.Image(image)
-            return {"Image synthesis info": image,
-                    "mean": self.distribution.loc,
-                    "std": torch.sqrt(self.distribution.covariance_matrix),
-                    "objective": np.max(torch.vstack(self.values_history).cpu().numpy()),
-                    "objective_mean": np.max(self.objective(torch.vstack(self.list_mu)).cpu().numpy()),
-                    "current objective_mean": self.objective(self.distribution.loc).cpu().numpy(),
-                    "GP lengthscales norm":torch.linalg.norm(self.model.covar_module.base_kernel.lengthscale[0]),
-                    "Avg distance samples": avg_distance,
-                    "Avg distance samples from center": avg_from_center,
-                    "Ellipse volume": covar_volume}
+            dict_plot["Image synthesis info"] = image
+            dict_plot["std"] = torch.sqrt(self.distribution.covariance_matrix)
             
         else:
             if len(self.list_mu) > 1:
-                return {"mean": self.distribution.loc,
-                        "difference mean": torch.linalg.norm(self.list_mu[-1] - self.list_mu[-2]),
-                        "difference covar": torch.linalg.norm(self.list_covar[-1] - self.list_covar[-2]),
-                        "objective": np.max(torch.vstack(self.values_history).cpu().numpy()),
-                        "objective_mean": np.max(self.objective(torch.vstack(self.list_mu)).cpu().numpy()),
-                        "current objective_mean": self.objective(self.distribution.loc).cpu().numpy(),
-                        "GP lengthscales norm":torch.linalg.norm(self.model.covar_module.base_kernel.lengthscale[0]),
-                        "Avg distance samples": avg_distance,
-                        "Avg distance samples from center": avg_from_center,
-                        "Ellipse volume": covar_volume}
+                dict_plot["difference mean"] = torch.linalg.norm(self.list_mu[-1] - self.list_mu[-2])
+                dict_plot["difference covar"] = torch.linalg.norm(self.list_covar[-1] - self.list_covar[-2])
             else:
-                return {"mean": self.list_mu[-1],
-                        "difference mean": 0.,
-                        "difference covar": 0.,
-                        "objective": np.max(torch.vstack(self.values_history).cpu().numpy()),
-                        "objective_mean": np.max(self.objective(torch.vstack(self.list_mu)).cpu().numpy()),
-                        "current objective_mean": self.objective(self.distribution.loc).cpu().numpy(),
-                        "GP lengthscales norm":torch.linalg.norm(self.model.covar_module.base_kernel.lengthscale[0]),
-                        "Avg distance samples": avg_distance,
-                        "Avg distance samples from center": avg_from_center,
-                        "Ellipse volume": covar_volume}
-    
-#### Add scipy zero order optimiser and multi restart
-class multistart_scipy(AbstractOptimizer):
-    def __init__(
-        self,
-        n_init: int = 5,
-        objective: Callable[[torch.Tensor], torch.Tensor] = None,
-        batch_size: int = 1,
-        optimizer_config: Dict = None,
-        plot_path=None
-    ):
-        
-        super(ProbES, self).__init__(n_init, objective)
-        self.batch_size=batch_size
-        self.plot_path=plot_path
-
-
-    def step(self):
-        return super().step()
+                dict_plot["difference mean"] = 0.
+                dict_plot["difference covar"] = 0.
+        return dict_plot
 
