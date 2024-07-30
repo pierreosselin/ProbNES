@@ -1774,20 +1774,6 @@ class ProbES(AbstractOptimizer):
         self.manifold_point = geoopt.ManifoldTensor(torch.cat((mu, covar.flatten())), manifold=self.manifold)
         self.manifold_point.requires_grad = True
         self.param = geoopt.ManifoldParameter(self.manifold_point)
-
-        ### Make model
-        self.create_model()
-
-        # Optionally optimize hyperparameters.
-        mll = ExactMarginalLogLikelihood(
-            self.model.likelihood, self.model
-        )
-        fit_gpytorch_mll(mll)
-
-        # Optimize acquistion function and get new observation.
-        self.acquisition_function = QuadratureExploration(
-            model=self.model,
-            distribution=self.distribution)
         
         # self.optimize_acqf = initialize_acqf_optimizer(type="random", candidate_vr=optimizer_config["candidates_vr"], batch_size=batch_size)
         self.optimize_acqf = initialize_acqf_optimizer(
@@ -1800,12 +1786,17 @@ class ProbES(AbstractOptimizer):
                                                 candidates_vr=optimizer_config["candidates_vr"],
                                                 maxiter=200)
         
-        # Quadrature model
+
+        ### Make model and quad, only for plots in iteration 0
+        self.create_model()
+
+        # Optionally optimize hyperparameters.
+        mll = ExactMarginalLogLikelihood(
+            self.model.likelihood, self.model
+        )
+        fit_gpytorch_mll(mll)
         self.quad_model = Quadrature(self.model)
         self.linesearch = load_linesearch(self.policy, quad_model = self.quad_model, dict_parameter=optimizer_config)
-    
-    def step(self):
-        """Make a gradient step toward"""
 
         ### Instead do gradient in reparameterization and same for natural gradient
         ## Compute direction (sampled, expected , mdp ect...).
@@ -1835,6 +1826,9 @@ class ProbES(AbstractOptimizer):
         if self.policy != "constant":
             self.quad_model.precompute_linesearch(self.distribution.loc, self.distribution.covariance_matrix, [self.d_mu, self.d_epsilon])
         self.t_update = self.linesearch.compute_t()
+    
+    def step(self):
+        """Make a gradient step toward"""
         
         # Taking gradient update:
         ## TODO make it a function
@@ -1878,6 +1872,11 @@ class ProbES(AbstractOptimizer):
         self.manifold_point.requires_grad = True
         self.param = geoopt.ManifoldParameter(self.manifold_point)
 
+        self.params_history_list.append(new_x.clone())
+        # self.values_history.append(new_y.clone())
+        self.values_history.append(self.objective(self.distribution.loc).repeat(self.batch_size))
+        self.iteration += 1
+
         ### Make model
         self.create_model()
 
@@ -1891,33 +1890,34 @@ class ProbES(AbstractOptimizer):
         self.quad_model = Quadrature(self.model)
         self.linesearch.quad_model = self.quad_model
 
-        self.params_history_list.append(new_x.clone())
-        # self.values_history.append(new_y.clone())
-        self.values_history.append(self.objective(self.distribution.loc).repeat(self.batch_size))
-        self.iteration += 1
-
-    def extract_model_quantities(self):
-        # Extract model quantities
-        # TODO Optimise code computation of model quantities, redundancy in computations, same with wolfe
-        self.train_X = self.model.train_inputs[0]
-        self.noise_tensor = self.model.likelihood.noise.detach().clone() * torch.eye(self.train_X.shape[0], dtype=self.train_X.dtype, device=self.train_X.device)
-        self.gp_covariance = ((torch.diag(self.model.covar_module.base_kernel.lengthscale[0].detach().clone()))**2).detach().clone()
-        self.outputscale = self.model.covar_module.outputscale.detach().clone()
-        self.K_X_X = (self.model.covar_module(self.train_X) + self.noise_tensor).evaluate().detach().clone()
-        self.mean_constant = self.model.mean_module.constant.detach().clone()
-        self.inverse_data_covar_y = torch.linalg.solve(self.K_X_X, self.model.train_targets - self.mean_constant)
-        self.inverse_data = torch.linalg.inv(self.K_X_X)
+        ### Instead do gradient in reparameterization and same for natural gradient
+        ## Compute direction (sampled, expected , mdp ect...).
+        m, _ = self.quad_model.quadrature(self.manifold.take_submanifold_value(self.manifold_point, 0), self.manifold.take_submanifold_value(self.manifold_point, 1))
+        m.backward()
+        self.d_manifold = self.manifold_point.grad.detach().clone()
+        self.manifold_point.grad.zero_()
+        self.d_mu, self.d_epsilon = self.manifold.take_submanifold_value(self.d_manifold, 0), self.manifold.take_submanifold_value(self.d_manifold, 1)
+        
+        # Taking natural gradient:
+        ## TODO make it a function
+        if self.type == "SNES":
+            # Here it is assumed both matrix for gp kernel and input distribution are diagonal
+            self.d_mu = torch.matmul(self.distribution.covariance_matrix, self.d_mu)
+            self.d_epsilon = torch.matmul(torch.matmul(self.distribution.covariance_matrix, torch.diag(torch.diag(self.d_epsilon))), self.distribution.covariance_matrix)
+        elif self.type == "XNES":
+            A = torch.linalg.cholesky(self.distribution.covariance_matrix)
+            self.d_mu = torch.matmul(self.distribution.covariance_matrix, self.d_mu)
+            self.d_epsilon = torch.matmul(torch.matmul(A.T, self.d_epsilon), A)
+        elif self.type == "CMAES":
+            self.d_mu = torch.matmul(self.distribution.covariance_matrix, self.d_mu)
+            self.d_epsilon = torch.matmul(torch.matmul(self.distribution.covariance_matrix, self.d_epsilon), self.distribution.covariance_matrix)
+        else:
+            raise NotImplementedError
+        
+        ## Line search mehod, decide how far the step take
         if self.policy != "constant":
-            self.covariance_gp_distr = self.gp_covariance + self.distribution.covariance_matrix
-            self.constant = (self.outputscale * torch.sqrt(torch.linalg.det(2*torch.pi*self.gp_covariance))).detach().clone()
-            
-            self.t_1X = self.constant * torch.exp(MultivariateNormal(loc = self.distribution.loc, covariance_matrix = self.covariance_gp_distr).log_prob(self.train_X))
-            self.R_11 = self.constant * torch.exp(MultivariateNormal(loc = self.distribution.loc, covariance_matrix = self.covariance_gp_distr + self.distribution.covariance_matrix).log_prob(self.distribution.loc))
-
-            self.inverse_data_covar_t1X = torch.linalg.solve(self.K_X_X, self.t_1X) #Independant of t!..
-
-            self.mean_1 = self.mean_constant + (self.t_1X.T @ self.inverse_data_covar_y)
-            self.var_1 = self.R_11 - self.t_1X.T @ self.inverse_data_covar_t1X
+            self.quad_model.precompute_linesearch(self.distribution.loc, self.distribution.covariance_matrix, [self.d_mu, self.d_epsilon])
+        self.t_update = self.linesearch.compute_t()
 
     def create_model(self):
         covar_module = ScaleKernel(

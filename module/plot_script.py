@@ -73,6 +73,52 @@ def plot_distribution_1D(ax, distribution):
     y_lim = ax.get_ylim()
     ax.plot(x, (y_lim[1] - y_lim[0])*stats.norm.pdf(x, distribution.loc.cpu().detach().numpy(), distribution.covariance_matrix.cpu().detach().numpy()).flatten(), "k")
     
+def plot_quad_linesearch(ax, optimiser, tmin = 0, tmax = 10, budget = 50):
+    t_range = np.linspace(tmin, tmax, budget)
+    mean_q_list, std_q_list = [], []
+    for t in t_range:
+        target_mu, target_epsilon = optimiser.quad_model.mu1 + t*optimiser.quad_model.d_mu, optimiser.quad_model.Epsilon1 + t*optimiser.quad_model.d_epsilon
+        mean_q_joint, cov_q_joint = optimiser.quad_model.jointdistribution_linesearch(target_mu, target_epsilon)
+        if mean_q_joint != None:
+            mean_q_list.append(mean_q_joint[2].cpu().numpy())
+            std_q_list.append(torch.sqrt(cov_q_joint[2,2]).cpu().numpy())
+        else:
+            mean_q_list.append(0.)
+            std_q_list.append(0.)
+    mean_q_list, std_q_list = np.array(mean_q_list), np.array(std_q_list)
+
+    lower, upper = -2*std_q_list + mean_q_list, 2*std_q_list + mean_q_list
+    
+    ax.plot(t_range, mean_q_list, color='blue', label='Predictive mean')
+    ax.fill_between(t_range, lower, upper, color='lightblue', alpha=0.5, label='Confidence region')
+    ax.set_xlabel('t')
+    ax.set_ylabel('integral')
+    ax.set_title('Quadrature prediction')
+    ax.legend()
+
+def plot_quad_prime_linesearch(ax, optimiser, tmin = 0, tmax = 10, budget = 50):
+    t_range = np.linspace(tmin, tmax, budget)
+    mean_q_list, std_q_list = [], []
+    for t in t_range:
+        target_mu, target_epsilon = optimiser.quad_model.mu1 + t*optimiser.quad_model.d_mu, optimiser.quad_model.Epsilon1 + t*optimiser.quad_model.d_epsilon
+        mean_q_joint, cov_q_joint = optimiser.quad_model.jointdistribution_linesearch(target_mu, target_epsilon)
+        if mean_q_joint != None:
+            mean_q_list.append(mean_q_joint[3].cpu().numpy())
+            std_q_list.append(torch.sqrt(cov_q_joint[3,3]).cpu().numpy())
+        else:
+            mean_q_list.append(0.)
+            std_q_list.append(0.)
+    mean_q_list, std_q_list = np.array(mean_q_list), np.array(std_q_list)
+
+    lower, upper = -2*std_q_list + mean_q_list, 2*std_q_list + mean_q_list
+    
+    ax.plot(t_range, mean_q_list, color='blue', label='Predictive mean derivative')
+    ax.fill_between(t_range, lower, upper, color='lightblue', alpha=0.5, label='Confidence region')
+    ax.set_xlabel('t')
+    ax.set_ylabel('integral')
+    ax.set_title('Derivative quadrature prediction')
+    ax.legend()
+
 def plot_synthesis_quad(optimizer, iteration, save_path=".", standardize=True):
     iteration = optimizer.iteration
     save_path = optimizer.plot_path
@@ -172,6 +218,8 @@ def plot_synthesis_quad(optimizer, iteration, save_path=".", standardize=True):
     # axs[1,1].set_xlabel('$\mu$')
     # axs[1,1].set_ylabel('$\sigma^{2}$')
     # axs[1,1].set_title("Log Expected improvement")
+    if optimizer.policy != "constant":
+        plot_quad_linesearch(axs[1,1], optimiser=optimizer)
 
     contour4 = axs[0,2].contourf(B, D, std)
     axs[0,2].set_xlabel('$\mu$')
@@ -182,8 +230,9 @@ def plot_synthesis_quad(optimizer, iteration, save_path=".", standardize=True):
     # axs[1,2].set_xlabel('$\mu$')
     # axs[1,2].set_ylabel('$\sigma^{2}$')
     # axs[1,2].set_title("Bivariate Expected improvement")
+    if optimizer.policy != "constant":
+        plot_quad_prime_linesearch(axs[1,2], optimiser=optimizer)
 
-    axs[1,1].scatter([float(optimizer.distribution.loc)], [float(optimizer.distribution.covariance_matrix)])
     
     ### Plot update rather than assuming wolfe
     # mu2, Epsilon2 = optimizer.list_mu[-2], optimizer.list_covar[-2]

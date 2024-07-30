@@ -51,7 +51,7 @@ class Wolfe(Linesearch):
         assert self.c2 <= 1
 
     def compute_t(self) -> float:
-        current_max = -np.inf
+        current_max = 0.3
         current_tmax = 1
         for t in np.linspace(self.tmin, self.tmax, self.budget):
             if self.compute_wolfe(t) > current_max:
