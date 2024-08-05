@@ -16,6 +16,7 @@ import matplotlib.pyplot as plt
 import scipy.stats as stats
 from tqdm import tqdm
 from module.utils import nearestPD, EI, log_EI, EI_bivariate, create_path_alg, create_path_exp
+from module.linesearch import Wolfe
 from botorch.utils.transforms import standardize, normalize, unnormalize
 import geoopt
 from PIL import Image
@@ -79,12 +80,12 @@ def plot_quad_linesearch(ax, optimiser, tmin = 0, tmax = 10, budget = 50):
     for t in t_range:
         target_mu, target_epsilon = optimiser.quad_model.mu1 + t*optimiser.quad_model.d_mu, optimiser.quad_model.Epsilon1 + t*optimiser.quad_model.d_epsilon
         mean_q_joint, cov_q_joint = optimiser.quad_model.jointdistribution_linesearch(target_mu, target_epsilon)
-        if mean_q_joint != None:
-            mean_q_list.append(mean_q_joint[2].cpu().numpy())
-            std_q_list.append(torch.sqrt(cov_q_joint[2,2]).cpu().numpy())
-        else:
+        if mean_q_joint == None and cov_q_joint == None:
             mean_q_list.append(0.)
             std_q_list.append(0.)
+        else:
+            mean_q_list.append(mean_q_joint[2].cpu().numpy())
+            std_q_list.append(torch.sqrt(cov_q_joint[2,2]).cpu().numpy())
     mean_q_list, std_q_list = np.array(mean_q_list), np.array(std_q_list)
 
     lower, upper = -2*std_q_list + mean_q_list, 2*std_q_list + mean_q_list
@@ -119,6 +120,66 @@ def plot_quad_prime_linesearch(ax, optimiser, tmin = 0, tmax = 10, budget = 50):
     ax.set_title('Derivative quadrature prediction')
     ax.legend()
 
+def plot_synthesis_ls(optimizer, iteration, save_path="."):
+    iteration = optimizer.iteration
+
+    # ei = torch.tensor(result_ei).cpu().numpy().reshape(m,n)
+    # ei_bivariate = torch.tensor(result_bivariate_ei).cpu().numpy().reshape(m,n)
+    fig, axs = plt.subplots(1, 3, figsize=(22, 6))
+    if iteration >= 1:
+        if optimizer.policy in ["wolfe", "armijo"]:
+            t_linspace = torch.linspace(0., 10, 200, dtype=optimizer.train_x.dtype)[1:]
+            # mu1, Epsilon1 = optimizer.list_mu[-2], optimizer.list_covar[-2]
+            mu1, Epsilon1 = optimizer.quad_model.mu1, optimizer.quad_model.Epsilon1
+            # For cmaes here
+            ls = Wolfe(quad_model = optimizer.linesearch.quad_model, tmin = 0.1, tmax=2, budget = 50, c1 = optimizer.linesearch.c1, c2 = 0.9)
+            result_wolfe, result_armijo, result_slope, result_ei, result_ei_bi = [], [], [], [], []
+            for t in t_linspace:
+                mu2, Epsilon2 = mu1 + t*optimizer.d_mu, Epsilon1 + t*optimizer.d_epsilon
+                # mean_joint, covar_joint = optimizer.quad_model.compute_joint_distribution(mu1, Epsilon1, mu2, Epsilon2, [optimizer.d_mu, optimizer.d_epsilon])
+                mean_joint, covar_joint = optimizer.quad_model.jointdistribution_linesearch(mu2, Epsilon2)
+                if mean_joint == None and covar_joint == None:
+                    result_wolfe.append(0.)
+                    result_armijo.append(0.)
+                    result_slope.append(0.)
+                    result_ei.append(0.)
+                    result_ei_bi.append(0.)
+                else:
+                    result_wolfe.append(float(ls.compute_wolfe_from_joint(-mean_joint, covar_joint, t)))
+                    result_armijo.append(float(ls.compute_armijo_from_joint(-mean_joint, covar_joint, t)))
+                    result_slope.append(float(ls.compute_slope_from_joint(-mean_joint, covar_joint, t)))
+                    result_ei.append(float(ls.ei(mean_joint, covar_joint, t)))
+                    result_ei_bi.append(float(ls.ei_bivariate(mean_joint, covar_joint, t)))
+                    
+            wolfe_tensor = torch.tensor(result_wolfe).cpu().numpy()
+            armijo_tensor = torch.tensor(result_armijo).cpu().numpy()
+            slope_tensor = torch.tensor(result_slope).cpu().numpy()
+            ei_tensor = torch.tensor(result_ei).cpu().numpy()
+            ei_bi_tensor = torch.tensor(result_ei_bi).cpu().numpy()
+
+            axs[0].plot(t_linspace.cpu().numpy(), wolfe_tensor, color='blue', label = "Probability Wolfe condition")
+            axs[0].plot(t_linspace.cpu().numpy(), armijo_tensor, color='red', label = "Probability Armijo condition")
+            axs[0].plot(t_linspace.cpu().numpy(), slope_tensor, color='green', label = "Probability Slope condition")
+            axs[0].plot(t_linspace.cpu().numpy(), ei_tensor, color='black', label = "EI")
+            axs[0].plot(t_linspace.cpu().numpy(), ei_bi_tensor, color='purple', label = "EI bi")
+            
+            # axs[1,0].plot(t_linspace.cpu().numpy(), armijo_tensor, color='red', label = "Probability Armijo condition")
+            axs[0].set_title("Probabilistic conditions line search for next update")
+            axs[0].legend()
+            
+    if optimizer.policy != "constant":
+        plot_quad_linesearch(axs[1], optimiser=optimizer)
+        plot_quad_prime_linesearch(axs[2], optimiser=optimizer)
+
+    buf = BytesIO()
+    plt.savefig(buf, format='png')
+    buf.seek(0)
+    plt.close()
+
+    # Open image with Pillow
+    image_var = Image.open(buf)
+    return image_var
+
 def plot_synthesis_quad(optimizer, iteration, save_path=".", standardize=True):
     iteration = optimizer.iteration
     save_path = optimizer.plot_path
@@ -148,31 +209,44 @@ def plot_synthesis_quad(optimizer, iteration, save_path=".", standardize=True):
     if iteration >= 1:
         if optimizer.policy in ["wolfe", "armijo"]:
             t_linspace = torch.linspace(0., 10, 200, dtype=optimizer.train_x.dtype)[1:]
-            mu1, Epsilon1 = optimizer.list_mu[-2], optimizer.list_covar[-2]
+            mu1, Epsilon1 = optimizer.quad_model.mu1, optimizer.quad_model.Epsilon1
             # For cmaes here
             
-            result_wolfe, result_armijo = [], []
+            ls = Wolfe(quad_model = optimizer.linesearch.quad_model, tmin = 0.1, tmax=2, budget = 50, c1 = optimizer.linesearch.c1, c2 = 0.9)
+            result_wolfe, result_armijo, result_slope, result_ei, result_ei_bi = [], [], [], [], []
             for t in t_linspace:
                 mu2, Epsilon2 = mu1 + t*optimizer.d_mu, Epsilon1 + t*optimizer.d_epsilon
                 mean_joint, covar_joint = optimizer.quad_model.compute_joint_distribution(mu1, Epsilon1, mu2, Epsilon2, [optimizer.d_mu, optimizer.d_epsilon])
                 if mean_joint == None and covar_joint == None:
                     result_wolfe.append(0.)
+                    result_armijo.append(0.)
+                    result_slope.append(0.)
+                    result_ei.append(0.)
+                    result_ei_bi.append(0.)
                 else:
-                    mean_joint = -mean_joint
-                    result_wolfe.append(float(optimizer.linesearch.compute_wolfe_from_joint(mean_joint, covar_joint, t)))
-                
-                # result_armijo.append(optimizer.armijo_criterion(t))
+                    result_wolfe.append(float(ls.compute_wolfe_from_joint(-mean_joint, covar_joint, t)))
+                    result_armijo.append(float(ls.compute_armijo_from_joint(-mean_joint, covar_joint, t)))
+                    result_slope.append(float(ls.compute_slope_from_joint(-mean_joint, covar_joint, t)))
+                    result_ei.append(float(ls.ei(mean_joint, covar_joint, t)))
+                    result_ei_bi.append(float(ls.ei_bivariate(mean_joint, covar_joint, t)))
+                    
             wolfe_tensor = torch.tensor(result_wolfe).cpu().numpy()
-            # armijo_tensor = torch.tensor(result_armijo).cpu().numpy()
+            armijo_tensor = torch.tensor(result_armijo).cpu().numpy()
+            slope_tensor = torch.tensor(result_slope).cpu().numpy()
+            ei_tensor = torch.tensor(result_ei).cpu().numpy()
+            ei_bi_tensor = torch.tensor(result_ei_bi).cpu().numpy()
 
-            axs[1,0].plot(t_linspace.cpu().numpy(), wolfe_tensor, color='blue', label = "Probability Wolfe condition")
+            axs[1, 0].plot(t_linspace.cpu().numpy(), wolfe_tensor, color='blue', label = "Probability Wolfe condition")
+            axs[1, 0].plot(t_linspace.cpu().numpy(), armijo_tensor, color='red', label = "Probability Armijo condition")
+            axs[1, 0].plot(t_linspace.cpu().numpy(), slope_tensor, color='green', label = "Probability Slope condition")
+            axs[1, 0].plot(t_linspace.cpu().numpy(), ei_tensor, color='black', label = "EI")
+            axs[1, 0].plot(t_linspace.cpu().numpy(), ei_bi_tensor, color='purple', label = "EI bivariate")
+            
             # axs[1,0].plot(t_linspace.cpu().numpy(), armijo_tensor, color='red', label = "Probability Armijo condition")
-            axs[1,0].set_title("Probabilistic conditions line search for next update")
-            axs[1,0].legend()
+            axs[1, 0].set_title("Probabilistic conditions line search for next update")
+            axs[1, 0].legend()
             
             # target_point[1] = max(target_point[1], 1e-14)
-            
-            
     ## Compute gradients at multiple places
     # b_grad = np.arange(float(bounds[0][0]), float(bounds[1][0]), 1)
     # d_grad = np.arange(0, 3, 0.5)[1:]**2

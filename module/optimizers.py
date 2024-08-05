@@ -10,7 +10,7 @@ import botorch
 from module.model import DerivativeExactGPSEModel
 from module.environment_api import EnvironmentObjective
 from module.acquisition_function import GradientInformation, DownhillQuadratic, initialize_acqf_optimizer, piqExpectedImprovement, QuadratureExploration
-from module.plot_script import plot_synthesis_quad
+from module.plot_script import plot_synthesis_quad, plot_synthesis_ls
 from module.quadrature import Quadrature
 from module.linesearch import load_linesearch
 
@@ -1970,6 +1970,10 @@ class ProbES(AbstractOptimizer):
             dict_plot["std"] = torch.sqrt(self.distribution.covariance_matrix)
             
         else:
+            if self.policy != "constant":
+                image = plot_synthesis_ls(self, iteration=iteration)
+                image = wandb.Image(image)
+                dict_plot["Image synthesis info"] = image
             if len(self.list_mu) > 1:
                 dict_plot["difference mean"] = torch.linalg.norm(self.list_mu[-1] - self.list_mu[-2])
                 dict_plot["difference covar"] = torch.linalg.norm(self.list_covar[-1] - self.list_covar[-2])
