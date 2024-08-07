@@ -4,8 +4,13 @@ from typing import Optional, Any, Union, Tuple, Callable, Dict
 import torch
 from botorch.test_functions.synthetic import Ackley, Rosenbrock, Rastrigin
 from .utils import Sphere
-import gpytorch
+import scipy
 import os
+from ucimlrepo import fetch_ucirepo, list_available_datasets
+from sklearn import svm
+import numpy as np
+from sklearn.impute import SimpleImputer
+
 
 from module.model import Net, VAE, get_pretrained_dir,Discriminator, Generator, cifar10
 
@@ -90,37 +95,40 @@ def get_objective(
         else:
             raise NotImplementedError(f"Function {test_function} is not implemented")
     
-    elif label == "airfoil":
+    elif label == "uci":
+        dataset_name = problem_kwargs.get("function", "Heart Disease")
+        noise_std = problem_kwargs.get("noise_std", 0.)
+
+        imp = SimpleImputer(missing_values=np.nan, strategy='most_frequent')
         # Devices and dtype
         device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         dtype = torch.double
         
         ## Load data
-        train_x, train_y = torch.load('data/airfoil_scaled_train_x.pt').to(dtype=dtype, device=device), torch.load('data/airfoil_scaled_train_y.pt').to(dtype=dtype, device=device)
-        state_dict = torch.load('data/airfoil_model_state.pth')
-        n = train_x.shape[0]
-        noises = torch.ones(n, dtype=dtype, device=device) * 1e-5
-        likelihood = gpytorch.likelihoods.FixedNoiseGaussianLikelihood(noise=noises)
-        #model = ExactGPModel(train_x, train_y, likelihood=likelihood)  # Create a new GP model
-        model.load_state_dict(state_dict)
-        model = model.to(dtype=dtype, device=device)
-        target_value = train_y.cpu().max()
-        
+        dataset = fetch_ucirepo(name=dataset_name)
+        X, y = dataset.data.features, dataset.data.targets
+        dim = X.shape[1]
+
+        ## Clean and normalised
+        X_clean = imp.fit_transform(X)
+        m, cov = np.mean(X_clean, axis=0), np.cov(X_clean, rowvar=False)
+        B = scipy.linalg.cholesky(cov)
+        B_inv = scipy.linalg.lapack.dtrtri(B)
+        X_clean_normalized = np.dot(X_clean - m, B_inv[0])
+
+        ## Fit model
+        regr = svm.SVR()
+        regr.fit(X_clean_normalized, y)
+
         ## Create objective
         def objec(x):
-            x = x.clone().detach()
+            x = x.clone().detach().cpu()
             if x.ndim == 1:
-                x = x.reshape(-1,1)
-            model.eval()
-            likelihood.eval()
-
-            # Test points are regularly spaced along [0,1]
-            # Make predictions by feeding model through likelihood
-            with torch.no_grad(), gpytorch.settings.fast_pred_var():
-                observed_pred = likelihood(model(x))
-            return observed_pred.mean
-        
-        obj = Objective(label=label, obj_func=objec, noise_std=0., best_value=target_value)
+                x = x.reshape(1,-1)
+            return torch.tensor(regr.predict(x), device=device, dtype=dtype)
+        initial_bounds = problem_kwargs.get("initial_bounds", 1.)
+        bounds = torch.tensor([[-initial_bounds] * dim, [initial_bounds] * dim], device=device, dtype=dtype)
+        obj = Objective(label=label, obj_func=objec, dim=dim, device=device, dtype=dtype, bounds=bounds, noise_std=noise_std, best_value=float(np.max(y)), negate=False)
         return obj
 
     elif label == "latent_space":

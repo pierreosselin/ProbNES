@@ -444,6 +444,8 @@ def create_path_exp(save_dir, problem_name, problem_kwargs):
        s = "_".join([problem_kwargs["function"], f'noise_std-{problem_kwargs["noise_std"]}', f'dim-{problem_kwargs["dim"]}', f'initial_bounds-{problem_kwargs["initial_bounds"]}'])
     elif problem_name == "latent_space":
        s = "_".join([problem_kwargs["function"], f'noise_std-{problem_kwargs["noise_std"]}', f'initial_bounds-{problem_kwargs["initial_bounds"]}', f'label-{problem_kwargs["label"]}'])
+    elif problem_name == "uci":
+       s = "_".join([problem_kwargs["function"].replace(" ", "_"), f'noise_std-{problem_kwargs["noise_std"]}', f'initial_bounds-{problem_kwargs["initial_bounds"]}'])
     else:
         raise NotImplementedError
     save_path = os.path.join(save_dir, s)

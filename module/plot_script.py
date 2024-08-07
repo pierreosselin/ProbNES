@@ -9,26 +9,21 @@ import scipy.stats as stats
 from module.objective import get_objective
 from .utils import standardize_return
 import numpy as np
-from module.quadrature import Quadrature
 import torch
-from torch.distributions.multivariate_normal import MultivariateNormal
+
 import matplotlib.pyplot as plt
 import scipy.stats as stats
 from tqdm import tqdm
-from module.utils import nearestPD, EI, log_EI, EI_bivariate, create_path_alg, create_path_exp
+from module.utils import create_path_alg, create_path_exp
 from module.linesearch import Wolfe
-from botorch.utils.transforms import standardize, normalize, unnormalize
-import geoopt
+from botorch.utils.transforms import normalize
 from PIL import Image
 from io import BytesIO
 import yaml
 from itertools import product
 import pandas as pd
-import math
 
 import numpy as np
-from matplotlib.colors import ListedColormap
-from matplotlib.cm import hsv
 
 algo_to_label = {"probES": "Proba ES (ours)",
                  "ES": "ES",

@@ -1847,6 +1847,7 @@ class ProbES(AbstractOptimizer):
             mu_target = self.distribution.loc + self.t_update*self.d_mu
             covar_target = self.distribution.covariance_matrix * torch.exp(self.t_update*self.d_epsilon)
         elif self.type == "XNES":
+            A = torch.linalg.cholesky(self.distribution.covariance_matrix)
             mu_target = self.distribution.loc + self.t_update*self.d_mu
             covar_target = torch.matmul(torch.matmul(A, torch.linalg.matrix_exp(self.t_update*self.d_epsilon)), A.T)
         elif self.type == "CMAES":
@@ -1922,7 +1923,6 @@ class ProbES(AbstractOptimizer):
             self.d_mu = torch.matmul(self.distribution.covariance_matrix, self.d_mu)
             self.d_epsilon = torch.matmul(torch.matmul(self.distribution.covariance_matrix, torch.diag(torch.diag(self.d_epsilon))), self.distribution.covariance_matrix)
         elif self.type == "XNES":
-            A = torch.linalg.cholesky(self.distribution.covariance_matrix)
             self.d_mu = torch.matmul(self.distribution.covariance_matrix, self.d_mu)
             self.d_epsilon = torch.matmul(torch.matmul(A.T, self.d_epsilon), A)
         elif self.type == "CMAES":
