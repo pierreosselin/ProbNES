@@ -1757,6 +1757,7 @@ class ProbES(AbstractOptimizer):
         
         self.aqc_type = optimizer_config["aqc_type"]
         self.policy=optimizer_config["policy"]
+        self.gradient = optimizer_config["gradient"]
         self.type = optimizer_config["type"]
         self.chi_threshold = np.sqrt(scipy.stats.chi2.ppf(q=0.9973,df=self.d))
         self.mahalanobis = optimizer_config["mahalanobis"]
@@ -1795,16 +1796,25 @@ class ProbES(AbstractOptimizer):
             self.model.likelihood, self.model
         )
         fit_gpytorch_mll(mll)
-        self.quad_model = Quadrature(self.model)
+        self.quad_model = Quadrature(self.model, self.distribution)
         self.linesearch = load_linesearch(self.policy, quad_model = self.quad_model, dict_parameter=optimizer_config)
 
         ### Instead do gradient in reparameterization and same for natural gradient
         ## Compute direction (sampled, expected , mdp ect...).
-        m, _ = self.quad_model.quadrature(self.manifold.take_submanifold_value(self.manifold_point, 0), self.manifold.take_submanifold_value(self.manifold_point, 1))
-        m.backward()
-        self.d_manifold = self.manifold_point.grad.detach().clone()
-        self.manifold_point.grad.zero_()
-        self.d_mu, self.d_epsilon = self.manifold.take_submanifold_value(self.d_manifold, 0), self.manifold.take_submanifold_value(self.d_manifold, 1)
+        if self.gradient == "expected":
+            m, _ = self.quad_model.quadrature(self.manifold.take_submanifold_value(self.manifold_point, 0), self.manifold.take_submanifold_value(self.manifold_point, 1))
+            m.backward()
+            self.d_manifold = self.manifold_point.grad.detach().clone()
+            self.manifold_point.grad.zero_()
+            self.d_mu, self.d_epsilon = self.manifold.take_submanifold_value(self.d_manifold, 0), self.manifold.take_submanifold_value(self.d_manifold, 1)
+        elif self.gradient == "sampled":
+            self.d_mu, self.d_epsilon = self.quad_model.gradient_estimate(10000)
+            # distrib_gradient = self.quad_model.gradient_distribution()
+            # self.gradient_joint = distrib_gradient.sample()
+            # self.d_mu = self.gradient_joint[:self.d]
+            # self.d_epsilon = self.gradient_joint[self.d:].reshape(self.d, self.d)
+            # self.d_epsilon = 0.5*(self.d_epsilon + self.d_epsilon.T)
+            
         
         # Taking natural gradient:
         ## TODO make it a function
@@ -1887,17 +1897,24 @@ class ProbES(AbstractOptimizer):
         fit_gpytorch_mll(mll)
 
         # Update quad and linesearch
-        self.quad_model = Quadrature(self.model)
+        self.quad_model = Quadrature(self.model, self.distribution)
         self.linesearch.quad_model = self.quad_model
 
         ### Instead do gradient in reparameterization and same for natural gradient
         ## Compute direction (sampled, expected , mdp ect...).
-        m, _ = self.quad_model.quadrature(self.manifold.take_submanifold_value(self.manifold_point, 0), self.manifold.take_submanifold_value(self.manifold_point, 1))
-        m.backward()
-        self.d_manifold = self.manifold_point.grad.detach().clone()
-        self.manifold_point.grad.zero_()
-        self.d_mu, self.d_epsilon = self.manifold.take_submanifold_value(self.d_manifold, 0), self.manifold.take_submanifold_value(self.d_manifold, 1)
-        
+        if self.gradient == "expected":
+            m, _ = self.quad_model.quadrature(self.manifold.take_submanifold_value(self.manifold_point, 0), self.manifold.take_submanifold_value(self.manifold_point, 1))
+            m.backward()
+            self.d_manifold = self.manifold_point.grad.detach().clone()
+            self.manifold_point.grad.zero_()
+            self.d_mu, self.d_epsilon = self.manifold.take_submanifold_value(self.d_manifold, 0), self.manifold.take_submanifold_value(self.d_manifold, 1)
+        elif self.gradient == "sampled":
+            self.d_mu, self.d_epsilon = self.quad_model.gradient_estimate(10000)
+            # distrib_gradient = self.quad_model.gradient_distribution()
+            # self.gradient_joint = distrib_gradient.sample()
+            # self.d_mu = self.gradient_joint[:self.d]
+            # self.d_epsilon = self.gradient_joint[self.d:].reshape(self.d, self.d)
+            # self.d_epsilon = 0.5*(self.d_epsilon + self.d_epsilon.T)
         # Taking natural gradient:
         ## TODO make it a function
         if self.type == "SNES":

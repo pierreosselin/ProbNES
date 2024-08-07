@@ -56,6 +56,6 @@ alg_settings:
 
 problem_settings:
   function: "ackley" # Name of the function in [airfoil, rosenbrock, sphere, ackley, rastrigin, function_1, mountains, sin3]
-  noise: 0.
+  noise_std: 0.
   dim: [1, 5, 10] # Irrelevant for latent space problem
   initial_bounds: 10.

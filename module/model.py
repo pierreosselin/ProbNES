@@ -2,6 +2,17 @@ import torch
 import gpytorch
 import botorch
 
+import torch.nn as nn
+import torch.nn.functional as F
+import os
+import torch.utils.model_zoo as model_zoo
+from collections import OrderedDict
+
+
+model_urls = {
+    'cifar10': 'http://ml.cs.tsinghua.edu.cn/~chenxi/pytorch-models/cifar10-d875770b.pth',
+    'cifar100': 'http://ml.cs.tsinghua.edu.cn/~chenxi/pytorch-models/cifar100-3a55a987.pth',
+}
 
 class ExactGPSEModel(gpytorch.models.ExactGP, botorch.models.gpytorch.GPyTorchModel):
     """An exact Gaussian process (GP) model with a squared exponential (SE) kernel.
@@ -286,3 +297,173 @@ class DerivativeExactGPSEModel(ExactGPSEModel):
         variance_d = variance_d.clamp_min(1e-9)
 
         return mean_d, variance_d
+
+class Net(nn.Module):
+    def __init__(self):
+        super(Net, self).__init__()
+        self.conv1 = nn.Conv2d(1, 20, 5, 1)
+        self.conv2 = nn.Conv2d(20, 50, 5, 1)
+        self.fc1 = nn.Linear(4 * 4 * 50, 500)
+        self.fc2 = nn.Linear(500, 10)
+
+    def forward(self, x):
+        x = F.relu(self.conv1(x))
+        x = F.max_pool2d(x, 2, 2)
+        x = F.relu(self.conv2(x))
+        x = F.max_pool2d(x, 2, 2)
+        x = x.view(-1, 4 * 4 * 50)
+        x = F.relu(self.fc1(x))
+        x = self.fc2(x)
+        return F.log_softmax(x, dim=1)
+    
+def get_pretrained_dir() -> str:
+    return os.path.join(os.getcwd(), "data/pretrained_models")
+
+class VAE(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.fc1 = nn.Linear(784, 400)
+        self.fc21 = nn.Linear(400, 20)
+        self.fc22 = nn.Linear(400, 20)
+        self.fc3 = nn.Linear(20, 400)
+        self.fc4 = nn.Linear(400, 784)
+
+    def encode(self, x):
+        h1 = F.relu(self.fc1(x))
+        return self.fc21(h1), self.fc22(h1)
+
+    def reparameterize(self, mu, logvar):
+        std = torch.exp(0.5 * logvar)
+        eps = torch.randn_like(std)
+        return mu + eps * std
+
+    def decode(self, z):
+        h3 = F.relu(self.fc3(z))
+        return torch.sigmoid(self.fc4(h3))
+
+    def forward(self, x):
+        mu, logvar = self.encode(x.view(-1, 784))
+        z = self.reparameterize(mu, logvar)
+        return self.decode(z), mu, logvar
+    
+
+class Generator(nn.Module):
+    def __init__(self, ngpu, nc=3, nz=100, ngf=64):
+        super(Generator, self).__init__()
+        self.ngpu = ngpu
+        self.main = nn.Sequential(
+            # input is Z, going into a convolution
+            nn.ConvTranspose2d(     nz, ngf * 8, 4, 1, 0, bias=False),
+            nn.BatchNorm2d(ngf * 8),
+            nn.ReLU(True),
+            # state size. (ngf*8) x 4 x 4
+            nn.ConvTranspose2d(ngf * 8, ngf * 4, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(ngf * 4),
+            nn.ReLU(True),
+            # state size. (ngf*4) x 8 x 8
+            nn.ConvTranspose2d(ngf * 4, ngf * 2, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(ngf * 2),
+            nn.ReLU(True),
+            # state size. (ngf*2) x 16 x 16
+            nn.ConvTranspose2d(ngf * 2,     ngf, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(ngf),
+            nn.ReLU(True),
+            nn.ConvTranspose2d(    ngf,      nc, kernel_size=1, stride=1, padding=0, bias=False),
+            nn.Tanh()
+        )
+
+    def forward(self, input):
+        if input.is_cuda and self.ngpu > 1:
+            output = nn.parallel.data_parallel(self.main, input, range(self.ngpu))
+        else:
+            output = self.main(input)
+        return output
+
+class Discriminator(nn.Module):
+    def __init__(self, ngpu, nc=3, ndf=64):
+        super(Discriminator, self).__init__()
+        self.ngpu = ngpu
+        self.main = nn.Sequential(
+            # input is (nc) x 64 x 64
+            nn.Conv2d(nc, ndf, 4, 2, 1, bias=False),
+            nn.LeakyReLU(0.2, inplace=True),
+            # state size. (ndf) x 32 x 32
+            nn.Conv2d(ndf, ndf * 2, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(ndf * 2),
+            nn.LeakyReLU(0.2, inplace=True),
+            # state size. (ndf*2) x 16 x 16
+            nn.Conv2d(ndf * 2, ndf * 4, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(ndf * 4),
+            nn.LeakyReLU(0.2, inplace=True),
+            # state size. (ndf*4) x 8 x 8
+            nn.Conv2d(ndf * 4, ndf * 8, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(ndf * 8),
+            nn.LeakyReLU(0.2, inplace=True),
+            # state size. (ndf*8) x 4 x 4
+            nn.Conv2d(ndf * 8, 1, 2, 2, 0, bias=False),
+            nn.Sigmoid()
+        )
+
+    def forward(self, input):
+        if input.is_cuda and self.ngpu > 1:
+            output = nn.parallel.data_parallel(self.main, input, range(self.ngpu))
+        else:
+            output = self.main(input)
+
+        return output.view(-1, 1).squeeze(1)
+
+class CIFAR(nn.Module):
+    def __init__(self, features, n_channel, num_classes):
+        super(CIFAR, self).__init__()
+        assert isinstance(features, nn.Sequential), type(features)
+        self.features = features
+        self.classifier = nn.Sequential(
+            nn.Linear(n_channel, num_classes)
+        )
+        # print(self.features)
+        # print(self.classifier)
+
+    def forward(self, x):
+        x = self.features(x)
+        x = x.view(x.size(0), -1)
+        x = self.classifier(x)
+        return x
+
+def make_layers(cfg, batch_norm=False):
+    layers = []
+    in_channels = 3
+    for i, v in enumerate(cfg):
+        if v == 'M':
+            layers += [nn.MaxPool2d(kernel_size=2, stride=2)]
+        else:
+            padding = v[1] if isinstance(v, tuple) else 1
+            out_channels = v[0] if isinstance(v, tuple) else v
+            conv2d = nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=padding)
+            if batch_norm:
+                layers += [conv2d, nn.BatchNorm2d(out_channels, affine=False), nn.ReLU()]
+            else:
+                layers += [conv2d, nn.ReLU()]
+            in_channels = out_channels
+    return nn.Sequential(*layers)
+
+def cifar10(n_channel, pretrained=None):
+    cfg = [n_channel, n_channel, 'M', 2*n_channel, 2*n_channel, 'M', 4*n_channel, 4*n_channel, 'M', (8*n_channel, 0), 'M']
+    layers = make_layers(cfg, batch_norm=True)
+    model = CIFAR(layers, n_channel=8*n_channel, num_classes=10)
+    if pretrained is not None:
+        m = model_zoo.load_url(model_urls['cifar10'])
+        state_dict = m.state_dict() if isinstance(m, nn.Module) else m
+        assert isinstance(state_dict, (dict, OrderedDict)), type(state_dict)
+        model.load_state_dict(state_dict)
+    return model
+
+def cifar100(n_channel, pretrained=None):
+    cfg = [n_channel, n_channel, 'M', 2*n_channel, 2*n_channel, 'M', 4*n_channel, 4*n_channel, 'M', (8*n_channel, 0), 'M']
+    layers = make_layers(cfg, batch_norm=True)
+    model = CIFAR(layers, n_channel=8*n_channel, num_classes=100)
+    if pretrained is not None:
+        m = model_zoo.load_url(model_urls['cifar100'])
+        state_dict = m.state_dict() if isinstance(m, nn.Module) else m
+        assert isinstance(state_dict, (dict, OrderedDict)), type(state_dict)
+        model.load_state_dict(state_dict)
+    return model

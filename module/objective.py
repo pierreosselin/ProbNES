@@ -7,58 +7,7 @@ from .utils import Sphere
 import gpytorch
 import os
 
-import torch.nn as nn
-import torch.nn.functional as F
-import torch.optim as optim
-from torchvision import datasets  # transforms
-
-class Net(nn.Module):
-    def __init__(self):
-        super(Net, self).__init__()
-        self.conv1 = nn.Conv2d(1, 20, 5, 1)
-        self.conv2 = nn.Conv2d(20, 50, 5, 1)
-        self.fc1 = nn.Linear(4 * 4 * 50, 500)
-        self.fc2 = nn.Linear(500, 10)
-
-    def forward(self, x):
-        x = F.relu(self.conv1(x))
-        x = F.max_pool2d(x, 2, 2)
-        x = F.relu(self.conv2(x))
-        x = F.max_pool2d(x, 2, 2)
-        x = x.view(-1, 4 * 4 * 50)
-        x = F.relu(self.fc1(x))
-        x = self.fc2(x)
-        return F.log_softmax(x, dim=1)
-    
-def get_pretrained_dir() -> str:
-    return os.path.join(os.getcwd(), "data/pretrained_models")
-
-class VAE(nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.fc1 = nn.Linear(784, 400)
-        self.fc21 = nn.Linear(400, 20)
-        self.fc22 = nn.Linear(400, 20)
-        self.fc3 = nn.Linear(20, 400)
-        self.fc4 = nn.Linear(400, 784)
-
-    def encode(self, x):
-        h1 = F.relu(self.fc1(x))
-        return self.fc21(h1), self.fc22(h1)
-
-    def reparameterize(self, mu, logvar):
-        std = torch.exp(0.5 * logvar)
-        eps = torch.randn_like(std)
-        return mu + eps * std
-
-    def decode(self, z):
-        h3 = F.relu(self.fc3(z))
-        return torch.sigmoid(self.fc4(h3))
-
-    def forward(self, x):
-        mu, logvar = self.encode(x.view(-1, 784))
-        z = self.reparameterize(mu, logvar)
-        return self.decode(z), mu, logvar
+from module.model import Net, VAE, get_pretrained_dir,Discriminator, Generator, cifar10
 
 class Objective:
     def __init__(self,
@@ -101,9 +50,9 @@ class Objective:
     def scaled_to_raw(self):
         raise NotImplementedError
 
-    def __call__(self, X: torch.Tensor, noise: bool = False):
+    def __call__(self, X: torch.Tensor, noise: bool = True):
         f = self.evaluate_true(X=X)
-        if noise and self.noise_std is not None:
+        if noise and self.noise_std > 0.:
             f += self.noise_std * torch.randn_like(f)
         return f
     
@@ -225,6 +174,58 @@ def get_objective(
             obj.decode = lambda x: decode(x)
             return obj
         
+        elif model == "cifar10":
+            label = problem_kwargs.get("label", 3)
+            dim = 100
+            bounds = torch.tensor([[-initial_bounds] * dim, [initial_bounds] * dim], device=device, dtype=dtype)
+
+            D = Discriminator(ngpu=1).eval()
+            G = Generator(ngpu=1).eval()
+
+            # load weights
+            D.load_state_dict(torch.load(os.path.join(get_pretrained_dir(), "netD_epoch_199.pth")))
+            G.load_state_dict(torch.load(os.path.join(get_pretrained_dir(), "netG_epoch_199.pth")))
+            if torch.cuda.is_available():
+                D = D.cuda()
+                G = G.cuda()
+
+            net = cifar10(128, pretrained=True).eval()  
+            net = net.to(device)
+
+            def score(y):
+                """Returns a 'score' for each digit from 0 to 9. It is modeled as a squared exponential
+                centered at the digit '3'.
+                """
+                # return -torch.abs(y - 1)
+                return torch.exp(-2 * (y - label) ** 2)
+            
+            def score_image(x):
+                """The input x is an image and an expected score 
+                based on the CNN classifier and the scoring 
+                function is returned.
+                """
+                with torch.no_grad():
+                    probs = net(x).softmax(dim=1)  # b x 10
+                    scores = score(
+                        torch.arange(10, device=device, dtype=dtype)
+                    ).expand(probs.shape)
+                return (probs * scores).sum(dim=1)
+            
+            def decode(train_x):
+                if train_x.ndim == 1:
+                    train_x = train_x.reshape(1,-1)
+                train_x = train_x.unsqueeze(-1).unsqueeze(-1)
+                with torch.no_grad():
+                    decoded = G(train_x)
+                return decoded
+            
+            def objective(x):
+                return score_image(decode(x))
+            obj = Objective(label=label, obj_func=objective, dim=dim, device=device, dtype=dtype, bounds=bounds, noise_std=noise_std, best_value=0., negate=False)
+            obj.decode = lambda x: decode(x)
+            return obj
+
+
     else:
         raise NotImplementedError(f"Problem {label} is not implemented")
     return obj

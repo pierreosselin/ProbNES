@@ -8,17 +8,25 @@ Class handling quadrature computations
 
 class Quadrature:
     def __init__(self, 
-                 model=None
+                 model=None,
+                 distribution=None
                  ) -> None:
         
         ### Create attributes
-        self.model=model
-        self.dim = model.train_inputs[0].shape[1]
-        self.device = model.train_inputs[0].device
-        self.dtype = model.train_inputs[0].dtype
-            
+        self.model = model
+        self.distribution = distribution
+        
         # Extract model quantities
         # TODO optimise the use of cache
+        if self.model != None:
+            self.dim = model.train_inputs[0].shape[1]
+            self.device = model.train_inputs[0].device
+            self.dtype = model.train_inputs[0].dtype
+            self.extract_quantities()
+        if (self.model != None) and (self.distribution != None):
+            self.precompute()
+
+    def extract_quantities(self):
         self.train_X = self.model.train_inputs[0]
         self.noise_tensor = self.model.likelihood.noise.detach().clone() * torch.eye(self.train_X.shape[0], dtype=self.train_X.dtype, device=self.train_X.device)
         self.gp_covariance = ((torch.diag(self.model.covar_module.base_kernel.lengthscale[0].detach().clone()))**2).detach().clone()
@@ -29,23 +37,20 @@ class Quadrature:
         self.inverse_data = torch.linalg.inv(self.K_X_X)
         self.constant = (self.outputscale * torch.sqrt(torch.linalg.det(2*torch.pi*self.gp_covariance))).detach().clone()
 
-    def precompute_linesearch(self, mean, covariance, grad):
-        self.d_mu, self.d_epsilon = grad[0], grad[1]
+    ## TODO: only when sampling or method of lines
+    def precompute(self):
+        mean, covariance = self.distribution.loc, self.distribution.covariance_matrix
         self.mu1 = mean
         self.Epsilon1 = covariance
-        
         self.covariance_gp_distr = self.gp_covariance + covariance
         self.constant = (self.outputscale * torch.sqrt(torch.linalg.det(2*torch.pi*self.gp_covariance))).detach().clone()
-        
         self.t_1X = self.constant * torch.exp(MultivariateNormal(loc = mean, covariance_matrix = self.covariance_gp_distr).log_prob(self.train_X))
         self.R_11 = self.constant * torch.exp(MultivariateNormal(loc = mean, covariance_matrix = self.covariance_gp_distr + covariance).log_prob(mean))
-
         self.inverse_data_covar_t1X = torch.linalg.solve(self.K_X_X, self.t_1X)
-
         self.mean_1 = self.mean_constant + (self.t_1X.T @ self.inverse_data_covar_y)
         self.var_1 = self.R_11 - self.t_1X.T @ self.inverse_data_covar_t1X
 
-        ## Precompute quantities for method of lines
+        ## Precompute quantities for covariance structure
         Pi_1_1 = self.gp_covariance + 2*covariance
         self.Pi_inv_1_1 = torch.linalg.inv(Pi_1_1)
         self.fourth_order_Pi1_Pi1 = torch.einsum("ij,kl->ijkl", self.Pi_inv_1_1, self.Pi_inv_1_1)
@@ -63,7 +68,9 @@ class Quadrature:
         self.R11_prime_epsilon = -0.5*self.R_11*self.Pi_inv_1_1
         self.R1_prime_1_prime_mu_mu = self.Pi_inv_1_1 * self.R_11
         self.R1_prime_1_prime_epsilon_epsilon = (self.fourth_order_Pi1_Pi1 + torch.einsum("ijkl->ikjl" ,self.fourth_order_Pi1_Pi1) + torch.einsum("ijkl->iljk" ,self.fourth_order_Pi1_Pi1)) * self.R_11
-
+        
+    def precompute_linesearch(self, grad):
+        self.d_mu, self.d_epsilon = grad[0], grad[1]
         self.mean_prime_1 = (self.d_mu * (self.Tau_mu1.T @ self.inverse_data_covar_y)).sum() + (self.d_epsilon * (self.Tau_epsilon1.T @ self.inverse_data_covar_y)).sum()
         self.cov_1_1_prime = (self.d_epsilon*self.R11_prime_epsilon).sum() - (self.d_mu * (self.Tau_mu1.T @ self.inverse_data_covar_t1X)).sum() - (self.d_epsilon * (self.Tau_epsilon1.T @ self.inverse_data_covar_t1X)).sum()
         # TODO where is posterior GP term here?
@@ -72,6 +79,35 @@ class Quadrature:
             - self.d_mu @ self.Tau_mu1.T @ self.inverse_data @ self.Tau_mu1 @ self.d_mu - 2*(self.d_epsilon*(self.Tau_epsilon1.T @ self.inverse_data @ self.Tau_mu1 @ self.d_mu)).sum() \
             - ((torch.unsqueeze(torch.unsqueeze(self.d_epsilon, -1), -1)) * torch.einsum("ijk, klm->ijlm", self.Tau_epsilon1.T, torch.einsum("ij, jkl->ikl", self.inverse_data, self.Tau_epsilon1)) * (torch.unsqueeze(torch.unsqueeze(self.d_epsilon, 0), 0).repeat(self.dim,self.dim,1,1))).sum()
     
+    def gradient_distribution(self):
+        mean_gradient = torch.cat((self.Tau_mu1.T @ self.inverse_data_covar_y, (self.Tau_epsilon1.T @ self.inverse_data_covar_y).reshape(-1,)))
+        covar_mu_mu = self.R1_prime_1_prime_mu_mu - self.Tau_mu1.T @ self.inverse_data @ self.Tau_mu1
+        covar_eps_eps =  0.25*torch.flatten(torch.flatten(self.R1_prime_1_prime_epsilon_epsilon, end_dim = 1), start_dim = 1) - torch.flatten(torch.flatten(torch.einsum("ijk, klm->ijlm", self.Tau_epsilon1.T, torch.einsum("ij, jkl->ikl", self.inverse_data, self.Tau_epsilon1)), end_dim = 1), start_dim = 1)
+        covar_eps_mu = -torch.flatten(self.Tau_epsilon1.T @ self.inverse_data @ self.Tau_mu1, end_dim = 1)
+        covar_mu_eps = covar_eps_mu.T
+        covar = torch.cat((torch.cat((covar_mu_mu, covar_mu_eps), dim = 1), torch.cat((covar_eps_mu, covar_eps_eps), dim = 1)), dim=0)
+        return MultivariateNormal(loc=mean_gradient, covariance_matrix=0.5*(covar + covar.T))
+    
+    def gradient_estimate(self, N = 1000):
+        mu, covar = self.distribution.loc, self.distribution.covariance_matrix
+        covar_inverse = torch.linalg.inv(covar)
+        samples = self.distribution.sample((N, ))
+
+        mu_grad = (samples - mu) @ covar_inverse
+        eps_grad = 0.5*(-covar_inverse + torch.bmm(torch.unsqueeze(mu_grad, -1), torch.unsqueeze(mu_grad, 1)))
+
+        self.model.eval()
+        self.model.likelihood.eval()
+
+        with torch.no_grad():
+            # Make predictions
+            predictions = self.model.likelihood(self.model(samples)).sample()
+        
+        d_mu = (predictions.unsqueeze(-1) * mu_grad).mean(dim = 0)
+        d_epsilon = (predictions.unsqueeze(-1).unsqueeze(-1) * eps_grad).mean(dim = 0)
+
+        return d_mu, d_epsilon
+        
     def jointdistribution_linesearch(self, mean, covariance):
         ## Same function as joint distribution function but with precomputed terms
         if not isPD(covariance):

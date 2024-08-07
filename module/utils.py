@@ -441,9 +441,9 @@ def _is_in_ellipse(mean, cov, u, threshold):
 
 def create_path_exp(save_dir, problem_name, problem_kwargs):
     if problem_name == "test_function":
-       s = "_".join([problem_kwargs["function"], f'noise-{problem_kwargs["noise"]}', f'dim-{problem_kwargs["dim"]}', f'initial_bounds-{problem_kwargs["initial_bounds"]}'])
+       s = "_".join([problem_kwargs["function"], f'noise_std-{problem_kwargs["noise_std"]}', f'dim-{problem_kwargs["dim"]}', f'initial_bounds-{problem_kwargs["initial_bounds"]}'])
     elif problem_name == "latent_space":
-       s = "_".join([problem_kwargs["function"], f'noise-{problem_kwargs["noise"]}', f'initial_bounds-{problem_kwargs["initial_bounds"]}', f'label-{problem_kwargs["label"]}'])
+       s = "_".join([problem_kwargs["function"], f'noise_std-{problem_kwargs["noise_std"]}', f'initial_bounds-{problem_kwargs["initial_bounds"]}', f'label-{problem_kwargs["label"]}'])
     else:
         raise NotImplementedError
     save_path = os.path.join(save_dir, s)
@@ -451,7 +451,7 @@ def create_path_exp(save_dir, problem_name, problem_kwargs):
 
 def alg_name(algorithm_name, alg_kwargs):
   if algorithm_name == "probES":  #["probES", "ES", "random", "qEI", "piqEI"]
-    s = "_".join([f'type-{alg_kwargs[algorithm_name]["type"]}', f'policy-{alg_kwargs[algorithm_name]["policy"]}', f'aqc_typef-{alg_kwargs[algorithm_name]["aqc_type"]}', f'mahalanobis-{alg_kwargs[algorithm_name]["mahalanobis"]}', f'mean_prior-{alg_kwargs[algorithm_name]["mean_prior"]}', f'std_prior-{alg_kwargs[algorithm_name]["std_prior"]}', f'lr-{alg_kwargs[algorithm_name]["lr"]}', f'batch_size-{alg_kwargs["batch_size"]}'])
+    s = "_".join([f'type-{alg_kwargs[algorithm_name]["type"]}', f'policy-{alg_kwargs[algorithm_name]["policy"]}', f'gradient-{alg_kwargs[algorithm_name]["gradient"]}', f'aqc_typef-{alg_kwargs[algorithm_name]["aqc_type"]}', f'mahalanobis-{alg_kwargs[algorithm_name]["mahalanobis"]}', f'mean_prior-{alg_kwargs[algorithm_name]["mean_prior"]}', f'std_prior-{alg_kwargs[algorithm_name]["std_prior"]}', f'lr-{alg_kwargs[algorithm_name]["lr"]}', f'batch_size-{alg_kwargs["batch_size"]}'])
   elif algorithm_name == "ES":
     s = "_".join([f'type-{alg_kwargs[algorithm_name]["type"]}', f'std_prior-{alg_kwargs[algorithm_name]["std_prior"]}', f'batch_size-{alg_kwargs["batch_size"]}'])
   elif algorithm_name == "qEI":
