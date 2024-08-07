@@ -1740,8 +1740,6 @@ class ProbES(AbstractOptimizer):
 
         self.batch_size = batch_size
         self.plot_path = plot_path
-        if not os.path.exists(os.path.join(self.plot_path, "fitgp")):
-            os.makedirs(os.path.join(self.plot_path, "fitgp"))
         ## Load parameter distribution
         mu, var = optimizer_config["mean_prior"], optimizer_config["std_prior"]**2
         mean, loc = mu*torch.ones(objective.dim, device=objective.device, dtype=objective.dtype), var*torch.eye(objective.dim, device=objective.device, dtype=objective.dtype)

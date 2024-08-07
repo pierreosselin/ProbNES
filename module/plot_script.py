@@ -178,7 +178,6 @@ def plot_synthesis_ls(optimizer, iteration, save_path="."):
 def plot_synthesis_quad(optimizer, iteration, save_path=".", standardize=True):
     iteration = optimizer.iteration
     save_path = optimizer.plot_path
-    save_path_gp = os.path.join(save_path, f"fitgp/synthesis_{iteration}.png")
     bounds = optimizer.objective.bounds
 
     b = np.arange(float(bounds[0][0]), float(bounds[1][0]), 0.2)

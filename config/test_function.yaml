@@ -3,6 +3,7 @@ save_dir: ./logs/test_function
 seed: 0
 verbose_synthesis: 0
 gpu: 0
+overwrite: True
 
 exp_settings:
   n_exp: 5

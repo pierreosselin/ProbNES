@@ -8,7 +8,6 @@ from itertools import product
 import torch
 
 if __name__ == "__main__":
-    OVERWRITE = True
     # parse arguments and load config
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', type=str, default='test')
@@ -27,6 +26,7 @@ if __name__ == "__main__":
     problem_kwargs = config["problem_settings"]
     alg_kwargs = config["alg_settings"]
     gpu_label = config["gpu"]
+    OVERWRITE = config["overwrite"]
     verbose_synthesis = config["verbose_synthesis"]
     #if gpu_label != 'cpu':
     #    torch.set_default_device('cuda:'+str(gpu_label))
@@ -93,7 +93,7 @@ if __name__ == "__main__":
             if not os.path.exists(alg_path):
                 os.makedirs(alg_path)
             else:
-                if OVERWRITE == False:
+                if (OVERWRITE == False) and (len([name for name in os.listdir('.') if os.path.isfile(name)]) == exp_kwargs["n_exp"]):
                     print(alg_path + "found without overwriting, next config...")
                     continue
             print("Processing", alg_path, "...")
