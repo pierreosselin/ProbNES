@@ -93,7 +93,7 @@ if __name__ == "__main__":
             if not os.path.exists(alg_path):
                 os.makedirs(alg_path)
             else:
-                if (OVERWRITE == False) and (len([name for name in os.listdir('.') if os.path.isfile(name)]) == exp_kwargs["n_exp"]):
+                if (OVERWRITE == False) and (len([name for name in os.listdir(alg_path) if os.path.isfile(os.path.join(alg_path, name))]) == exp_kwargs["n_exp"]):
                     print(alg_path + "found without overwriting, next config...")
                     continue
             print("Processing", alg_path, "...")

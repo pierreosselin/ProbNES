@@ -6,7 +6,7 @@ gpu: 0
 overwrite: True
 
 exp_settings:
-  n_exp: 5
+  n_exp: 2
   n_iter: 50
   n_init: 3 # Has to be equal to batch size for evo algo
 
