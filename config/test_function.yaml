@@ -56,7 +56,7 @@ alg_settings:
     mean_prior: 1.
 
 problem_settings:
-  function: "ackley" # Name of the function in [airfoil, rosenbrock, sphere, ackley, rastrigin, function_1, mountains, sin3]
+  function: "ackley" # Name of the function in [airfoil, rosenbrock, sphere, ackley, rastrigin, function_1, mountains, sin3] or ["Heart Disease", "Wine Quality", "Student Performance", "Forest Fires", "Computer Hardware", "Breast Cancer Wisconsin (Prognostic)", "Fertility", "Risk Factor Prediction of Chronic Kidney Disease", "Algerian Forest Fires", "Facebook Metrics", "Stock Portfolio Performance", "ISTANBUL STOCK EXCHANGE", "Air Quality", "Estimation of Obesity Levels Based On Eating Habits and Physical Condition", "Individual Household Electric Power Consumption", "AI4I 2020 Predictive Maintenance Dataset", "Concrete Compressive Strength", "Appliances Energy Prediction", "Combined Cycle Power PlantCombined Cycle Power Plant", "Iranian Churn", "Airfoil Self-Noise", "Superconductivty Data", "Gas Turbine CO and NOx Emission Data Set", "Pedestrians in Traffic"]
   noise_std: 10.
   dim: 2 # Irrelevant for latent space problem
   initial_bounds: 10.
