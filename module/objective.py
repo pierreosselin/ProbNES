@@ -245,7 +245,7 @@ def get_objective(
         model = problem_kwargs.get("function", "xgboost")
         noise_std = problem_kwargs.get("noise_std", 0.)
         initial_bounds = problem_kwargs.get("initial_bounds", 1.)
-        label = problem_kwargs.get("label", 42)
+        index_obj = problem_kwargs.get("label", 42)
         if model == "xgboost":
             dim = 8
             bounds = torch.tensor([[-initial_bounds] * dim, [initial_bounds] * dim], device=device, dtype=dtype)
@@ -254,7 +254,7 @@ def get_objective(
                 if x.ndim == 1:
                     x = x.reshape(1,-1)
                 x = x.numpy()
-                result = [xgboost_function(el[0], el[1], el[2], el[3], el[4], el[5], el[6], el[7], label) for el in x]
+                result = [xgboost_function(el[0], el[1], el[2], el[3], el[4], el[5], el[6], el[7], index_obj) for el in x]
                 return torch.tensor(result, device=device, dtype=dtype)
             obj = Objective(label=label, obj_func=objective, dim=dim, device=device, dtype=dtype, bounds=bounds, noise_std=noise_std, best_value=-5, negate=True)
         elif model == "svm":
@@ -265,7 +265,7 @@ def get_objective(
                 if x.ndim == 1:
                     x = x.reshape(1,-1)
                 x = x.numpy()
-                result = [svm_function(el[0], el[1], label) for el in x]
+                result = [svm_function(el[0], el[1], index_obj) for el in x]
                 return torch.tensor(result, device=device, dtype=dtype)
             obj = Objective(label=label, obj_func=objective, dim=dim, device=device, dtype=dtype, bounds=bounds, noise_std=noise_std, best_value=-5, negate=True)
         elif model == "fcnet":
@@ -276,7 +276,7 @@ def get_objective(
                 if x.ndim == 1:
                     x = x.reshape(1,-1)
                 x = x.numpy()
-                result = [svm_function(el[0], el[1], el[2], el[3], el[4], el[5], label) for el in x]
+                result = [svm_function(el[0], el[1], el[2], el[3], el[4], el[5], index_obj) for el in x]
                 return torch.tensor(result, device=device, dtype=dtype)
             obj = Objective(label=label, obj_func=objective, dim=dim, device=device, dtype=dtype, bounds=bounds, noise_std=noise_std, best_value=-5, negate=True)
     else:
