@@ -107,6 +107,12 @@ def get_objective(
         ## Load data
         dataset = fetch_ucirepo(name=dataset_name)
         X, y = dataset.data.features, dataset.data.targets
+        
+        if dataset_name in ['Breast Cancer Wisconsin (Prognostic)', 'Fertility']:
+            y = np.array((y == "N")).astype(float)
+        elif dataset_name in ['Appliances Energy Prediction']:
+            X = X.iloc[:, 1:-1]
+
         dim = X.shape[1]
 
         ## Clean and normalised
@@ -116,6 +122,7 @@ def get_objective(
         B_inv = scipy.linalg.lapack.dtrtri(B)
         X_clean_normalized = np.dot(X_clean - m, B_inv[0])
 
+        
         ## Fit model
         regr = svm.SVR()
         regr.fit(X_clean_normalized, y)
