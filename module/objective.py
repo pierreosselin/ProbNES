@@ -6,10 +6,11 @@ from botorch.test_functions.synthetic import Ackley, Rosenbrock, Rastrigin
 from .utils import Sphere
 import scipy
 import os
-from ucimlrepo import fetch_ucirepo, list_available_datasets
+from ucimlrepo import fetch_ucirepo
 from sklearn import svm
 import numpy as np
 from sklearn.impute import SimpleImputer
+from .hyperparameter import xgboost_function, fcnet_function, svm_function
 
 
 from module.model import Net, VAE, get_pretrained_dir,Discriminator, Generator, cifar10
@@ -239,8 +240,45 @@ def get_objective(
             obj = Objective(label=label, obj_func=objective, dim=dim, device=device, dtype=dtype, bounds=bounds, noise_std=noise_std, best_value=0., negate=False)
             obj.decode = lambda x: decode(x)
             return obj
-
-
+        
+    elif label == "hyperparameter_opt":
+        model = problem_kwargs.get("function", "xgboost")
+        noise_std = problem_kwargs.get("noise_std", 0.)
+        initial_bounds = problem_kwargs.get("initial_bounds", 1.)
+        label = problem_kwargs.get("label", 42)
+        if model == "xgboost":
+            dim = 8
+            bounds = torch.tensor([[-initial_bounds] * dim, [initial_bounds] * dim], device=device, dtype=dtype)
+            def objective(x):
+                x = x.clone().detach().cpu()
+                if x.ndim == 1:
+                    x = x.reshape(1,-1)
+                x = x.numpy()
+                result = [xgboost_function(el[0], el[1], el[2], el[3], el[4], el[5], el[6], el[7], label) for el in x]
+                return torch.tensor(result, device=device, dtype=dtype)
+            obj = Objective(label=label, obj_func=objective, dim=dim, device=device, dtype=dtype, bounds=bounds, noise_std=noise_std, best_value=-5, negate=True)
+        elif model == "svm":
+            dim = 2
+            bounds = torch.tensor([[-initial_bounds] * dim, [initial_bounds] * dim], device=device, dtype=dtype)
+            def objective(x):
+                x = x.clone().detach().cpu()
+                if x.ndim == 1:
+                    x = x.reshape(1,-1)
+                x = x.numpy()
+                result = [svm_function(el[0], el[1], label) for el in x]
+                return torch.tensor(result, device=device, dtype=dtype)
+            obj = Objective(label=label, obj_func=objective, dim=dim, device=device, dtype=dtype, bounds=bounds, noise_std=noise_std, best_value=-5, negate=True)
+        elif model == "fcnet":
+            dim = 6
+            bounds = torch.tensor([[-initial_bounds] * dim, [initial_bounds] * dim], device=device, dtype=dtype)
+            def objective(x):
+                x = x.clone().detach().cpu()
+                if x.ndim == 1:
+                    x = x.reshape(1,-1)
+                x = x.numpy()
+                result = [svm_function(el[0], el[1], el[2], el[3], el[4], el[5], label) for el in x]
+                return torch.tensor(result, device=device, dtype=dtype)
+            obj = Objective(label=label, obj_func=objective, dim=dim, device=device, dtype=dtype, bounds=bounds, noise_std=noise_std, best_value=-5, negate=True)
     else:
         raise NotImplementedError(f"Problem {label} is not implemented")
     return obj

@@ -1,4 +1,4 @@
-problem_name: test_function #test_function, airfoil, latent_space
+problem_name: test_function #test_function, latent_space, uci, hyperparameter_tuning
 save_dir: ./logs/test_function
 seed: 0
 verbose_synthesis: 0
