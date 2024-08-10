@@ -250,35 +250,38 @@ def get_objective(
             dim = 8
             bounds = torch.tensor([[-initial_bounds] * dim, [initial_bounds] * dim], device=device, dtype=dtype)
             def objective(x):
+                x = x/(2*initial_bounds) + 0.5
                 x = x.clone().detach().cpu()
                 if x.ndim == 1:
                     x = x.reshape(1,-1)
                 x = x.numpy()
                 result = [xgboost_function(el[0], el[1], el[2], el[3], el[4], el[5], el[6], el[7], index_obj) for el in x]
                 return torch.tensor(result, device=device, dtype=dtype)
-            obj = Objective(label=label, obj_func=objective, dim=dim, device=device, dtype=dtype, bounds=bounds, noise_std=noise_std, best_value=-5, negate=True)
+            obj = Objective(label=label, obj_func=objective, dim=dim, device=device, dtype=dtype, bounds=bounds, noise_std=noise_std, best_value=0., negate=True)
         elif model == "svm":
             dim = 2
             bounds = torch.tensor([[-initial_bounds] * dim, [initial_bounds] * dim], device=device, dtype=dtype)
             def objective(x):
+                x = x/(2*initial_bounds) + 0.5
                 x = x.clone().detach().cpu()
                 if x.ndim == 1:
                     x = x.reshape(1,-1)
                 x = x.numpy()
                 result = [svm_function(el[0], el[1], index_obj) for el in x]
                 return torch.tensor(result, device=device, dtype=dtype)
-            obj = Objective(label=label, obj_func=objective, dim=dim, device=device, dtype=dtype, bounds=bounds, noise_std=noise_std, best_value=-5, negate=True)
+            obj = Objective(label=label, obj_func=objective, dim=dim, device=device, dtype=dtype, bounds=bounds, noise_std=noise_std, best_value=0., negate=True)
         elif model == "fcnet":
             dim = 6
             bounds = torch.tensor([[-initial_bounds] * dim, [initial_bounds] * dim], device=device, dtype=dtype)
             def objective(x):
+                x = x/(2*initial_bounds) + 0.5
                 x = x.clone().detach().cpu()
                 if x.ndim == 1:
                     x = x.reshape(1,-1)
                 x = x.numpy()
-                result = [svm_function(el[0], el[1], el[2], el[3], el[4], el[5], index_obj) for el in x]
+                result = [fcnet_function(el[0], el[1], el[2], el[3], el[4], el[5], index_obj) for el in x]
                 return torch.tensor(result, device=device, dtype=dtype)
-            obj = Objective(label=label, obj_func=objective, dim=dim, device=device, dtype=dtype, bounds=bounds, noise_std=noise_std, best_value=-5, negate=True)
+            obj = Objective(label=label, obj_func=objective, dim=dim, device=device, dtype=dtype, bounds=bounds, noise_std=noise_std, best_value=0., negate=True)
     else:
         raise NotImplementedError(f"Problem {label} is not implemented")
     return obj
