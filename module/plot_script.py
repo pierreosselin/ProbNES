@@ -7,7 +7,7 @@ import imageio.v2 as imageio
 from tqdm import tqdm
 import scipy.stats as stats
 from module.objective import get_objective
-from .utils import standardize_return
+from .utils import standardize_return, compute_N_colours
 import numpy as np
 import torch
 
@@ -446,9 +446,14 @@ def plot_config(config_name, log_transform=False):
     for t_pb in product(*list_values_pb):
         fig, ax = plt.subplots(1, 1, figsize=(8, 6))
         for t_exp in product(*(list_values_exp)):
-            N_colours = 3
-            cmap = plt.get_cmap('hsv')
-            colors = [cmap((i+1) / (N_colours+1)) for i in range(N_colours)]
+            # N_colours = 6 # In practive just ProbES, ect..
+            N_colours = compute_N_colours(alg_kwargs)
+            if N_colours <= 10:
+                prop_cycle = plt.rcParams['axes.prop_cycle']
+                colors = prop_cycle.by_key()['color']
+            else:
+                cmap = plt.get_cmap('viridis')
+                colors = [cmap((i+1) / (N_colours+1)) for i in range(N_colours)]
             count_color = -1
             for t_alg in product(*(list_values_alg)): ## For loop on experiment problem parameters and algorithms
                 t = t_pb + t_exp + t_alg

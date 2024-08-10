@@ -471,3 +471,16 @@ def create_path_alg(save_path, algorithm_name, alg_kwargs):
     save_path = os.path.join(save_path, s)
     return save_path
 
+def compute_N_colours(dict):
+  algs = dict["algorithm"]
+  N_colour = 0
+  for alg in algs:
+    if alg in ["probES", "ES"]:
+      types = dict[alg]["type"]
+      if type(types) == list:
+         N_colour += len(dict[alg]["type"])
+      else:
+         N_colour += 1
+    else:
+      N_colour += 1
+  return N_colour
