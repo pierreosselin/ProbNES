@@ -186,7 +186,7 @@ def get_objective(
             
             def objective(x):
                 return score_image(decode(x))
-            obj = Objective(label=label, obj_func=objective, dim=dim, device=device, dtype=dtype, bounds=bounds, noise_std=noise_std, best_value=0., negate=False)
+            obj = Objective(label=label, obj_func=objective, dim=dim, device=device, dtype=dtype, bounds=bounds, noise_std=noise_std, best_value=1., negate=False)
             obj.decode = lambda x: decode(x)
             return obj
         
@@ -237,7 +237,7 @@ def get_objective(
             
             def objective(x):
                 return score_image(decode(x))
-            obj = Objective(label=label, obj_func=objective, dim=dim, device=device, dtype=dtype, bounds=bounds, noise_std=noise_std, best_value=0., negate=False)
+            obj = Objective(label=label, obj_func=objective, dim=dim, device=device, dtype=dtype, bounds=bounds, noise_std=noise_std, best_value=1., negate=False)
             obj.decode = lambda x: decode(x)
             return obj
         
