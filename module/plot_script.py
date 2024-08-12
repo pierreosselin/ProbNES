@@ -371,7 +371,7 @@ def plot_figure_algo(alg_dir, ax, log_transform=False, color=None):
         data_path = os.path.join(alg_dir, df)
         data = torch.load(data_path, map_location="cpu")
         data_over_seeds.append(data["best_value"] - data["Y"])
-    N_INIT = data["N_INIT"]
+    N_INIT = data["BATCH_SIZE"]
     N_TRIALS = len(data_over_seeds)
     N_BATCH = data["N_BATCH"]
     BATCH_SIZE = data["BATCH_SIZE"]

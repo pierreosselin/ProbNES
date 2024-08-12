@@ -457,7 +457,7 @@ def alg_name(algorithm_name, alg_kwargs):
   if algorithm_name == "probES":  #["probES", "ES", "random", "qEI", "piqEI"]
     s = "_".join([f'type-{alg_kwargs[algorithm_name]["type"]}', f'policy-{alg_kwargs[algorithm_name]["policy"]}', f'gradient-{alg_kwargs[algorithm_name]["gradient"]}', f'aqc_typef-{alg_kwargs[algorithm_name]["aqc_type"]}', f'mahalanobis-{alg_kwargs[algorithm_name]["mahalanobis"]}', f'mean_prior-{alg_kwargs[algorithm_name]["mean_prior"]}', f'std_prior-{alg_kwargs[algorithm_name]["std_prior"]}', f'lr-{alg_kwargs[algorithm_name]["lr"]}', f'batch_size-{alg_kwargs["batch_size"]}'])
   elif algorithm_name == "ES":
-    s = "_".join([f'type-{alg_kwargs[algorithm_name]["type"]}', f'std_prior-{alg_kwargs[algorithm_name]["std_prior"]}', f'batch_size-{alg_kwargs["batch_size"]}'])
+    s = "_".join([f'type-{alg_kwargs[algorithm_name]["type"]}', f'mean_prior-{alg_kwargs[algorithm_name]["mean_prior"]}', f'std_prior-{alg_kwargs[algorithm_name]["std_prior"]}', f'batch_size-{alg_kwargs["batch_size"]}'])
   elif algorithm_name == "qEI":
     s = "_".join([f'batch_size-{alg_kwargs["batch_size"]}'])
   elif algorithm_name == "piqEI":

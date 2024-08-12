@@ -121,7 +121,7 @@ def run(save_path: str,
         "bounds": problem_kwargs["initial_bounds"]
     }
 
-    if label in ["SNES", "quad"]:
+    if label in ["ES", "probES"]:
         output_dict["mu"] = optimizer.list_mu
         output_dict["sigma"] = optimizer.list_covar
     
