@@ -1854,8 +1854,13 @@ class ProbES(AbstractOptimizer):
             covar_target = self.distribution.covariance_matrix + self.t_update*self.d_epsilon
         else:
             raise NotImplementedError
-        self.distribution = MultivariateNormal(mu_target, covar_target)
-
+        
+        try:
+            self.distribution = MultivariateNormal(mu_target, covar_target)
+        except:
+            print("Adding jitter for positive definiteness")
+            covar_target  += (10e-6)*torch.eye(self.dim, device = covar_target.device, dtype=covar_target.dtype)
+            self.distribution = MultivariateNormal(mu_target, covar_target)
         """
         Check the grad of mu target
         """
