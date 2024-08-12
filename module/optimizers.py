@@ -48,9 +48,9 @@ def load_optimizer(label, n_init, objective, dict_parameter, plot_path):
     elif label == "piqEI":
         optimizer = PiBayesianOptimization(n_init=n_init, objective=objective, batch_size=dict_parameter["batch_size"], optimizer_config=dict_parameter["piqEI"], plot_path=plot_path)
     elif label == "probES":
-        optimizer = ProbES(n_init=n_init, objective=objective, batch_size=dict_parameter["batch_size"], optimizer_config=dict_parameter["probES"], plot_path=plot_path)
+        optimizer = ProbES(n_init=n_init, objective=objective, batch_size=dict_parameter["batch_size"], evaluation=dict_parameter["evaluation"], optimizer_config=dict_parameter["probES"], plot_path=plot_path)
     elif label == "ES":
-        optimizer = ES(n_init=n_init, objective=objective, batch_size=dict_parameter["batch_size"], optimizer_config=dict_parameter["ES"], plot_path=plot_path)
+        optimizer = ES(n_init=n_init, objective=objective, batch_size=dict_parameter["batch_size"], evaluation=dict_parameter["evaluation"], optimizer_config=dict_parameter["ES"], plot_path=plot_path)
     elif label == "random":
         optimizer = Random(n_init=n_init, objective=objective, batch_size=dict_parameter["batch_size"], optimizer_config=dict_parameter["random"], plot_path=plot_path)
     return optimizer
@@ -310,6 +310,7 @@ class ES(AbstractOptimizer):
         n_init: int = 5,
         objective: Callable[[torch.Tensor], torch.Tensor] = None,
         batch_size: int = 1,
+        evaluation: str = "mean",
         optimizer_config: Dict = None,
         plot_path=None
     ):
@@ -317,6 +318,7 @@ class ES(AbstractOptimizer):
         super(ES, self).__init__(n_init, objective)
 
         self.batch_size = batch_size
+        self.evaluation = evaluation
         self.plot_path = plot_path
         self.type = optimizer_config["type"]
         # Create problem
@@ -341,18 +343,28 @@ class ES(AbstractOptimizer):
 
         # Initialization of training data.
         if self.type == "CMAES":
-            self.values_history.append(self.objective(self.searcher._get_center()).repeat(self.batch_size))
-            # self.values_history.append(train_obj.clone())
+            if self.evaluation == "mean":
+                self.values_history.append(self.objective(self.searcher._get_center()).repeat(self.batch_size))
+            else:
+                self.values_history.append(train_obj.clone())
             self.list_mu.append(self.searcher._get_center())
             self.list_covar.append((self.searcher._get_sigma()**2)*self.searcher.C)
         else:
-            self.values_history.append(self.objective(self.searcher._get_mu()).repeat(self.batch_size))
-            # self.values_history.append(train_obj.clone())
+            if self.evaluation == "mean":
+                self.values_history.append(self.objective(self.searcher._get_mu()).repeat(self.batch_size))
+            else:
+                self.values_history.append(train_obj.clone())
             self.list_mu.append(self.searcher._get_mu())
             self.list_covar.append(self.searcher._get_sigma()**2)
         self.searcher.run(1)
         train_x, train_obj = self.searcher.population.values, self.searcher.population.evals
         self.params_history_list.append(train_x.clone())
+        if self.type == "CMAES":
+            if self.evaluation != "mean":
+                self.values_history.append(train_obj.clone())
+        else:
+            if self.evaluation != "mean":
+                self.values_history.append(train_obj.clone())
         # self.values_history.append(train_obj.clone())
         
 
@@ -360,18 +372,24 @@ class ES(AbstractOptimizer):
 
     def step(self) -> None:
         if self.type == "CMAES":
-            self.values_history.append(self.objective(self.searcher._get_center()).repeat(self.batch_size))
-            # self.values_history.append(train_obj.clone())
+            if self.evaluation == "mean":
+                self.values_history.append(self.objective(self.searcher._get_center()).repeat(self.batch_size))
             self.list_mu.append(self.searcher._get_center())
             self.list_covar.append((self.searcher._get_sigma()**2)*self.searcher.C)
         else:
-            self.values_history.append(self.objective(self.searcher._get_mu()).repeat(self.batch_size))
-            # self.values_history.append(train_obj.clone())
+            if self.evaluation == "mean":
+                self.values_history.append(self.objective(self.searcher._get_mu()).repeat(self.batch_size))
             self.list_mu.append(self.searcher._get_mu())
             self.list_covar.append(self.searcher._get_sigma()**2)
         self.searcher.run(1)
         train_x, train_obj = self.searcher.population.values, self.searcher.population.evals
         self.params_history_list.append(train_x.clone())
+        if self.type == "CMAES":
+            if self.evaluation != "mean":
+                self.values_history.append(train_obj.clone())
+        else:
+            if self.evaluation != "mean":
+                self.values_history.append(train_obj.clone())
         # self.values_history.append(train_obj.clone())
         
     def plot_synthesis(self):
@@ -1732,6 +1750,7 @@ class ProbES(AbstractOptimizer):
         n_init: int = 5,
         objective: Callable[[torch.Tensor], torch.Tensor] = None,
         batch_size: int = 1,
+        evaluation: str = "mean",
         optimizer_config: Dict = None,
         plot_path=None
     ):
@@ -1739,6 +1758,7 @@ class ProbES(AbstractOptimizer):
         super(ProbES, self).__init__(n_init, objective)
 
         self.batch_size = batch_size
+        self.evaluation = evaluation
         self.plot_path = plot_path
         ## Load parameter distribution
         mu, var = optimizer_config["mean_prior"], optimizer_config["std_prior"]**2
@@ -1748,8 +1768,10 @@ class ProbES(AbstractOptimizer):
         self.train_x, self.train_y, _ = generate_data("quad", objective=objective, n_init = n_init, distribution=self.distribution)
         #self.params = self.train_x.clone()
         self.params_history_list = [self.train_x.clone()]
-        # self.values_history = [self.train_y.clone()]
-        self.values_history = [self.objective(self.distribution.loc).repeat(self.batch_size)]
+        if self.evaluation == "mean":
+            self.values_history = [self.objective(self.distribution.loc).repeat(self.batch_size)]
+        else:
+            self.values_history = [self.train_y.clone()]
 
         self.d = self.objective.dim
         
@@ -1887,8 +1909,10 @@ class ProbES(AbstractOptimizer):
         self.param = geoopt.ManifoldParameter(self.manifold_point)
 
         self.params_history_list.append(new_x.clone())
-        # self.values_history.append(new_y.clone())
-        self.values_history.append(self.objective(self.distribution.loc).repeat(self.batch_size))
+        if self.evaluation == "mean":
+            self.values_history = [self.objective(self.distribution.loc).repeat(self.batch_size)]
+        else:
+            self.values_history = [self.train_y.clone()]
         self.iteration += 1
 
         ### Make model
