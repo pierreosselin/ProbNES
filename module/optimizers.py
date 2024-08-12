@@ -345,15 +345,11 @@ class ES(AbstractOptimizer):
         if self.type == "CMAES":
             if self.evaluation == "mean":
                 self.values_history.append(self.objective(self.searcher._get_center()).repeat(self.batch_size))
-            else:
-                self.values_history.append(train_obj.clone())
             self.list_mu.append(self.searcher._get_center())
             self.list_covar.append((self.searcher._get_sigma()**2)*self.searcher.C)
         else:
             if self.evaluation == "mean":
                 self.values_history.append(self.objective(self.searcher._get_mu()).repeat(self.batch_size))
-            else:
-                self.values_history.append(train_obj.clone())
             self.list_mu.append(self.searcher._get_mu())
             self.list_covar.append(self.searcher._get_sigma()**2)
         self.searcher.run(1)
@@ -1910,9 +1906,9 @@ class ProbES(AbstractOptimizer):
 
         self.params_history_list.append(new_x.clone())
         if self.evaluation == "mean":
-            self.values_history = [self.objective(self.distribution.loc).repeat(self.batch_size)]
+            self.values_history.append(self.objective(self.distribution.loc).repeat(self.batch_size))
         else:
-            self.values_history = [self.train_y.clone()]
+            self.values_history.append(self.train_y.clone())
         self.iteration += 1
 
         ### Make model
