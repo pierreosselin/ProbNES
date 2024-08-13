@@ -441,7 +441,7 @@ def _is_in_ellipse(mean, cov, u, threshold):
 
 def create_path_exp(save_dir, problem_name, problem_kwargs):
     if problem_name == "test_function":
-       s = "_".join([problem_kwargs["function"], f'noise_std-{problem_kwargs["noise_std"]}', f'dim-{problem_kwargs["dim"]}', f'initial_bounds-{problem_kwargs["initial_bounds"]}'])
+       s = "_".join([problem_kwargs["function"], f'noise_std-{problem_kwargs["noise_std"]}', f'initial_bounds-{problem_kwargs["initial_bounds"]}'])
     elif problem_name == "latent_space":
        s = "_".join([problem_kwargs["function"], f'noise_std-{problem_kwargs["noise_std"]}', f'initial_bounds-{problem_kwargs["initial_bounds"]}', f'label-{problem_kwargs["label"]}'])
     elif problem_name == "uci":

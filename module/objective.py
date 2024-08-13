@@ -2,7 +2,7 @@
 
 from typing import Optional, Any, Union, Tuple, Callable, Dict
 import torch
-from botorch.test_functions.synthetic import Ackley, Rosenbrock, Rastrigin
+from botorch.test_functions.synthetic import Ackley, Rosenbrock, Rastrigin, ThreeHumpCamel, StyblinskiTang, SixHumpCamel, Shekel, Powell, Michalewicz, Levy, HolderTable, Hartmann, Griewank, EggHolder, DixonPrice, DropWave, Cosine8, Bukin, Branin, Beale 
 from .utils import Sphere
 import scipy
 import os
@@ -71,27 +71,86 @@ def get_objective(
     problem_kwargs = problem_kwargs or {}
     if label == "test_function":
         test_function = problem_kwargs.get("function", "rosenbrock")
-        dim = problem_kwargs.get("dim", 2)
         noise_std = problem_kwargs.get("noise_std", 0.)
         initial_bounds = problem_kwargs.get("initial_bounds", 1.)
-        bounds = torch.tensor([[-initial_bounds] * dim, [initial_bounds] * dim], device=device, dtype=dtype)
         if test_function == "rosenbrock":
+            dim = 2
+            bounds = torch.tensor([[-initial_bounds] * dim, [initial_bounds] * dim], device=device, dtype=dtype)
             obj = Objective(label=label, obj_func=Rosenbrock(dim), dim=dim, device=device, dtype=dtype, bounds=bounds, noise_std=noise_std, best_value=0., negate=True)
         elif test_function == "ackley":
+            dim = 2
+            bounds = torch.tensor([[-initial_bounds] * dim, [initial_bounds] * dim], device=device, dtype=dtype)
+            obj = Objective(label=label, obj_func=Ackley(dim), dim=dim, device=device, dtype=dtype, bounds=bounds, noise_std=noise_std, best_value=0., negate=True)
+        elif test_function == "ThreeHumpCamel":
+            dim = 2
+            bounds = torch.tensor([[-initial_bounds] * dim, [initial_bounds] * dim], device=device, dtype=dtype)
+            obj = Objective(label=label, obj_func=ThreeHumpCamel(), dim=dim, device=device, dtype=dtype, bounds=bounds, noise_std=noise_std, best_value=0., negate=True)
+        elif test_function == "StyblinskiTang":
+            dim = 2
+            bounds = torch.tensor([[-initial_bounds] * dim, [initial_bounds] * dim], device=device, dtype=dtype)
+            obj = Objective(label=label, obj_func=StyblinskiTang(dim), dim=dim, device=device, dtype=dtype, bounds=bounds, noise_std=noise_std, best_value=39.166166 * dim, negate=True)
+        elif test_function == "SixHumpCamel":
+            dim = 2
+            bounds = torch.tensor([[-initial_bounds] * dim, [initial_bounds] * dim], device=device, dtype=dtype)
+            obj = Objective(label=label, obj_func=SixHumpCamel(), dim=dim, device=device, dtype=dtype, bounds=bounds, noise_std=noise_std, best_value=0., negate=True)
+        elif test_function == "Shekel":
+            dim = 4
+            bounds = torch.tensor([[-initial_bounds] * dim, [initial_bounds] * dim], device=device, dtype=dtype)
+            obj = Objective(label=label, obj_func=Shekel(), dim=dim, device=device, dtype=dtype, bounds=bounds, noise_std=noise_std, best_value=10.5363, negate=True)
+        elif test_function == "Powell":
+            dim = 4
+            bounds = torch.tensor([[-initial_bounds] * dim, [initial_bounds] * dim], device=device, dtype=dtype)
+            obj = Objective(label=label, obj_func=Powell(dim), dim=dim, device=device, dtype=dtype, bounds=bounds, noise_std=noise_std, best_value=0., negate=True)
+        elif test_function == "Michalewicz":
+            dim = 2
+            bounds = torch.tensor([[-initial_bounds] * dim, [initial_bounds] * dim], device=device, dtype=dtype)
+            obj = Objective(label=label, obj_func=Michalewicz(dim), dim=dim, device=device, dtype=dtype, bounds=bounds, noise_std=noise_std, best_value=0., negate=True)
+        elif test_function == "Levy":
+            dim = 2
+            bounds = torch.tensor([[-initial_bounds] * dim, [initial_bounds] * dim], device=device, dtype=dtype)
+            obj = Objective(label=label, obj_func=Levy(dim), dim=dim, device=device, dtype=dtype, bounds=bounds, noise_std=noise_std, best_value=0., negate=True)
+        elif test_function == "Hartmann":
+            dim = 6
+            bounds = torch.tensor([[-initial_bounds] * dim, [initial_bounds] * dim], device=device, dtype=dtype)
+            obj = Objective(label=label, obj_func=Hartmann(dim), dim=dim, device=device, dtype=dtype, bounds=bounds, noise_std=noise_std, best_value= 3.32237, negate=True)
+        elif test_function == "Branin":
+            dim = 2
+            bounds = torch.tensor([[-initial_bounds] * dim, [initial_bounds] * dim], device=device, dtype=dtype)
+            obj = Objective(label=label, obj_func=Branin(), dim=dim, device=device, dtype=dtype, bounds=bounds, noise_std=noise_std, best_value=-0.397887, negate=True)
+        elif test_function == "Griewank":
+            dim = 2
+            bounds = torch.tensor([[-initial_bounds] * dim, [initial_bounds] * dim], device=device, dtype=dtype)
+            obj = Objective(label=label, obj_func=Griewank(dim), dim=dim, device=device, dtype=dtype, bounds=bounds, noise_std=noise_std, best_value=0., negate=True)
+        elif test_function == "EggHolder":
+            dim = 2
+            bounds = torch.tensor([[-initial_bounds] * dim, [initial_bounds] * dim], device=device, dtype=dtype)
+            obj = Objective(label=label, obj_func=EggHolder(), dim=dim, device=device, dtype=dtype, bounds=bounds, noise_std=noise_std, best_value=0., negate=True)
+        elif test_function == "ackley":
+            dim = problem_kwargs.get("dim", 2)
+            bounds = torch.tensor([[-initial_bounds] * dim, [initial_bounds] * dim], device=device, dtype=dtype)
             obj = Objective(label=label, obj_func=Ackley(dim), dim=dim, device=device, dtype=dtype, bounds=bounds, noise_std=noise_std, best_value=0., negate=True)
         elif test_function == "rastrigin":
+            dim = problem_kwargs.get("dim", 2)
+            bounds = torch.tensor([[-initial_bounds] * dim, [initial_bounds] * dim], device=device, dtype=dtype)
             obj = Objective(label=label, obj_func=Rastrigin(dim), dim=dim, device=device, dtype=dtype, bounds=bounds, noise_std=noise_std, best_value=0., negate=True)
         elif test_function == "sphere":
+            dim = problem_kwargs.get("dim", 2)
+            bounds = torch.tensor([[-initial_bounds] * dim, [initial_bounds] * dim], device=device, dtype=dtype)
             obj = Objective(label=label, obj_func=Sphere(dim), dim=dim, device=device, dtype=dtype, bounds=bounds, noise_std=noise_std, best_value=0., negate=True)
         elif test_function == "function_1":
+            dim = problem_kwargs.get("dim", 2)
+            bounds = torch.tensor([[-initial_bounds] * dim, [initial_bounds] * dim], device=device, dtype=dtype)
             obj_function = lambda x: torch.sin(x - 4.) + torch.sin((10./3.)*(x - 4.))
             obj = Objective(label=label, obj_func=obj_function, dim=1, device=device, dtype=dtype, bounds=bounds, noise_std=noise_std, best_value=0., negate=True)
         elif test_function == "mountains":
+            dim = problem_kwargs.get("dim", 2)
+            bounds = torch.tensor([[-initial_bounds] * dim, [initial_bounds] * dim], device=device, dtype=dtype)
             obj_function = lambda x: torch.flatten(5*torch.exp(-2*(x - 1)**2) + 5*torch.exp(-2*(x + 1)**2))
             obj = Objective(label=label, obj_func=obj_function, dim=1, device=device, dtype=dtype, bounds=bounds, noise_std=noise_std, best_value=5., negate=False)
         elif test_function == "sin3":
-            obj_function = lambda x: (-(1.4 - 3*(x/15+0.6))*torch.sin(18*(x/15+0.6))).flatten()
             dim = 1
+            bounds = torch.tensor([[-initial_bounds] * dim, [initial_bounds] * dim], device=device, dtype=dtype)
+            obj_function = lambda x: (-(1.4 - 3*(x/15+0.6))*torch.sin(18*(x/15+0.6))).flatten()
             obj = Objective(label=label, obj_func=obj_function, dim=1, device=device, dtype=dtype, bounds=bounds, noise_std=noise_std, best_value=1.6, negate=True)
         else:
             raise NotImplementedError(f"Function {test_function} is not implemented")
