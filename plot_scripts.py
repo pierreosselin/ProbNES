@@ -16,7 +16,7 @@ if __name__ == "__main__":
         config = yaml.safe_load(file)
     log_plot = args.log
     plot_figure(config["save_dir"], log_transform=log_plot)
-    plot_distribution_gif(config, n_seeds=1)
+    # plot_distribution_gif(config, n_seeds=1)
     
     """
     for seed, var_prior in product(seed_list, var_list):
