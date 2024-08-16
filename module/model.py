@@ -14,6 +14,17 @@ model_urls = {
     'cifar100': 'http://ml.cs.tsinghua.edu.cn/~chenxi/pytorch-models/cifar100-3a55a987.pth',
 }
 
+class MyGP(gpytorch.models.ExactGP):
+    def __init__(self, train_x, train_y, likelihood, mean_module, covar_module):
+        super().__init__(train_x, train_y, likelihood)
+        self.mean_module = mean_module
+        self.covar_module = covar_module
+        
+    def forward(self, x):
+        mean = self.mean_module(x)
+        covar = self.covar_module(x)
+        return gpytorch.distributions.MultivariateNormal(mean, covar)
+
 class ExactGPSEModel(gpytorch.models.ExactGP, botorch.models.gpytorch.GPyTorchModel):
     """An exact Gaussian process (GP) model with a squared exponential (SE) kernel.
 

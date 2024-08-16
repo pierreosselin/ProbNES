@@ -11,9 +11,15 @@ from sklearn import svm
 import numpy as np
 from sklearn.impute import SimpleImputer
 from .hyperparameter import xgboost_function, fcnet_function, svm_function
+from gpytorch.kernels import RBFKernel
+from gpytorch.kernels.scale_kernel import ScaleKernel
+from gpytorch.means import ConstantMean
+from gpytorch.likelihoods import GaussianLikelihood
+from botorch.models import SingleTaskGP
+from gpytorch.mlls import ExactMarginalLogLikelihood
 
 
-from module.model import Net, VAE, get_pretrained_dir,Discriminator, Generator, cifar10
+from module.model import Net, VAE, get_pretrained_dir,Discriminator, Generator, cifar10, MyGP
 
 class Objective:
     def __init__(self,
@@ -341,28 +347,44 @@ def get_objective(
                 result = [fcnet_function(el[0], el[1], el[2], el[3], el[4], el[5], index_obj) for el in x]
                 return torch.tensor(result, device=device, dtype=dtype)
             obj = Objective(label=label, obj_func=objective, dim=dim, device=device, dtype=dtype, bounds=bounds, noise_std=noise_std, best_value=0., negate=True)
-    
-    elif label == "hpo":
-        model = problem_kwargs.get("function", "nn")
-        noise_std = problem_kwargs.get("noise_std", 0.)
-        initial_bounds = problem_kwargs.get("initial_bounds", 1.)
-        task_id = problem_kwargs.get("label", 42)
-        dim = 6
-        b = Benchmark(task_id=task_id, rng=1, model=model)
-        config_space = b.get_configuration_space(seed=1)
-        def objective(x):
-            x = x/(2*initial_bounds) + 0.5
-            ## Here convert [0, 1] to appropriate values
-            x[:, 1] = x[:, 1]*254 + 2 # batch [0, 1] -> [2, 4, 8, 16, 32, 64, 128, 256]
-            x[:, 2] = x[:, 2]*62 + 2
-            x[:, 4] = x[:, 4]*98 + 2 # batch [0, 1] -> [2, 4, 8, 16, 32, 64, 128, 256]
-            x[:, 3] = 10**(-x[:, 3]*8)
-            for el in x:
-                args_dict = format_arguments(config_space, el)
-                config = Configuration(b.get_configuration_space(seed=1), args_dict)
-                result_dict = b.objective_function(configuration=config, rng=1)
-            return result_dict['function_value']
-        obj = Objective(label=label, obj_func=objective, dim=dim, device=device, dtype=dtype, bounds=bounds, noise_std=noise_std, best_value=0., negate=True)
+        
+        elif model == "gpmll":
+            dim = 4
+            train_x = torch.linspace(0, 1, 100)
+            # True function is sin(2*pi*x) with Gaussian noise
+            train_y = torch.sin(train_x * (2 * torch.pi)) + torch.randn(train_x.size()) * np.sqrt(0.04)
+
+            bounds = torch.tensor([[-initial_bounds] * dim, [initial_bounds] * dim], device=device, dtype=dtype)
+            
+            def model_mll(x1, x2, x3, x4):
+                covar_module = ScaleKernel(
+                    RBFKernel(
+                        ard_num_dims=1,
+                        batch_shape=None,
+                    ),
+                    batch_shape=None,
+                )
+                mean_module = ConstantMean()
+                likelihood = GaussianLikelihood()
+                covar_module.base_kernel.lengthscale = np.abs(x1)
+                covar_module.outputscale = np.abs(x2)
+                mean_module.constant = x3
+                likelihood.noise = max(np.abs(x4), 1e-4) 
+                model = MyGP(train_x=train_x, train_y=train_y, likelihood=likelihood, mean_module=mean_module, covar_module=covar_module)
+                mll = ExactMarginalLogLikelihood(likelihood, model)
+
+                output = model(train_x)
+                return mll(output, train_y)
+
+            def objective(x):
+                x = x.clone().detach().cpu()
+                if x.ndim == 1:
+                    x = x.reshape(1,-1)
+                x = x.numpy()
+                result = [model_mll(el[0], el[1], el[2], el[3]) for el in x]
+                return torch.tensor(result, device=device, dtype=dtype)
+            obj = Objective(label=label, obj_func=objective, dim=dim, device=device, dtype=dtype, bounds=bounds, noise_std=noise_std, best_value=1., negate=False)
+        
     else:
         raise NotImplementedError(f"Problem {label} is not implemented")
     return obj
