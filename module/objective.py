@@ -2,7 +2,7 @@
 
 from typing import Optional, Any, Union, Tuple, Callable, Dict
 import torch
-from botorch.test_functions.synthetic import Ackley, Rosenbrock, Rastrigin, ThreeHumpCamel, StyblinskiTang, SixHumpCamel, Shekel, Powell, Michalewicz, Levy, HolderTable, Hartmann, Griewank, EggHolder, DixonPrice, DropWave, Cosine8, Bukin, Branin, Beale 
+from botorch.test_functions.synthetic import Ackley, Rosenbrock, Rastrigin, ThreeHumpCamel, StyblinskiTang, SixHumpCamel, Shekel, Powell, Michalewicz, Levy, Hartmann, Griewank, EggHolder, Branin
 from .utils import Sphere
 import scipy
 import os
@@ -341,6 +341,28 @@ def get_objective(
                 result = [fcnet_function(el[0], el[1], el[2], el[3], el[4], el[5], index_obj) for el in x]
                 return torch.tensor(result, device=device, dtype=dtype)
             obj = Objective(label=label, obj_func=objective, dim=dim, device=device, dtype=dtype, bounds=bounds, noise_std=noise_std, best_value=0., negate=True)
+    
+    elif label == "hpo":
+        model = problem_kwargs.get("function", "nn")
+        noise_std = problem_kwargs.get("noise_std", 0.)
+        initial_bounds = problem_kwargs.get("initial_bounds", 1.)
+        task_id = problem_kwargs.get("label", 42)
+        dim = 6
+        b = Benchmark(task_id=task_id, rng=1, model=model)
+        config_space = b.get_configuration_space(seed=1)
+        def objective(x):
+            x = x/(2*initial_bounds) + 0.5
+            ## Here convert [0, 1] to appropriate values
+            x[:, 1] = x[:, 1]*254 + 2 # batch [0, 1] -> [2, 4, 8, 16, 32, 64, 128, 256]
+            x[:, 2] = x[:, 2]*62 + 2
+            x[:, 4] = x[:, 4]*98 + 2 # batch [0, 1] -> [2, 4, 8, 16, 32, 64, 128, 256]
+            x[:, 3] = 10**(-x[:, 3]*8)
+            for el in x:
+                args_dict = format_arguments(config_space, el)
+                config = Configuration(b.get_configuration_space(seed=1), args_dict)
+                result_dict = b.objective_function(configuration=config, rng=1)
+            return result_dict['function_value']
+        obj = Objective(label=label, obj_func=objective, dim=dim, device=device, dtype=dtype, bounds=bounds, noise_std=noise_std, best_value=0., negate=True)
     else:
         raise NotImplementedError(f"Problem {label} is not implemented")
     return obj

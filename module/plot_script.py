@@ -507,50 +507,57 @@ def plot_config(config_name, log_transform=False):
     
 
 def plot_figure(save_path, log_transform=False):
+    plt.rcParams.update({'font.size': 3})
     exp_name = [name for name in os.listdir(save_path) if os.path.isdir(os.path.join(save_path, name))]
     for experiment in exp_name:
         exp_dir = os.path.join(save_path, experiment)
         fig, ax = plt.subplots(1, 1, figsize=(8, 6))
         alg_name = [name for name in os.listdir(exp_dir) if os.path.isdir(os.path.join(exp_dir, name))]
-        for algo in alg_name:
-            alg_dir = os.path.join(exp_dir, algo)
-            alg_dir_param_name = [name for name in os.listdir(alg_dir) if os.path.isdir(os.path.join(alg_dir, name)) and name != "path_distribution"]
-            for algo_param in alg_dir_param_name:
-                algo_param_dir = os.path.join(alg_dir, algo_param)
-                data_path_seeds = [f for f in os.listdir(algo_param_dir) if ".pt" in f]
-                data_over_seeds = []
-                for _, df in enumerate(data_path_seeds):
-                    data_path = os.path.join(algo_param_dir, df)
-                    data = torch.load(data_path, map_location="cpu")
-                    data_over_seeds.append(data["regret"])
-                N_TRIALS = len(data_over_seeds)
-                N_BATCH = data["N_BATCH"]
-                BATCH_SIZE = data["BATCH_SIZE"]
-                iters = np.arange(N_BATCH + 1) * BATCH_SIZE
-                label = data["label"]
-                data_over_seeds = [t.detach().cpu().numpy() for t in data_over_seeds]
-                y = np.asarray(data_over_seeds)
-                if log_transform:
-                    ax.plot(iters, np.log(y.mean(axis=0)), ".-", label=label)
-                else:
-                    ax.plot(iters, y.mean(axis=0), ".-", label=label)
-                yerr=ci(y, N_TRIALS)
-                if log_transform:
-                    ax.fill_between(iters, np.log(np.clip(y.mean(axis=0)-yerr, a_min=1e-5, a_max=None)), np.log(np.clip(y.mean(axis=0)+yerr, a_min=1e-5, a_max=None)), alpha=0.1)
-                else:
-                    ax.fill_between(iters, y.mean(axis=0)-yerr, y.mean(axis=0)+yerr, alpha=0.1)
-        if not log_transform:    
-            ax.plot([0, N_BATCH * BATCH_SIZE], [0.] * 2, 'k', label="true best objective", linewidth=2)
-            ax.set_ylim(0,10.)
-        ax.set(xlabel='number of observations (beyond initial points)', ylabel='best objective value')
-        #ax.set_ylim(0,10.)
-        ax.legend(loc="lower right")
-        if not log_transform:
-            fig.savefig(os.path.join(exp_dir, f"plot_regret.pdf"))
-            fig.savefig(os.path.join(exp_dir, f"plot_regret.png"))
-        else:
-            fig.savefig(os.path.join(exp_dir, f"plot_regret_log.pdf"))
-            fig.savefig(os.path.join(exp_dir, f"plot_regret_log.png"))
+        try:
+            for algo in alg_name:
+                alg_dir = os.path.join(exp_dir, algo)
+                alg_dir_param_name = [name for name in os.listdir(alg_dir) if os.path.isdir(os.path.join(alg_dir, name)) and name != "path_distribution"]
+                for algo_param in alg_dir_param_name:
+                    algo_param_dir = os.path.join(alg_dir, algo_param)
+                    data_path_seeds = [f for f in os.listdir(algo_param_dir) if ".pt" in f]
+                    data_over_seeds = []
+                    for _, df in enumerate(data_path_seeds):
+                        data_path = os.path.join(algo_param_dir, df)
+                        data = torch.load(data_path, map_location="cpu")
+                        data_over_seeds.append(data["best_value"] - data["Y"])
+                    N_TRIALS = len(data_over_seeds)
+                    N_BATCH = data["N_BATCH"]
+                    BATCH_SIZE = data["BATCH_SIZE"]
+                    iters = np.arange(N_BATCH + 1) * BATCH_SIZE
+                    label = data["label"]
+                    data_over_seeds = [t.detach().cpu().numpy() for t in data_over_seeds]
+                    y = np.asarray(data_over_seeds)
+                    y = pd.DataFrame(y).cummin(axis=1)
+                    y = y.iloc[:, iters]
+                    if log_transform:
+                        ax.plot(iters, np.array(np.log(y.mean(axis=0))), ".-", label=algo_param_dir.split("/")[-1])
+                    else:
+                        ax.plot(iters, np.array(y.mean(axis=0)), ".-", label=algo_param_dir.split("/")[-1])
+                    yerr=ci(y, N_TRIALS)
+                    if log_transform:
+                        ax.fill_between(iters, np.log(np.clip(y.mean(axis=0)-yerr, a_min=1e-5, a_max=None)), np.log(np.clip(y.mean(axis=0)+yerr, a_min=1e-5, a_max=None)), alpha=0.1)
+                    else:
+                        ax.fill_between(iters, y.mean(axis=0)-yerr, y.mean(axis=0)+yerr, alpha=0.1)
+
+            if not log_transform:    
+                ax.plot([0, N_BATCH * BATCH_SIZE], [0.] * 2, 'k', label="true best objective", linewidth=2)
+                # ax.set_ylim(0,10.)
+            ax.set(xlabel='number of observations (beyond initial points)', ylabel='best objective value')
+            #ax.set_ylim(0,10.)
+            ax.legend(loc="lower right")
+            if not log_transform:
+                fig.savefig(os.path.join(exp_dir, f"plot_regret.pdf"))
+                fig.savefig(os.path.join(exp_dir, f"plot_regret.png"))
+            else:
+                fig.savefig(os.path.join(exp_dir, f"plot_regret_log.pdf"))
+                fig.savefig(os.path.join(exp_dir, f"plot_regret_log.png"))
+        except:
+            continue
 
 def distribution_gif_2D(algo_path, objective, seed, data, ax):
     X = data["X"]

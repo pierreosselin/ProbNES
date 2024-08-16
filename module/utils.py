@@ -455,7 +455,7 @@ def create_path_exp(save_dir, problem_name, problem_kwargs):
 
 def alg_name(algorithm_name, alg_kwargs):
   if algorithm_name == "probES":  #["probES", "ES", "random", "qEI", "piqEI"]
-    s = "_".join([f'type-{alg_kwargs[algorithm_name]["type"]}', f'policy-{alg_kwargs[algorithm_name]["policy"]}', f'gradient-{alg_kwargs[algorithm_name]["gradient"]}', f'aqc_typef-{alg_kwargs[algorithm_name]["aqc_type"]}', f'mahalanobis-{alg_kwargs[algorithm_name]["mahalanobis"]}', f'mean_prior-{alg_kwargs[algorithm_name]["mean_prior"]}', f'std_prior-{alg_kwargs[algorithm_name]["std_prior"]}', f'lr-{alg_kwargs[algorithm_name]["lr"]}', f'batch_size-{alg_kwargs["batch_size"]}', f'evaluation-{alg_kwargs["evaluation"]}'])
+    s = "_".join([f'type-{alg_kwargs[algorithm_name]["type"]}', f'policy-{alg_kwargs[algorithm_name]["policy"]}', f'gradient-{alg_kwargs[algorithm_name]["gradient"]}', f'aqc_type-{alg_kwargs[algorithm_name]["aqc_type"]}', f'mahalanobis-{alg_kwargs[algorithm_name]["mahalanobis"]}', f'mean_prior-{alg_kwargs[algorithm_name]["mean_prior"]}', f'std_prior-{alg_kwargs[algorithm_name]["std_prior"]}', f'lr-{alg_kwargs[algorithm_name]["lr"]}', f'batch_size-{alg_kwargs["batch_size"]}', f'evaluation-{alg_kwargs["evaluation"]}'])
   elif algorithm_name == "ES":
     s = "_".join([f'type-{alg_kwargs[algorithm_name]["type"]}', f'mean_prior-{alg_kwargs[algorithm_name]["mean_prior"]}', f'std_prior-{alg_kwargs[algorithm_name]["std_prior"]}', f'batch_size-{alg_kwargs["batch_size"]}', f'evaluation-{alg_kwargs["evaluation"]}'])
   elif algorithm_name == "qEI":
