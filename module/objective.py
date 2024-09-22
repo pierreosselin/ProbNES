@@ -17,7 +17,9 @@ from gpytorch.means import ConstantMean
 from gpytorch.likelihoods import GaussianLikelihood
 from botorch.models import SingleTaskGP
 from gpytorch.mlls import ExactMarginalLogLikelihood
-
+from .environment_api import StateNormalizer, EnvironmentObjective, manipulate_reward
+import gym
+from .model import MLP, discretize
 
 from module.model import Net, VAE, get_pretrained_dir,Discriminator, Generator, cifar10, MyGP
 
@@ -384,7 +386,38 @@ def get_objective(
                 result = [model_mll(el[0], el[1], el[2], el[3]) for el in x]
                 return torch.tensor(result, device=device, dtype=dtype)
             obj = Objective(label=label, obj_func=objective, dim=dim, device=device, dtype=dtype, bounds=bounds, noise_std=noise_std, best_value=1., negate=False)
+    elif label == "rl_experiment":
+        env_name = problem_kwargs.get("function", "CartPole-v1")
+        add_bias = problem_kwargs.get("add_bias", 2)
+        layers = problem_kwargs.get("layers", [4,1])
+        state_normalization = problem_kwargs.get("state_normalization", False)
+
+
+        mlp = MLP(*layers, add_bias=add_bias)
+
+        if add_bias is not None:
+            mlp = discretize(mlp, add_bias)
         
+        if cfg["mlp"]["state_normalization"]:
+            state_norm = StateNormalizer(
+                normalize_params=mlp.normalize_params,
+                unnormalize_params=mlp.unnormalize_params,
+            )
+        else:
+            state_norm = None
+
+        reward_func = manipulate_reward(
+            cfg["mlp"]["manipulate_reward"]["shift"],
+            cfg["mlp"]["manipulate_reward"]["scale"],
+        )
+
+        objective_env = EnvironmentObjective(
+            env=gym.make(env_name),
+            policy=mlp,
+            manipulate_state=state_norm,
+            manipulate_reward=reward_func,
+        )
+        objective_env.env.seed(current_seed)
     else:
         raise NotImplementedError(f"Problem {label} is not implemented")
     return obj
