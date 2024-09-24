@@ -387,18 +387,24 @@ def get_objective(
                 return torch.tensor(result, device=device, dtype=dtype)
             obj = Objective(label=label, obj_func=objective, dim=dim, device=device, dtype=dtype, bounds=bounds, noise_std=noise_std, best_value=1., negate=False)
     elif label == "rl_experiment":
-        env_name = problem_kwargs.get("function", "CartPole-v1")
-        add_bias = problem_kwargs.get("add_bias", 2)
+        env_name = problem_kwargs.get("env_name", "CartPole-v1")
         layers = problem_kwargs.get("layers", [4,1])
+        discretize_value = problem_kwargs.get("discretize_value", 2)
+        add_bias = problem_kwargs.get("add_bias", False)
         state_normalization = problem_kwargs.get("state_normalization", False)
-
-
-        mlp = MLP(*layers, add_bias=add_bias)
-
-        if add_bias is not None:
-            mlp = discretize(mlp, add_bias)
+        shift = problem_kwargs.get("shift", None)
+        scale = problem_kwargs.get("scale", 500)
+        noise_std = problem_kwargs.get("noise_std", 0.)
+        initial_bounds = problem_kwargs.get("initial_bounds", 1.)
         
-        if cfg["mlp"]["state_normalization"]:
+        mlp = MLP(*layers, add_bias=add_bias)
+        len_params = mlp.len_params
+        bounds = torch.tensor([[-initial_bounds] * len_params, [initial_bounds] * len_params], device=device, dtype=dtype)
+
+        if discretize_value is not None:
+            mlp = discretize(mlp, discretize_value)
+        
+        if state_normalization:
             state_norm = StateNormalizer(
                 normalize_params=mlp.normalize_params,
                 unnormalize_params=mlp.unnormalize_params,
@@ -407,8 +413,8 @@ def get_objective(
             state_norm = None
 
         reward_func = manipulate_reward(
-            cfg["mlp"]["manipulate_reward"]["shift"],
-            cfg["mlp"]["manipulate_reward"]["scale"],
+            shift,
+            scale,
         )
 
         objective_env = EnvironmentObjective(
@@ -417,7 +423,8 @@ def get_objective(
             manipulate_state=state_norm,
             manipulate_reward=reward_func,
         )
-        objective_env.env.seed(current_seed)
+
+        obj = Objective(label=label, obj_func=objective_env, dim=len_params, device=device, dtype=dtype, bounds=bounds, noise_std=noise_std, best_value=1., negate=False)
     else:
         raise NotImplementedError(f"Problem {label} is not implemented")
     return obj

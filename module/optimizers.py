@@ -1762,7 +1762,7 @@ class ProbES(AbstractOptimizer):
         self.distribution = MultivariateNormal(mean, loc)
 
         self.train_x, self.train_y, _ = generate_data("quad", objective=objective, n_init = n_init, distribution=self.distribution)
-        #self.params = self.train_x.clone()
+        # self.params = self.train_x.clone()
         self.params_history_list = [self.train_x.clone()]
         if self.evaluation == "mean":
             self.values_history = [self.objective(self.distribution.loc).repeat(self.batch_size)]
