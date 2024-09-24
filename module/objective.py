@@ -2,7 +2,7 @@
 
 from typing import Optional, Any, Union, Tuple, Callable, Dict
 import torch
-from botorch.test_functions.synthetic import Ackley, Rosenbrock, Rastrigin, ThreeHumpCamel, StyblinskiTang, SixHumpCamel, Shekel, Powell, Michalewicz, Levy, HolderTable, Hartmann, Griewank, EggHolder, DixonPrice, DropWave, Cosine8, Bukin, Branin, Beale 
+from botorch.test_functions.synthetic import Ackley, Rosenbrock, Rastrigin, ThreeHumpCamel, StyblinskiTang, SixHumpCamel, Shekel, Powell, Michalewicz, Levy, Hartmann, Griewank, EggHolder, Branin
 from .utils import Sphere
 import scipy
 import os
@@ -11,9 +11,17 @@ from sklearn import svm
 import numpy as np
 from sklearn.impute import SimpleImputer
 from .hyperparameter import xgboost_function, fcnet_function, svm_function
+from gpytorch.kernels import RBFKernel
+from gpytorch.kernels.scale_kernel import ScaleKernel
+from gpytorch.means import ConstantMean
+from gpytorch.likelihoods import GaussianLikelihood
+from botorch.models import SingleTaskGP
+from gpytorch.mlls import ExactMarginalLogLikelihood
+from .environment_api import StateNormalizer, EnvironmentObjective, manipulate_reward
+import gym
+from .model import MLP, discretize
 
-
-from module.model import Net, VAE, get_pretrained_dir,Discriminator, Generator, cifar10
+from module.model import Net, VAE, get_pretrained_dir,Discriminator, Generator, cifar10, MyGP
 
 class Objective:
     def __init__(self,
@@ -341,6 +349,82 @@ def get_objective(
                 result = [fcnet_function(el[0], el[1], el[2], el[3], el[4], el[5], index_obj) for el in x]
                 return torch.tensor(result, device=device, dtype=dtype)
             obj = Objective(label=label, obj_func=objective, dim=dim, device=device, dtype=dtype, bounds=bounds, noise_std=noise_std, best_value=0., negate=True)
+        
+        elif model == "gpmll":
+            dim = 4
+            train_x = torch.linspace(0, 1, 100)
+            # True function is sin(2*pi*x) with Gaussian noise
+            train_y = torch.sin(train_x * (2 * torch.pi)) + torch.randn(train_x.size()) * np.sqrt(0.04)
+
+            bounds = torch.tensor([[-initial_bounds] * dim, [initial_bounds] * dim], device=device, dtype=dtype)
+            
+            def model_mll(x1, x2, x3, x4):
+                covar_module = ScaleKernel(
+                    RBFKernel(
+                        ard_num_dims=1,
+                        batch_shape=None,
+                    ),
+                    batch_shape=None,
+                )
+                mean_module = ConstantMean()
+                likelihood = GaussianLikelihood()
+                covar_module.base_kernel.lengthscale = np.abs(x1)
+                covar_module.outputscale = np.abs(x2)
+                mean_module.constant = x3
+                likelihood.noise = max(np.abs(x4), 1e-4) 
+                model = MyGP(train_x=train_x, train_y=train_y, likelihood=likelihood, mean_module=mean_module, covar_module=covar_module)
+                mll = ExactMarginalLogLikelihood(likelihood, model)
+
+                output = model(train_x)
+                return mll(output, train_y)
+
+            def objective(x):
+                x = x.clone().detach().cpu()
+                if x.ndim == 1:
+                    x = x.reshape(1,-1)
+                x = x.numpy()
+                result = [model_mll(el[0], el[1], el[2], el[3]) for el in x]
+                return torch.tensor(result, device=device, dtype=dtype)
+            obj = Objective(label=label, obj_func=objective, dim=dim, device=device, dtype=dtype, bounds=bounds, noise_std=noise_std, best_value=1., negate=False)
+    elif label == "rl_experiment":
+        env_name = problem_kwargs.get("env_name", "CartPole-v1")
+        layers = problem_kwargs.get("layers", [4,1])
+        discretize_value = problem_kwargs.get("discretize_value", 2)
+        add_bias = problem_kwargs.get("add_bias", False)
+        state_normalization = problem_kwargs.get("state_normalization", False)
+        shift = problem_kwargs.get("shift", None)
+        scale = problem_kwargs.get("scale", 500)
+        noise_std = problem_kwargs.get("noise_std", 0.)
+        initial_bounds = problem_kwargs.get("initial_bounds", 1.)
+        
+        mlp = MLP(*layers, add_bias=add_bias)
+        len_params = mlp.len_params
+        bounds = torch.tensor([[-initial_bounds] * len_params, [initial_bounds] * len_params], device=device, dtype=dtype)
+
+        if discretize_value is not None:
+            mlp = discretize(mlp, discretize_value)
+        
+        if state_normalization:
+            state_norm = StateNormalizer(
+                normalize_params=mlp.normalize_params,
+                unnormalize_params=mlp.unnormalize_params,
+            )
+        else:
+            state_norm = None
+
+        reward_func = manipulate_reward(
+            shift,
+            scale,
+        )
+
+        objective_env = EnvironmentObjective(
+            env=gym.make(env_name),
+            policy=mlp,
+            manipulate_state=state_norm,
+            manipulate_reward=reward_func,
+        )
+
+        obj = Objective(label=label, obj_func=objective_env, dim=len_params, device=device, dtype=dtype, bounds=bounds, noise_std=noise_std, best_value=1., negate=False)
     else:
         raise NotImplementedError(f"Problem {label} is not implemented")
     return obj

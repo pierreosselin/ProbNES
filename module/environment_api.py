@@ -37,7 +37,7 @@ class EnvironmentObjective:
         self.timesteps = 0
         self.timesteps_to_reward = {}
         shape_states = env.observation_space.shape
-        dtype_states = torch.float32
+        dtype_states = torch.float64
 
         shape_actions = env.action_space.shape
         dtype_actions = torch.tensor(env.action_space.sample()).dtype
@@ -66,7 +66,11 @@ class EnvironmentObjective:
         )
 
     def __call__(self, params: torch.Tensor) -> torch.Tensor:
-        return self.run(params)
+        if params.ndim > 1:
+            batch_size = params.shape[0]
+            return torch.tensor([self.run(params[i]) for i in range(batch_size)], dtype = params.dtype, device=params.device)
+        else:
+            return torch.tensor(self.run(params), dtype = params.dtype, device=params.device)
 
     def _unpack_episode(self) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Helper function for get_last_episode.
@@ -114,10 +118,10 @@ class EnvironmentObjective:
         """
         states, actions, rewards = self._unpack_episode()
         r = 0
-        states[0] = self.manipulate_state(self.env.reset())
+        states[0] = self.manipulate_state(self.env.reset()[0])
         for t in range(self.max_steps):  # rollout
             actions[t] = self.policy(states[t], params)
-            state, rewards[t], done, _ = self.env.step(actions[t].numpy())
+            state, rewards[t], done, _, _ = self.env.step(actions[t].numpy())
             states[t + 1] = self.manipulate_state(state)
             r += self.manipulate_reward(
                 rewards[t], actions[t], states[t + 1], done
