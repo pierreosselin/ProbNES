@@ -1877,8 +1877,12 @@ class ProbES(AbstractOptimizer):
             self.distribution = MultivariateNormal(mu_target, covar_target)
         except:
             print("Adding jitter for positive definiteness")
-            covar_target  += (10e-6)*torch.eye(self.dim, device = covar_target.device, dtype=covar_target.dtype)
+            covar_target  += (10e-5)*torch.eye(self.dim, device = covar_target.device, dtype=covar_target.dtype)
             self.distribution = MultivariateNormal(mu_target, covar_target)
+        try:
+            MultivariateNormal(mu_target, covar_target)
+        except:
+            print("hello")
         """
         Check the grad of mu target
         """

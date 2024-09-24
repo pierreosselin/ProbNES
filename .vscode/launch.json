@@ -8,8 +8,8 @@
             "name": "Semisupervised",
             "type": "python",
             "request": "launch",
-            "program": "${workspaceFolder}/main.py",
-            "args": ["--config", "hyper"],
+            "program": "${workspaceFolder}/plot_script.py",
+            "args": ["--config", "ablation_prior"],
             "console": "integratedTerminal",
             "justMyCode": true
         }

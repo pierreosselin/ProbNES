@@ -59,7 +59,7 @@ class Objective:
     def __call__(self, X: torch.Tensor, noise: bool = True):
         f = self.evaluate_true(X=X)
         if noise and self.noise_std > 0.:
-            f += self.noise_std * torch.randn_like(f)
+            f = f + self.noise_std * torch.randn_like(f)
         return f
     
 def get_objective(
