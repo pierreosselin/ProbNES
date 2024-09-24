@@ -117,9 +117,11 @@ if __name__ == "__main__":
                     continue
                 """
                 initial_seed = config["seed"]
+                device = config["gpu"]
                 run(save_path=alg_path,
                     problem_name=problem_name,
                     seed=initial_seed + seed,
+                    device=device,
                     verbose_synthesis=verbose_synthesis,
                     exp_kwargs=exp_kwargs,
                     alg_kwargs=alg_kwargs,

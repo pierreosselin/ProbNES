@@ -14,6 +14,7 @@ import wandb
 def run(save_path: str,
         problem_name:str = "test_function",
         seed:int = 0,
+        device:int = None,
         verbose_synthesis:int = 0,
         exp_kwargs: Optional[Dict[str, Any]] = None,
         alg_kwargs: Optional[Dict[str, Any]] = None,
@@ -24,7 +25,10 @@ def run(save_path: str,
     label = alg_kwargs["algorithm"]
 
     # Set device, dtype, seed
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    if (not torch.cuda.is_available()) or (device is None):
+        device = torch.device("cpu")
+    else:
+        device = torch.device(f"cuda:{device}")
     dtype = torch.double
     torch.set_default_dtype(dtype)
     
