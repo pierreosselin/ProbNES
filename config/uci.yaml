@@ -1,0 +1,63 @@
+problem_name: uci #test_function, airfoil, latent_space
+save_dir: ./logs/uci
+seed: 0
+verbose_synthesis: 0
+gpu: 0
+overwrite: False
+
+exp_settings:
+  n_exp: 10
+  n_iter: 100
+  n_init: 3 # Has to be equal to batch size for evo algo
+
+## Change config for algorithm setting
+alg_settings:
+  algorithm: ["ES", "probES"] #["probES", "ES", "random", "qEI", "piqEI"] 
+  verbose: 10
+  batch_size: 3
+  piqEI:
+    beta: 1.
+    mean_prior: -1.
+    std_prior: 3.
+    num_restarts: 10 #For qEI and piqEI
+    mc_samples: 256 #For qEI and piqEI
+    raw_samples: 512 #For qEI and piqEI
+    batch_acq: 5 # Number of batches used to evaluate the acquisition function at the same time
+  qEI:
+    num_restarts: 10 #For qEI and piqEI
+    mc_samples: 256 #For qEI and piqEI
+    raw_samples: 512 #For qEI and piqEI
+    batch_acq: 5 # Number of batches used to evaluate the acquisition function at the same time
+  probES:
+    mean_prior: 0.
+    std_prior: 1.
+    candidates_vr: 2000 #5000
+    type: "XNES" # One of ["SNES", "XNES", "CMAES"]
+    lr: 1.
+    policy: "constant" # ["wolfe", "ei", "ei_bi", "armijo", "constant", "wolfe_ei", "armijo_ei"]
+    aqc_type: "random" # ["none", "random", "optimized_bound", "optimized_mahalanobis"] none = random samples, "random" = optimized via random samples, "optimized_bound": optimization on full bounds, "optimized_mahalanobis": optimised on subbounds
+    gradient: "expected" # ["expected", "sampled"]
+    c1: 0.0001
+    c2: 0.9
+    t_min: 0.5
+    t_max: 2
+    budget: 30
+    mahalanobis: True
+    num_restarts: 10 #For qEI and piqEI
+    mc_samples: 256 #For qEI and piqEI
+    raw_samples: 512 #For qEI and piqEI
+    batch_acq: 5 # Number of batches used to evaluate the acquisition function at the same time
+  ES:
+    std_prior: 1.
+    mean_prior: 0.
+    type: "XNES" # One of ["SNES", "XNES", CMAES]
+  random:
+    std_prior: 3.
+    mean_prior: 5.
+
+problem_settings:
+  function: ["Heart Disease", "Wine Quality", "Breast Cancer Wisconsin (Prognostic)", "Fertility", "Concrete Compressive Strength", "Combined Cycle Power Plant", "Appliances Energy Prediction", "Superconductivty Data", "Airfoil Self-Noise", "Iranian Churn"] # "Individual Household Electric Power Consumption" Name of the function in [airfoil, rosenbrock, sphere, ackley, rastrigin] or [mnist]
+  noise_std: 0.
+  label: 0
+  dim: 5 # Irrelevant for latent space problem
+  initial_bounds: 10.

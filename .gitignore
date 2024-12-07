@@ -1,7 +1,6 @@
 logs/
 logs_saved/
 data/
-config/
 wandb/
 .png
 experiments.md
