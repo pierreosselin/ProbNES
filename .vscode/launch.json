@@ -8,16 +8,11 @@
             "name": "Semisupervised",
             "type": "python",
             "request": "launch",
-<<<<<<< HEAD
-            "program": "${workspaceFolder}/plot_script.py",
-            "args": ["--config", "ablation_prior"],
-=======
             "program": "${workspaceFolder}/main.py",
-            "args": ["--config", "rl_swimmer"],
->>>>>>> 039f29088b04a90ecf7919b7f2c0747005f93798
+            "args": ["--config", "test"],
             "console": "integratedTerminal",
             "justMyCode": true
-        }
+        }, 
     ]
 }
 
